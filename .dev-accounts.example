@@ -3,3 +3,6 @@
 # The integration script (scripts/auth-integration.mjs) makes its own random it_* users each run.
 DEV_USERNAME=qa_57c7c3
 DEV_PASSWORD=qZewh7u82uU12cxV
+# Two-player duel test accounts (lead's integration check, local D1 only):
+DEV_DUEL_USERS=qa_alice,qa_bob
+DEV_DUEL_PASSWORD=QaLocal-7f3k9q-test
