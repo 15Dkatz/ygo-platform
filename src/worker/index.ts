@@ -13,7 +13,7 @@ const app = new Hono<AppEnv>();
 
 app.use("/api/*", authMiddleware);       // sets c.var.user (null when signed out)
 app.route("/api/cards", cards);          // phase 1: catalogue search / lookup
-app.route("/img", images);               // phase 1: R2-cached card images
+app.route("/img", images);               // phase 1: edge-cached card images
 app.route("/api/auth", auth);            // phase 2: accounts
 app.route("/api/decks", decks);          // phase 2: decks saved per user
 app.route("/", duel);                    // phase 3/4: /api/rooms/*, /ws/room/:id

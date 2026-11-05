@@ -4,7 +4,7 @@
 // hibernation. A duel is therefore *defined* by `SavedDuel` (seed + decks + every response
 // so far): `EngineDuel.restore()` rebuilds it by replaying the responses, which the core
 // processes deterministically. The same replay covers a script that was not preloaded:
-// the sync core can't wait for R2, so we note what it asked for, fetch it, and rebuild.
+// the sync core can't wait for D1, so we note what it asked for, fetch it, and rebuild.
 
 import {
   OcgDuelMode, OcgHintType, OcgLocation, OcgMessageType, OcgPosition, OcgProcessResult, OcgQueryFlags, OcgResponseType,

@@ -1,7 +1,7 @@
 # YGO Duel Hub
 
 A Yu-Gi-Oh! card library, deck builder and online dueling platform, running entirely on
-Cloudflare (Workers + static assets, D1, R2, Durable Objects). It started as a port of the
+Cloudflare (Workers + static assets, D1, Durable Objects; no R2 needed). It started as a port of the
 `ygo_library_enhanced.py` command-line tool.
 
 ## Run locally
@@ -32,12 +32,12 @@ npm run dev                  # http://localhost:5173
 ## Rules engine (phase 4)
 
 Rules-enforced duels run EDOPro's core (ygopro-core, AGPL-3.0) as WebAssembly inside the
-DuelRoom Durable Object (`src/worker/duel/engine/`), with ProjectIgnis card scripts in R2
-(`SCRIPTS`) and BabelCDB card data in D1 (`engine_cards`). Setup — download the sources into
+DuelRoom Durable Object (`src/worker/duel/engine/`), with ProjectIgnis card scripts
+in D1 (`engine_scripts`) and BabelCDB card data in D1 (`engine_cards`). Setup — download the sources into
 `data/vendor/` as described at the top of `scripts/import-engine-data.ts`, then:
 
 ```bash
-npm run engine:import:local    # engine_cards -> local D1, base + test-deck scripts -> local R2
+npm run engine:import:local    # engine_cards -> local D1, base + test-deck scripts -> local D1
 npx vitest run src/worker/duel/engine   # bot-vs-bot duels through the adapter (Node)
 ```
 
@@ -45,13 +45,11 @@ The engine is AGPL-3.0: see `LICENSES/NOTICE.md` for what that requires of a dep
 
 ## Deploy (Cloudflare)
 
-Needs the Workers Paid plan: rules-engine duel creation and password hashing exceed the free plan's 10 ms CPU limit.
+Runs on the free plan: rules-enforced duels run in the room host's browser (`ENGINE_RUNNER=host`). Set `ENGINE_RUNNER` to `server` in `wrangler.jsonc` to run them in the Durable Object instead (needs Workers Paid for CPU).
 
 ```bash
 npx wrangler login
 npx wrangler d1 create ygo-platform          # put the printed database_id into wrangler.jsonc
-npx wrangler r2 bucket create ygo-platform-images
-npx wrangler r2 bucket create ygo-platform-scripts
 npm run db:migrate:remote
 npm run cards:import:remote                  # ~14.6k cards from YGOPRODeck
 npm run engine:import:remote                 # engine card data + all ~13.5k card scripts

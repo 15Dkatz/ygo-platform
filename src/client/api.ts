@@ -19,7 +19,7 @@ export async function api<T>(path: string, init?: RequestInit & { json?: unknown
   return data as T;
 }
 
-/** Image URL served (and cached in R2) by our Worker. */
+/** Image URL served (and edge-cached) by our Worker. */
 export const cardImage = (id: number, size: "small" | "full" | "crop" = "small") => `/img/${size}/${id}.jpg`;
 
 export interface LookupResult {

@@ -1,7 +1,7 @@
 /**
  * Imports rules-engine data (phase 4):
  *   - ProjectIgnis BabelCDB `cards.cdb`  -> D1 table `engine_cards` (migration 0004)
- *   - ProjectIgnis CardScripts (*.lua)  -> R2 bucket `ygo-platform-scripts` (binding SCRIPTS), key "scripts/<name>"
+ *   - ProjectIgnis CardScripts (*.lua)  -> D1 table `engine_scripts` (migration 0005)
  *
  * Get the sources first (both AGPL-3.0, see LICENSES/NOTICE.md), into the gitignored data/ folder:
  *   curl -L -o data/vendor/babelcdb/BabelCDB.zip https://github.com/ProjectIgnis/BabelCDB/archive/refs/heads/master.zip
@@ -45,7 +45,6 @@ function defaultCdbs(): string[] {
 const cdbPaths = opt("cdb") ? opt("cdb")!.split(",").map((p) => resolve(p)) : defaultCdbs();
 const scriptsRoot = resolve(opt("scripts") ?? "data/vendor/cardscripts/CardScripts-master");
 const outDir = resolve("data/engine");
-const BUCKET = "ygo-platform-scripts";
 
 function run(cmd: string) {
   console.log(`$ ${cmd}`);
@@ -89,7 +88,7 @@ if (!flag("--no-cards")) {
   }
 }
 
-// ---- scripts -> R2 -----------------------------------------------------------------------
+// ---- scripts -> D1 -----------------------------------------------------------------------
 if (!flag("--no-scripts")) {
   const wanted = new Set<string>(BASE_SCRIPTS);
   const byId = new Map(cards.map((c) => [c.id, c]));
@@ -114,18 +113,24 @@ if (!flag("--no-scripts")) {
   const missingBase = BASE_SCRIPTS.filter((s) => !scripts.has(s));
   if (missingBase.length) throw new Error(`CardScripts checkout lacks ${missingBase.join(", ")}`);
 
-  // stage flat copies + a bulk-put manifest
-  const stage = join(outDir, "scripts");
-  rmSync(stage, { recursive: true, force: true });
-  mkdirSync(stage, { recursive: true });
-  const manifest = [...wanted].map((name) => {
-    const file = join(stage, name);
-    copyFileSync(scripts.get(name)!, file);
-    return { key: `scripts/${name}`, file };
-  });
-  const manifestPath = join(outDir, "scripts-manifest.json");
-  writeFileSync(manifestPath, JSON.stringify(manifest));
-  console.log(`staged ${manifest.length} scripts in ${stage}`);
-  if (target) run(`npx wrangler r2 bulk put ${BUCKET} ${target} --filename=${manifestPath} --content-type=text/x-lua --concurrency=32`);
+  // multi-row INSERTs kept under ~80 KB each (D1 caps a statement at 100 KB)
+  const lines = flag("--all-scripts") ? ["DELETE FROM engine_scripts;"] : [];
+  let batch: string[] = [], size = 0;
+  const flush = () => {
+    if (batch.length) lines.push(`INSERT OR REPLACE INTO engine_scripts (name, body) VALUES\n${batch.join(",\n")};`);
+    batch = []; size = 0;
+  };
+  let total = 0;
+  for (const name of [...wanted].sort()) {
+    const row = `(${sql(name)}, ${sql(readFileSync(scripts.get(name)!, "utf8"))})`;
+    if (row.length > 95_000) { console.warn(`skipping ${name}: too large for one D1 statement (${row.length} bytes)`); continue; }
+    if (size + row.length > 80_000) flush();
+    batch.push(row); size += row.length; total++;
+  }
+  flush();
+  const scriptsSql = join(outDir, "engine_scripts.sql");
+  writeFileSync(scriptsSql, lines.join("\n") + "\n");
+  console.log(`wrote ${scriptsSql}: ${total} scripts`);
+  if (target) run(`npx wrangler d1 execute DB ${target} --file=${scriptsSql} --yes`);
 }
 console.log("done");

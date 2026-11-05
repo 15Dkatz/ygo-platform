@@ -23,7 +23,7 @@ export interface EngineCardRow {
   has_script: boolean;
 }
 
-/** Where engine data comes from (D1 + R2 in the Worker, JSON + disk in tests). */
+/** Where engine data comes from (D1 in the Worker, JSON + disk in tests). */
 export interface EngineDataSource {
   cards(codes: number[]): Promise<Map<number, EngineCardRow>>;
   /** Missing scripts map to null. Names are what the core asks for: "c123.lua", "utility.lua". */
@@ -146,7 +146,7 @@ function cardScriptCode(name: string): number | null {
 export function clearEngineCaches(): void { cardCache.clear(); scriptCache.clear(); }
 
 // ---------------------------------------------------------------------------------------
-// Worker source: D1 `engine_cards` + R2 `SCRIPTS` bucket (key "scripts/<name>").
+// Worker source: D1 `engine_cards` (card rows) + `engine_scripts` (Lua bodies).
 
 interface EngineCardDbRow {
   id: number; alias: number; setcodes: string; type: number; level: number; attribute: number;
@@ -154,7 +154,7 @@ interface EngineCardDbRow {
   name: string; strings: string; has_script: number;
 }
 
-export function d1r2Source(db: D1Database, bucket: R2Bucket): EngineDataSource {
+export function d1Source(db: D1Database): EngineDataSource {
   return {
     async cards(codes) {
       const out = new Map<number, EngineCardRow>();
@@ -168,11 +168,14 @@ export function d1r2Source(db: D1Database, bucket: R2Bucket): EngineDataSource {
       return out;
     },
     async scripts(names) {
-      const out = new Map<string, string | null>();
-      await Promise.all(names.map(async (n) => {
-        const obj = await bucket.get(`scripts/${n}`);
-        out.set(n, obj ? await obj.text() : null);
-      }));
+      const out = new Map<string, string | null>(names.map((n) => [n, null]));
+      for (let i = 0; i < names.length; i += 90) {
+        const chunk = names.slice(i, i + 90);
+        const { results } = await db
+          .prepare(`SELECT name, body FROM engine_scripts WHERE name IN (${chunk.map(() => "?").join(",")})`)
+          .bind(...chunk).all<{ name: string; body: string }>();
+        for (const r of results) out.set(r.name, r.body);
+      }
       return out;
     },
   };

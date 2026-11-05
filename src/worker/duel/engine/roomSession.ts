@@ -1,7 +1,7 @@
 // Phase 3's engine plug-in contract, implemented over EngineDuel (no WASM import here, so
 // Node tests can drive it). Workers use ./roomHook.ts, which binds env + the bundled WASM.
 //
-// Everything is async under the hood (card data / scripts come from D1 + R2), so:
+// Everything is async under the hood (card data / scripts come from D1), so:
 //   - `start()` creates the duel; on a *restored* session it rebuilds by replay and returns
 //     the current board + open prompt (call it once after waking, before anything else);
 //   - `exportBoard()` / `snapshot()` are sync and valid once `start()` has resolved.

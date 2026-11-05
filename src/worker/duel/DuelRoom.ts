@@ -85,7 +85,7 @@ export class DuelRoom extends DurableObject<Env> {
   private room: RoomData | null = null;
   /** Live engine (WASM state). Rebuilt from storage[ENGINE_KEY] by replay after hibernation. */
   private engine: RoomEngineSession | null = null;
-  /** Engine calls await D1/R2, so other messages could interleave: run them one at a time. */
+  /** Engine calls await D1, so other messages could interleave: run them one at a time. */
   private engineQueue: Promise<unknown> = Promise.resolve();
 
   constructor(ctx: DurableObjectState, env: Env) {

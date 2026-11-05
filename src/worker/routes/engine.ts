@@ -3,7 +3,7 @@ import type { AppEnv } from "../env.ts";
 import ocgWasm from "ocgcore-wasm/lib/ocgcore.sync.wasm";
 import { botResponse, seededRng } from "../duel/engine/bot.ts";
 import { loadCore, wasmMemoryMB } from "../duel/engine/core.ts";
-import { EngineData, d1r2Source } from "../duel/engine/data.ts";
+import { EngineData, d1Source } from "../duel/engine/data.ts";
 import { EngineDuel } from "../duel/engine/EngineDuel.ts";
 import { TEST_DECK_A, TEST_DECK_B } from "../duel/engine/testDecks.ts";
 import { LICENSE_NAME, SOURCE_URL } from "../../shared/project.ts";
@@ -63,17 +63,17 @@ engine.post("/support", async (c) => {
 engine.post("/cards", async (c) => {
   const body = await c.req.json<{ ids?: unknown }>().catch(() => ({ ids: [] }));
   const ids = [...new Set((Array.isArray(body.ids) ? body.ids : []).map(Number).filter((x) => Number.isInteger(x) && x > 0))].slice(0, 2000);
-  const rows = await d1r2Source(c.env.DB, c.env.SCRIPTS).cards(ids);
+  const rows = await d1Source(c.env.DB).cards(ids);
   c.header("Cache-Control", "no-store");
   return c.json({ cards: [...rows.values()] });
 });
 
-/** POST /api/engine/scripts { names } -> { scripts: { name: body | null } } (Lua from the SCRIPTS bucket). */
+/** POST /api/engine/scripts { names } -> { scripts: { name: body | null } } (Lua from D1 engine_scripts). */
 const SCRIPT_NAME = /^[A-Za-z0-9_.-]{1,80}\.lua$/;
 engine.post("/scripts", async (c) => {
   const body = await c.req.json<{ names?: unknown }>().catch(() => ({ names: [] }));
   const names = [...new Set((Array.isArray(body.names) ? body.names : []).filter((n): n is string => typeof n === "string" && SCRIPT_NAME.test(n)))].slice(0, 600);
-  const got = await d1r2Source(c.env.DB, c.env.SCRIPTS).scripts(names);
+  const got = await d1Source(c.env.DB).scripts(names);
   c.header("Cache-Control", "no-store");
   return c.json({ scripts: Object.fromEntries(got) });
 });
@@ -84,7 +84,7 @@ engine.get("/selftest", async (c) => {
   const t0 = Date.now();
   const core = await loadCore(() => ocgWasm);
   const t1 = Date.now();
-  const duel = await EngineDuel.create(core, new EngineData(d1r2Source(c.env.DB, c.env.SCRIPTS)), {
+  const duel = await EngineDuel.create(core, new EngineData(d1Source(c.env.DB)), {
     seed: [String(seed), String(seed * 7 + 1), String(seed * 13 + 2), String(seed * 31 + 3)],
     decks: [TEST_DECK_A, TEST_DECK_B], names: ["Bot A", "Bot B"], first: 0,
   });

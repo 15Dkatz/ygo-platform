@@ -13,16 +13,10 @@
     {
       "binding": "DB",
       "database_name": "ygo-platform",
-      // replaced with the real id after `wrangler d1 create ygo-platform`
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      // production database (wrangler d1 create ygo-platform)
+      "database_id": "f821269b-c0ef-4ab0-b292-a25b87568a6e",
       "migrations_dir": "migrations"
     }
-  ],
-  "r2_buckets": [
-    // card images cached from YGOPRODeck (they ask sites not to hotlink)
-    { "binding": "IMAGES", "bucket_name": "ygo-platform-images" },
-    // rules engine: ProjectIgnis CardScripts (*.lua, AGPL-3.0), key "scripts/<name>" (phase 4)
-    { "binding": "SCRIPTS", "bucket_name": "ygo-platform-scripts" }
   ],
   "durable_objects": {
     "bindings": [
