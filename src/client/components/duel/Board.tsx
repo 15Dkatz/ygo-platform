@@ -1,0 +1,168 @@
+import { useState, type DragEvent, type MouseEvent, type ReactNode } from "react";
+import type { BoardState, CardInstance, Zone } from "../../../shared/duel.ts";
+import type { Seat } from "../../../shared/duelActions.ts";
+import { CardBack, CardView } from "./CardView.tsx";
+
+export interface ZoneRef { zone: Zone; player: Seat; slot?: number }
+
+export interface BoardUI {
+  /** Bottom side of the board (your seat; seat 0 for spectators). */
+  me: Seat;
+  /** Your real seat, null when spectating. */
+  you: Seat | null;
+  pending: boolean;
+  flash: Set<string>;
+  selectedUid: string | null;
+  onCard(card: CardInstance, at: ZoneRef, e: MouseEvent): void;
+  onZone(at: ZoneRef, e: MouseEvent): void;
+  onHover(code: number | null): void;
+  onDrop(at: ZoneRef, uid: string): void;
+  onLp(player: Seat, e: MouseEvent): void;
+}
+
+export const DRAG_MIME = "application/x-ygo-uid";
+
+function dragStart(card: CardInstance) {
+  return (e: DragEvent) => {
+    e.dataTransfer.setData(DRAG_MIME, card.uid);
+    e.dataTransfer.setData("text/plain", card.uid);
+    e.dataTransfer.effectAllowed = "move";
+  };
+}
+
+function DropZone({ at, ui, className, label, children, onClick }: { at: ZoneRef; ui: BoardUI; className: string; label?: string; children?: ReactNode; onClick?: (e: MouseEvent) => void }) {
+  const [over, setOver] = useState(false);
+  const canDrop = ui.you !== null;
+  return (
+    <div
+      className={`duel-zone ${className} ${over ? "is-over" : ""} ${ui.pending ? "is-targetable" : ""}`}
+      data-zone={at.zone}
+      data-player={at.player}
+      data-slot={at.slot}
+      onClick={onClick ?? ((e) => ui.onZone(at, e))}
+      onDragOver={canDrop ? (e) => { if (e.dataTransfer.types.includes(DRAG_MIME)) { e.preventDefault(); setOver(true); } } : undefined}
+      onDragLeave={() => setOver(false)}
+      onDrop={canDrop ? (e) => {
+        e.preventDefault();
+        setOver(false);
+        const uid = e.dataTransfer.getData(DRAG_MIME);
+        if (uid) ui.onDrop(at, uid);
+      } : undefined}
+    >
+      {label && <span className="duel-zone-label">{label}</span>}
+      {children}
+    </div>
+  );
+}
+
+function Slot({ card, at, ui, label, className = "" }: { card: CardInstance | null; at: ZoneRef; ui: BoardUI; label: string; className?: string }) {
+  const controller = at.zone === "extraMonster" ? (card?.controller ?? card?.owner) : at.player;
+  return (
+    <DropZone at={at} ui={ui} className={`duel-slot ${className}`} label={card ? undefined : label}>
+      {card && (
+        <CardView
+          card={card}
+          draggable={ui.you !== null && controller === ui.you}
+          onDragStart={dragStart(card)}
+          selected={ui.selectedUid === card.uid}
+          flash={ui.flash.has(card.uid)}
+          onHover={ui.onHover}
+          onClick={(e) => { e.stopPropagation(); ui.onCard(card, at, e); }}
+        />
+      )}
+    </DropZone>
+  );
+}
+
+const PILE_LABEL: Record<string, string> = { deck: "Deck", extra: "Extra", gy: "GY", banished: "Banished" };
+
+function Pile({ cards, at, ui }: { cards: CardInstance[]; at: ZoneRef; ui: BoardUI }) {
+  const top = at.zone === "deck" ? cards[0] : cards[cards.length - 1];
+  const showFace = top && (at.zone === "gy" || at.zone === "banished") && top.code !== 0;
+  return (
+    <DropZone at={at} ui={ui} className={`duel-pile duel-pile-${at.zone}`} label={cards.length ? undefined : PILE_LABEL[at.zone]}>
+      {top && (showFace
+        ? <CardView card={top} onHover={ui.onHover} draggable={ui.you === at.player} onDragStart={dragStart(top)} />
+        : <div className="duel-card"><div className="duel-card-inner"><CardBack /></div></div>)}
+      <span className="duel-pile-count" title={`${PILE_LABEL[at.zone]}: ${cards.length}`}>{cards.length}</span>
+      <span className="duel-pile-name">{PILE_LABEL[at.zone]}</span>
+    </DropZone>
+  );
+}
+
+function Hand({ cards, player, ui, own }: { cards: CardInstance[]; player: Seat; ui: BoardUI; own: boolean }) {
+  return (
+    <DropZone at={{ zone: "hand", player }} ui={ui} className={`duel-hand ${own ? "is-own" : "is-opp"}`} onClick={() => undefined}>
+      <div className="duel-hand-fan" style={{ ["--n" as string]: Math.max(cards.length, 1) }}>
+        {cards.map((c, i) => (
+          <CardView
+            key={c.uid}
+            card={own ? { ...c, faceUp: true } : c}
+            draggable={own}
+            onDragStart={dragStart(c)}
+            selected={ui.selectedUid === c.uid}
+            onHover={ui.onHover}
+            onClick={own ? (e) => { e.stopPropagation(); ui.onCard(c, { zone: "hand", player, slot: i }, e); } : undefined}
+          />
+        ))}
+        {!cards.length && <span className="duel-zone-label">{own ? "Your hand is empty" : "Empty hand"}</span>}
+      </div>
+    </DropZone>
+  );
+}
+
+/** Both fields: opponent mirrored at the top, the 2 shared Extra Monster Zones in the middle. */
+export function Board({ board, ui }: { board: BoardState; ui: BoardUI }) {
+  const me = ui.me;
+  const opp: Seat = me === 0 ? 1 : 0;
+  const P = board.players;
+  const idx = [0, 1, 2, 3, 4];
+  const emzLeft = me === 0 ? 0 : 1;
+  const emzRight = 1 - emzLeft;
+  const slot = (p: Seat, zone: "monster" | "spelltrap", i: number, label: string) =>
+    <Slot key={`${p}${zone}${i}`} card={P[p][zone][i]} at={{ zone, player: p, slot: i }} ui={ui} label={label} />;
+
+  return (
+    <div className="duel-board-wrap">
+      <Hand cards={P[opp].hand} player={opp} ui={ui} own={ui.you === opp} />
+      <div className="duel-field">
+        {/* opponent: S/T row then monster row, mirrored */}
+        <Pile cards={P[opp].deck} at={{ zone: "deck", player: opp }} ui={ui} />
+        {[...idx].reverse().map((i) => slot(opp, "spelltrap", i, "S/T"))}
+        <Pile cards={P[opp].extra} at={{ zone: "extra", player: opp }} ui={ui} />
+
+        <Pile cards={P[opp].gy} at={{ zone: "gy", player: opp }} ui={ui} />
+        {[...idx].reverse().map((i) => slot(opp, "monster", i, "Monster"))}
+        <Slot card={P[opp].field} at={{ zone: "field", player: opp }} ui={ui} label="Field" className="duel-fieldzone" />
+
+        <Pile cards={P[opp].banished} at={{ zone: "banished", player: opp }} ui={ui} />
+        <div className="duel-gap" />
+        <Slot card={board.extraMonster[emzLeft]} at={{ zone: "extraMonster", player: me, slot: emzLeft }} ui={ui} label="Extra Monster" className="duel-emz" />
+        <div className="duel-gap" />
+        <Slot card={board.extraMonster[emzRight]} at={{ zone: "extraMonster", player: me, slot: emzRight }} ui={ui} label="Extra Monster" className="duel-emz" />
+        <div className="duel-gap" />
+        <Pile cards={P[me].banished} at={{ zone: "banished", player: me }} ui={ui} />
+
+        <Slot card={P[me].field} at={{ zone: "field", player: me }} ui={ui} label="Field" className="duel-fieldzone" />
+        {idx.map((i) => slot(me, "monster", i, "Monster"))}
+        <Pile cards={P[me].gy} at={{ zone: "gy", player: me }} ui={ui} />
+
+        <Pile cards={P[me].extra} at={{ zone: "extra", player: me }} ui={ui} />
+        {idx.map((i) => slot(me, "spelltrap", i, "S/T"))}
+        <Pile cards={P[me].deck} at={{ zone: "deck", player: me }} ui={ui} />
+      </div>
+      <Hand cards={P[me].hand} player={me} ui={ui} own={ui.you === me} />
+    </div>
+  );
+}
+
+/** Pendulum Zones are only filled by engine-mode boards (manual mode uses S/T zones 1 and 5, Master Rule 5). */
+export function PendulumStrip({ board, player, ui }: { board: BoardState; player: Seat; ui: BoardUI }) {
+  const cards = board.players[player].pendulum;
+  if (!cards.some(Boolean)) return null;
+  return (
+    <div className="duel-pendulum">
+      {cards.map((c, i) => <Slot key={i} card={c} at={{ zone: "pendulum", player, slot: i }} ui={ui} label={i ? "P-R" : "P-L"} />)}
+    </div>
+  );
+}

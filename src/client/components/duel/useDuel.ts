@@ -1,0 +1,177 @@
+// Client-side duel plumbing: identity (guest name / account), the room websocket, card data cache.
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { api, lookupCards } from "../../api.ts";
+import type { BoardState, CardInstance, ClientMsg, DuelEvent, RoomInfo, ServerMsg, SessionInfo } from "../../../shared/duel.ts";
+import type { Seat } from "../../../shared/duelActions.ts";
+import type { Card } from "../../../shared/types.ts";
+
+// ---------- identity ----------
+
+export interface DuelIdentity { id: string; name: string; guest: boolean }
+
+export function useDuelIdentity() {
+  const [identity, setIdentity] = useState<DuelIdentity | null>(null);
+  const [requireAccount, setRequireAccount] = useState(false);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    api<{ identity: DuelIdentity | null; requireAccount: boolean }>("/api/duel/me")
+      .then((r) => { setIdentity(r.identity); setRequireAccount(r.requireAccount); })
+      .catch(() => setIdentity(null))
+      .finally(() => setLoading(false));
+  }, []);
+  const setName = useCallback(async (name: string) => {
+    const r = await api<{ identity: DuelIdentity }>("/api/duel/guest", { method: "POST", json: { name } });
+    setIdentity(r.identity);
+    return r.identity;
+  }, []);
+  return { identity, requireAccount, loading, setName };
+}
+
+// ---------- websocket ----------
+
+export interface ChatLine { from: string; text: string; at?: number; system?: boolean }
+export interface Toast { id: number; text?: string; event?: DuelEvent; error?: boolean }
+
+export interface DuelConn {
+  status: "connecting" | "open" | "closed" | "gone";
+  room: RoomInfo | null;
+  you: Seat | null;
+  session: SessionInfo | null;
+  board: BoardState | null;
+  chat: ChatLine[];
+  peek: { title: string; cards: CardInstance[] } | null;
+  toasts: Toast[];
+}
+
+let toastSeq = 0;
+
+export function useDuelSocket(roomId: string) {
+  const [conn, setConn] = useState<DuelConn>({ status: "connecting", room: null, you: null, session: null, board: null, chat: [], peek: null, toasts: [] });
+  const wsRef = useRef<WebSocket | null>(null);
+  const queue = useRef<ClientMsg[]>([]);
+
+  const toast = useCallback((t: Omit<Toast, "id">, ms = 4000) => {
+    const id = ++toastSeq;
+    setConn((c) => ({ ...c, toasts: [...c.toasts.slice(-4), { ...t, id }] }));
+    setTimeout(() => setConn((c) => ({ ...c, toasts: c.toasts.filter((x) => x.id !== id) })), ms);
+  }, []);
+
+  useEffect(() => {
+    let stopped = false;
+    let retry = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // heartbeat: the room answers "ping" with "pong" without waking up, and drops silent sockets
+    const ping = setInterval(() => { if (wsRef.current?.readyState === WebSocket.OPEN) wsRef.current.send("ping"); }, 25_000);
+    const connect = () => {
+      const proto = location.protocol === "https:" ? "wss" : "ws";
+      const ws = new WebSocket(`${proto}://${location.host}/ws/room/${encodeURIComponent(roomId)}`);
+      wsRef.current = ws;
+      setConn((c) => ({ ...c, status: "connecting" }));
+      ws.onopen = () => {
+        retry = 0;
+        setConn((c) => ({ ...c, status: "open", chat: [] }));
+        for (const m of queue.current.splice(0)) ws.send(JSON.stringify(m));
+      };
+      ws.onmessage = (e) => {
+        let msg: ServerMsg;
+        try { msg = JSON.parse(e.data); } catch { return; }
+        switch (msg.t) {
+          case "room": setConn((c) => ({ ...c, room: msg.room, you: msg.you })); break;
+          case "session": setConn((c) => ({ ...c, session: msg.session, board: msg.session.stage === "lobby" ? null : c.board })); break;
+          case "state": setConn((c) => ({ ...c, board: msg.state })); break;
+          case "chat": setConn((c) => ({ ...c, chat: [...c.chat.slice(-199), msg] })); break;
+          case "peek": setConn((c) => ({ ...c, peek: { title: msg.title, cards: msg.cards } })); break;
+          case "event": toast({ event: msg.event }, msg.event.kind === "reveal" ? 7000 : 4000); break;
+          case "error": toast({ text: msg.message, error: true }); break;
+          default: break;
+        }
+      };
+      ws.onclose = (e) => {
+        if (wsRef.current === ws) wsRef.current = null;
+        if (stopped) return;
+        if (e.code === 4404) { setConn((c) => ({ ...c, status: "gone" })); return; }
+        setConn((c) => ({ ...c, status: "closed" }));
+        timer = setTimeout(connect, Math.min(10_000, 1000 * 2 ** retry++));
+      };
+    };
+    // deferred so React StrictMode's mount/unmount/mount does not open a throwaway socket
+    timer = setTimeout(connect, 0);
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+      clearInterval(ping);
+      wsRef.current?.close(1000, "leaving");
+    };
+  }, [roomId, toast]);
+
+  const send = useCallback((m: ClientMsg) => {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(m));
+    else queue.current.push(m);
+  }, []);
+
+  const clearPeek = useCallback(() => setConn((c) => ({ ...c, peek: null })), []);
+  return { conn, send, toast, clearPeek };
+}
+
+// ---------- card data ----------
+
+const cache = new Map<number, Card | null>();
+const listeners = new Set<() => void>();
+let pending = new Set<number>();
+let flushTimer: ReturnType<typeof setTimeout> | undefined;
+
+function request(codes: number[]) {
+  for (const c of codes) if (c > 0 && !cache.has(c)) pending.add(c);
+  if (!pending.size || flushTimer) return;
+  flushTimer = setTimeout(async () => {
+    flushTimer = undefined;
+    const batch = [...pending];
+    pending = new Set();
+    for (const c of batch) cache.set(c, null); // mark in flight
+    try {
+      const r = await lookupCards(batch);
+      const byId = new Map(r.cards.map((c) => [c.id, c]));
+      for (const raw of batch) cache.set(raw, byId.get(r.alias[raw] ?? raw) ?? null);
+    } catch {
+      for (const c of batch) cache.delete(c);
+    }
+    listeners.forEach((l) => l());
+  }, 30);
+}
+
+export function getCard(code: number): Card | null {
+  return cache.get(code) ?? null;
+}
+
+/** Re-renders when any of `codes` arrive; returns a lookup function. */
+export function useCardData(codes: number[]): (code: number) => Card | null {
+  const [, setTick] = useState(0);
+  const key = [...new Set(codes)].sort().join(",");
+  useEffect(() => {
+    const l = () => setTick((t) => t + 1);
+    listeners.add(l);
+    return () => { listeners.delete(l); };
+  }, []);
+  useEffect(() => { request(key ? key.split(",").map(Number) : []); }, [key]);
+  return getCard;
+}
+
+/** Every visible code on a board (for prefetching card data). */
+export function boardCodes(b: BoardState | null, extra: CardInstance[] = []): number[] {
+  if (!b) return extra.map((c) => c.code);
+  const out: number[] = [];
+  const add = (c: CardInstance | null) => { if (c) { out.push(c.code); c.materials?.forEach(add); } };
+  for (const p of b.players) [...p.hand, ...p.extra, ...p.gy, ...p.banished, ...p.monster, ...p.spelltrap, ...p.pendulum, p.field].forEach(add);
+  b.extraMonster.forEach(add);
+  extra.forEach(add);
+  for (const line of b.log.slice(-200)) for (const m of line.matchAll(/\[\[(\d+)\]\]/g)) out.push(Number(m[1]));
+  return out.filter((c) => c > 0);
+}
+
+// ---------- card classification (for menus / default drops) ----------
+
+export const isExtraDeckCard = (c: Card | null) => !!c?.type && /Fusion|Synchro|XYZ|Link/i.test(c.type);
+export const isPendulum = (c: Card | null) => !!c?.type && /Pendulum/i.test(c.type);
+export const isFieldSpell = (c: Card | null) => c?.category === "Spell" && c.race === "Field";

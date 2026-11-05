@@ -1,0 +1,21 @@
+/* DuelPage layout: board column + side panel (preview, log, chat). Board pieces live in components/duel/duel.css. */
+.duel-page { display: flex; flex-direction: column; gap: 10px; }
+.duel-topline { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.duel-topline h1 { margin: 0; font-size: 18px; overflow-wrap: anywhere; }
+.duel-topline-meta { margin-left: auto; font-size: 13px; }
+.duel-back { text-decoration: none; }
+.duel-help-btn { width: 30px; height: 30px; padding: 0; border-radius: 50%; }
+
+.duel-layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 12px; align-items: start; }
+.duel-layout.is-preduel { grid-template-columns: minmax(0, 1fr) 320px; }
+.duel-main { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.duel-side { display: flex; flex-direction: column; gap: 10px; position: sticky; top: 64px; max-height: calc(100vh - 80px); min-width: 0; }
+
+.duel-tools { display: flex; flex-wrap: wrap; gap: 6px; }
+.duel-tools button { font-size: 13px; padding: 4px 10px; }
+.duel-finished { border-top: 1px solid var(--border); padding-top: 10px; }
+
+@media (max-width: 1000px) {
+  .duel-layout, .duel-layout.is-preduel { grid-template-columns: minmax(0, 1fr); }
+  .duel-side { position: static; max-height: none; }
+}
