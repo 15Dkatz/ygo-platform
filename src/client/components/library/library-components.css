@@ -1,0 +1,14 @@
+.import-decks {
+  display: flex; flex-direction: column; gap: 8px; padding: 12px;
+  border: 1px dashed var(--border); border-radius: var(--radius); background: var(--surface);
+}
+.import-decks.compact { padding: 8px; border-style: solid; }
+.import-decks.over { border-color: var(--accent); background: var(--accent-soft); }
+.import-buttons { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.import-progress { display: flex; gap: 8px; align-items: center; }
+.import-progress progress { flex: 1; max-width: 320px; accent-color: var(--accent); }
+.import-error { color: var(--danger); margin: 0; }
+.import-summary { font-size: 13px; }
+.import-summary details { margin-top: 4px; }
+.id-list { display: block; max-height: 120px; overflow: auto; font-size: 12px; word-break: break-word; }
+.warn-text { color: var(--warn); }

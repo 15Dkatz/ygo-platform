@@ -1,0 +1,28 @@
+.card-search { display: flex; flex-direction: column; min-height: 0; height: 100%; gap: 6px; }
+.cs-filters { display: flex; flex-direction: column; gap: 6px; }
+.cs-row { display: flex; gap: 6px; align-items: center; }
+.cs-q { flex: 1; min-width: 0; }
+.cs-check { display: inline-flex; gap: 4px; align-items: center; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.cs-more > summary { cursor: pointer; color: var(--accent); font-size: 13px; }
+.cs-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 6px; }
+.cs-grid > * { min-width: 0; }
+.cs-range { display: flex; gap: 4px; }
+.cs-range > * { flex: 1; min-width: 0; }
+.cs-status { font-size: 12px; }
+.cs-error { color: var(--danger); }
+.cs-results { flex: 1; min-height: 200px; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
+.cs-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px; }
+.cs-card {
+  position: relative; display: flex; flex-direction: column; gap: 2px; padding: 3px; min-width: 0;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 6px; cursor: grab;
+}
+.cs-card:hover, .cs-card:focus-visible { border-color: var(--accent); outline: none; }
+.cs-name { font-size: 10px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+.cs-ban, .cs-used {
+  position: absolute; top: 4px; min-width: 18px; padding: 0 4px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  text-align: center; line-height: 18px;
+}
+.cs-ban { left: 4px; background: var(--danger); color: var(--accent-fg); }
+.cs-ban.ban-2 { background: var(--warn); }
+.cs-used { right: 4px; background: var(--accent); color: var(--accent-fg); }
+.cs-sentinel { padding: 12px; text-align: center; font-size: 12px; color: var(--muted); }

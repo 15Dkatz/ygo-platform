@@ -1,0 +1,32 @@
+/* Shared card visuals (library, deck builder, duel UI). Colours only from tokens in styles.css. */
+.card-img {
+  display: block; width: 100%; aspect-ratio: 59 / 86; object-fit: cover;
+  border-radius: 4px; background: var(--surface-2);
+}
+.card-ph {
+  display: flex; align-items: center; justify-content: center; padding: 6px; text-align: center;
+  font-size: 11px; line-height: 1.2; color: var(--muted); overflow: hidden;
+  border: 1px dashed var(--border); word-break: break-word;
+}
+.card-ph.ph-monster { box-shadow: inset 0 0 0 3px var(--monster); border: 0; }
+.card-ph.ph-spell { box-shadow: inset 0 0 0 3px var(--spell); border: 0; }
+.card-ph.ph-trap { box-shadow: inset 0 0 0 3px var(--trap); border: 0; }
+
+.card-preview {
+  position: fixed; left: 0; top: 0; z-index: 1000; display: flex; gap: 10px;
+  width: min(440px, calc(100vw - 16px)); padding: 8px; pointer-events: none;
+  background: var(--surface); color: var(--fg); border: 1px solid var(--accent);
+  border-radius: var(--radius); box-shadow: var(--shadow); font-size: 12px;
+}
+.card-preview .card-img { width: 120px; flex: none; align-self: flex-start; }
+.card-preview-body { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.card-preview-body p { margin: 0; }
+.card-preview-text { white-space: pre-wrap; margin-top: 4px !important; }
+.small { font-size: 11px; }
+
+.tier-badge { font-weight: 700; font-size: 11px; }
+.tier-S { color: var(--tier-s); }
+.tier-A { color: var(--tier-a); }
+.tier-B { color: var(--tier-b); }
+.tier-C { color: var(--muted); }
+.tier-D { color: var(--muted); opacity: 0.75; }

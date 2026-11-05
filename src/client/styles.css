@@ -17,6 +17,9 @@
   --monster: #c8823b;
   --spell: #1d9e74;
   --trap: #bc4a8c;
+  --accent-soft: rgb(76 95 215 / 0.12);
+  --danger-soft: rgb(217 72 15 / 0.12);
+  --backdrop: rgb(10 12 20 / 0.55);
   --radius: 8px;
   --shadow: 0 6px 24px rgb(0 0 0 / 0.18);
   --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -32,6 +35,15 @@
     --border: #343846;
     --accent: #8a9cff;
     --accent-fg: #0d1030;
+    --accent-soft: rgb(138 156 255 / 0.16);
+    --danger-soft: rgb(255 120 70 / 0.16);
+    --danger: #ff7a45;
+    --ok: #51cf66;
+    --warn: #fcc419;
+    --tier-s: #f0b429;
+    --tier-a: #51cf66;
+    --tier-b: #4dabf7;
+    --backdrop: rgb(0 0 0 / 0.65);
     color-scheme: dark;
   }
 }
@@ -44,6 +56,15 @@
   --border: #343846;
   --accent: #8a9cff;
   --accent-fg: #0d1030;
+  --accent-soft: rgb(138 156 255 / 0.16);
+  --danger-soft: rgb(255 120 70 / 0.16);
+  --danger: #ff7a45;
+  --ok: #51cf66;
+  --warn: #fcc419;
+  --tier-s: #f0b429;
+  --tier-a: #51cf66;
+  --tier-b: #4dabf7;
+  --backdrop: rgb(0 0 0 / 0.65);
   color-scheme: dark;
 }
 
