@@ -1,0 +1,33 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ygo-platform",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "not_found_handling": "single-page-application",
+    // API, image proxy and websocket paths go to the Worker first
+    "run_worker_first": ["/api/*", "/img/*", "/ws/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ygo-platform",
+      // replaced with the real id after `wrangler d1 create ygo-platform`
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    // card images cached from YGOPRODeck (they ask sites not to hotlink)
+    { "binding": "IMAGES", "bucket_name": "ygo-platform-images" }
+  ],
+  "durable_objects": {
+    "bindings": [
+      // one instance per duel room (manual sim + rules engine)
+      { "name": "DUEL_ROOM", "class_name": "DuelRoom" }
+    ]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["DuelRoom"] }],
+  "observability": { "enabled": true }
+}

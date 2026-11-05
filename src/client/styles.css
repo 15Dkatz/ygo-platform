@@ -1,0 +1,82 @@
+/* Design tokens. Every page uses these; add new tokens here rather than hard-coding colours. */
+:root {
+  --bg: #f6f7fb;
+  --surface: #ffffff;
+  --surface-2: #eef0f6;
+  --fg: #1b1c22;
+  --muted: #646778;
+  --border: #d8dbe6;
+  --accent: #4c5fd7;
+  --accent-fg: #ffffff;
+  --danger: #d9480f;
+  --ok: #2b8a3e;
+  --warn: #b08900;
+  --tier-s: #b8860b;
+  --tier-a: #2b8a3e;
+  --tier-b: #1c7ed6;
+  --monster: #c8823b;
+  --spell: #1d9e74;
+  --trap: #bc4a8c;
+  --radius: 8px;
+  --shadow: 0 6px 24px rgb(0 0 0 / 0.18);
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121318;
+    --surface: #1b1d24;
+    --surface-2: #252832;
+    --fg: #e8e9ee;
+    --muted: #9a9cab;
+    --border: #343846;
+    --accent: #8a9cff;
+    --accent-fg: #0d1030;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121318;
+  --surface: #1b1d24;
+  --surface-2: #252832;
+  --fg: #e8e9ee;
+  --muted: #9a9cab;
+  --border: #343846;
+  --accent: #8a9cff;
+  --accent-fg: #0d1030;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { font: 14px/1.45 var(--font); background: var(--bg); color: var(--fg); }
+a { color: var(--accent); }
+h1 { font-size: 20px; margin: 0 0 12px; }
+h2 { font-size: 16px; margin: 0 0 8px; }
+.muted { color: var(--muted); }
+
+input, select, button, textarea {
+  font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 6px; padding: 6px 8px;
+}
+button { cursor: pointer; }
+button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+button:disabled { opacity: 0.5; cursor: default; }
+
+.app { min-height: 100vh; display: flex; flex-direction: column; }
+.topbar {
+  position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 16px;
+  padding: 10px 16px; background: var(--surface); border-bottom: 1px solid var(--border);
+}
+.topbar .brand { font-weight: 700; text-decoration: none; color: var(--fg); }
+.topbar nav { display: flex; gap: 4px; flex: 1; }
+.topbar nav a { padding: 6px 10px; border-radius: 6px; text-decoration: none; color: var(--muted); }
+.topbar nav a.active { background: var(--surface-2); color: var(--fg); }
+.topbar .account { text-decoration: none; }
+.content { flex: 1; padding: 16px; width: 100%; max-width: 1400px; margin: 0 auto; }
+
+@media (max-width: 600px) {
+  .topbar { gap: 8px; padding: 8px 12px; }
+  .topbar .brand { display: none; }
+  .content { padding: 12px 16px; }
+}

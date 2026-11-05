@@ -1,0 +1,37 @@
+{
+  "name": "ygo-platform",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "npm run build && vite preview",
+    "deploy": "npm run build && wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local",
+    "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
+    "cards:import:local": "node --experimental-strip-types scripts/import-cards.ts --local",
+    "cards:import:remote": "node --experimental-strip-types scripts/import-cards.ts --remote",
+    "cf-typegen": "wrangler types"
+  },
+  "dependencies": {
+    "hono": "^4.13.16",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-router-dom": "^7.18.5"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.67.0",
+    "@cloudflare/workers-types": "^5.20261104.1",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.2.1",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.5",
+    "vitest": "^5.1.0",
+    "wrangler": "^4.157.0"
+  }
+}
