@@ -5,6 +5,9 @@ export interface Env {
   SCRIPTS: R2Bucket;
   /** "1" enables GET /api/engine/selftest (dev only; set in .dev.vars). */
   ENGINE_SELFTEST?: string;
+  /** Where rules-enforced duels run: "host" (the room host's browser, free; the default)
+   *  or "server" (this Durable Object; needs the Workers Paid plan for CPU). */
+  ENGINE_RUNNER?: string;
   DUEL_ROOM: DurableObjectNamespace;
   ASSETS: Fetcher;
 }

@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "../env.ts";
 import type {
-  BoardState, ClientMsg, DuelStage, RoomInfo, RpsChoice, ServerMsg, SessionInfo,
+  BoardState, ClientMsg, DuelStage, EngineHostStart, RoomInfo, RpsChoice, ServerMsg, SessionInfo,
 } from "../../shared/duel.ts";
 import type { DuelMode } from "../../shared/types.ts";
 import { validateDeck, type DuelAction, type Seat } from "../../shared/duelActions.ts";
@@ -15,6 +15,10 @@ import { BadResponse, restoreRoomEngine, startRoomEngine, type RoomEngineSession
 /** DO storage key of the engine snapshot (seed + decks + responses; replayed on wake). */
 const ENGINE_KEY = "engine";
 const MAX_LOG = 500;
+/** Host-runs-rules mode: whose browser runs the engine (the room creator sits in seat 0). */
+const HOST_SEAT: Seat = 0;
+/** DO storage values are capped at 128 KiB; a snapshot is ~40 bytes per engine response. */
+const MAX_SNAPSHOT_CHARS = 120_000;
 
 /**
  * One duel room. PHASE 3 implements manual mode (shared board state, players move cards
@@ -66,6 +70,10 @@ interface RoomData {
   chat: ChatLine[];
   /** Engine mode: the prompts currently waiting for an answer (kept so reconnecting players get theirs). */
   prompts?: { seat: Seat; prompt: unknown }[];
+  /** Where this room's rules engine runs (fixed when the room is created). */
+  engineRunner?: "host" | "server";
+  /** Host-runs-rules mode: the duel setup the host's browser starts from. */
+  hostStart?: EngineHostStart;
 }
 
 interface Attachment { id: string | null; name: string; seat: Seat | null; since?: number }
@@ -95,6 +103,7 @@ export class DuelRoom extends DurableObject<Env> {
     this.room = {
       ...info, created_at: new Date().toISOString(), stage: "lobby", seats: [null, null], rps: [null, null],
       chooser: null, winner: null, rematch: [false, false], switchVotes: [false, false], board: null, chat: [],
+      engineRunner: this.env.ENGINE_RUNNER === "server" ? "server" : "host",
     };
     await this.save();
     await this.updateIndex();
@@ -148,6 +157,7 @@ export class DuelRoom extends DurableObject<Env> {
     this.send(server, { t: "session", session: this.session(seat) });
     if (room.board) this.send(server, { t: "state", state: maskBoard(room.board, seat) });
     if (seat !== null && room.stage === "duel" && room.mode === "engine") this.send(server, { t: "prompt", prompt: this.promptFor(seat) });
+    if (seat === HOST_SEAT && room.mode === "engine" && this.hostMode() && room.stage === "duel") await this.sendHostJob(server);
     for (const line of room.chat) this.send(server, { t: "chat", ...line });
     await this.save();
     this.broadcastSession();
@@ -311,7 +321,11 @@ export class DuelRoom extends DurableObject<Env> {
         room.switchVotes[p] = true;
         this.systemLine(`${a.name} wants to play this room manually.`);
         if (room.switchVotes[0] && room.switchVotes[1]) {
-          if (room.stage === "duel") {
+          if (room.stage === "duel" && this.hostMode()) {
+            // the host's last update is the engine's full (unmasked) board
+            if (room.board) room.board.log = [...room.board.log, "Switched to manual mode: players now move cards themselves."].slice(-MAX_LOG);
+            await this.dropEngine();
+          } else if (room.stage === "duel") {
             // Mid-duel: the engine's current board becomes the manual board.
             await this.withEngine(async () => {
               const board = (await this.engineSession()).exportBoard();
@@ -331,6 +345,13 @@ export class DuelRoom extends DurableObject<Env> {
       case "respond": {
         const p = this.seated(a);
         if (room.mode !== "engine" || room.stage !== "duel") throw new RoomError("No rules-enforced duel is running.");
+        if (this.hostMode()) {
+          if (!room.prompts?.some((x) => x.seat === p)) throw new RoomError("There's nothing for you to choose right now.");
+          const hosts = this.socketsOf(HOST_SEAT);
+          if (!hosts.length) throw new RoomError(`Waiting for ${room.seats[HOST_SEAT]?.name ?? "the host"} to reconnect: their browser runs the rules.`);
+          for (const ws of hosts) this.send(ws, { t: "engineRespond", seat: p, response: msg.response });
+          return;
+        }
         await this.withEngine(async () => {
           if (room.stage !== "duel" || room.mode !== "engine") throw new RoomError("No rules-enforced duel is running.");
           const session = await this.engineSession();
@@ -343,6 +364,24 @@ export class DuelRoom extends DurableObject<Env> {
           }
           await this.applyEngineUpdate(update);
         });
+        return;
+      }
+      case "hostUpdate": {
+        if (a.seat !== HOST_SEAT || !this.hostMode() || room.mode !== "engine" || room.stage !== "duel") {
+          throw new RoomError("Only the host's rules engine can update this duel.");
+        }
+        const update = checkHostUpdate(msg.update);
+        const snap = JSON.stringify(msg.snapshot ?? null);
+        await this.applyEngineUpdate(update, snap.length <= MAX_SNAPSHOT_CHARS ? msg.snapshot : undefined);
+        return;
+      }
+      case "hostError": {
+        if (a.seat !== HOST_SEAT || !this.hostMode()) throw new RoomError("Only the host's rules engine can report errors.");
+        const seat: Seat = msg.seat === 1 ? 1 : 0;
+        for (const ws of this.socketsOf(seat)) {
+          this.send(ws, { t: "error", message: String(msg.message ?? "That answer isn't allowed.").slice(0, 200) });
+          this.send(ws, { t: "prompt", prompt: this.promptFor(seat) });   // the client hid it when answering
+        }
         return;
       }
       default:
@@ -398,6 +437,28 @@ export class DuelRoom extends DurableObject<Env> {
     const room = this.room!;
     const [s0, s1] = room.seats;
     if (!s0?.deck || !s1?.deck) throw new RoomError("Both players need a deck.");
+    if (room.mode === "engine" && this.hostMode()) {
+      await this.dropEngine();
+      room.hostStart = {
+        names: [s0.name, s1.name],
+        decks: [{ main: s0.deck.main, extra: s0.deck.extra }, { main: s1.deck.main, extra: s1.deck.extra }],
+        first,
+        seed: [...crypto.getRandomValues(new Uint32Array(8))],
+      };
+      room.board = null;
+      room.stage = "duel";
+      room.chooser = null;
+      room.winner = null;
+      room.endReason = undefined;
+      room.rematch = [false, false];
+      room.switchVotes = [false, false];
+      this.systemLine(`The rules-enforced duel begins! ${room.seats[first]!.name} goes first. The rules run in ${s0.name}'s browser.`);
+      await this.save();
+      this.broadcastAll();
+      await this.updateIndex();
+      for (const ws of this.socketsOf(HOST_SEAT)) await this.sendHostJob(ws);
+      return;
+    }
     if (room.mode === "engine") {
       await this.withEngine(async () => {
         await this.dropEngine();
@@ -499,6 +560,22 @@ export class DuelRoom extends DurableObject<Env> {
     return session;
   }
 
+  private hostMode(): boolean {
+    const room = this.room;
+    return !!room && (room.engineRunner ?? (this.env.ENGINE_RUNNER === "server" ? "server" : "host")) === "host";
+  }
+
+  private socketsOf(seat: Seat): WebSocket[] {
+    return this.ctx.getWebSockets().filter((w) => this.att(w).seat === seat);
+  }
+
+  /** Tell the host's browser to start the duel's engine, or resume it from the stored moves. */
+  private async sendHostJob(ws: WebSocket) {
+    const room = this.room!;
+    const snapshot = await this.ctx.storage.get(ENGINE_KEY);
+    this.send(ws, { t: "engineHost", start: room.hostStart, snapshot: snapshot ?? undefined });
+  }
+
   private async dropEngine() {
     this.engine = null;
     if (this.room) this.room.prompts = [];
@@ -510,7 +587,7 @@ export class DuelRoom extends DurableObject<Env> {
   }
 
   /** Store, persist and broadcast one engine step. */
-  private async applyEngineUpdate(u: RoomEngineUpdate) {
+  private async applyEngineUpdate(u: RoomEngineUpdate, hostSnapshot?: unknown) {
     const room = this.room!;
     const log = [...(room.board?.log ?? []), ...(u.log ?? [])].slice(-MAX_LOG);
     if (u.board) room.board = u.board;
@@ -519,6 +596,8 @@ export class DuelRoom extends DurableObject<Env> {
     if (u.finished) {
       this.finish(u.finished.winner, u.finished.reason);
       await this.dropEngine();
+    } else if (hostSnapshot !== undefined) {
+      await this.ctx.storage.put(ENGINE_KEY, hostSnapshot);
     } else if (this.engine) {
       await this.ctx.storage.put(ENGINE_KEY, this.engine.snapshot());
     }
@@ -531,6 +610,7 @@ export class DuelRoom extends DurableObject<Env> {
     const room = this.room!;
     if (room.mode === "engine") {
       room.prompts = [];
+      room.hostStart = undefined;
       this.engine = null;
       void this.ctx.storage.delete(ENGINE_KEY);
     }
@@ -567,6 +647,7 @@ export class DuelRoom extends DurableObject<Env> {
     room.winner = null;
     room.endReason = undefined;
     room.prompts = [];
+    room.hostStart = undefined;
     this.engine = null;
     void this.ctx.storage.delete(ENGINE_KEY);
   }
@@ -664,6 +745,7 @@ export class DuelRoom extends DurableObject<Env> {
       chooser: room.chooser, winner: room.winner, endReason: room.endReason, rematch: room.rematch,
       engineNotice: showNotice ? ENGINE_NOTICE : undefined,
       switchVotes: room.mode === "engine" ? room.switchVotes : undefined,
+      engineHost: room.mode === "engine" && this.hostMode() ? HOST_SEAT : undefined,
     };
   }
 
@@ -714,3 +796,35 @@ export class DuelRoom extends DurableObject<Env> {
 }
 
 class RoomError extends Error {}
+
+type EnginePromptEntry = NonNullable<RoomEngineUpdate["prompts"]>[number];
+
+/** Sanity-check an engine update from the host's browser before storing and broadcasting it.
+ *  (The host is trusted with the rules in this mode; this only keeps malformed data out.) */
+function checkHostUpdate(raw: unknown): RoomEngineUpdate {
+  const u = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const bad = (why: string) => new RoomError(`Bad engine update (${why}).`);
+  const out: RoomEngineUpdate = {};
+  if (u.board !== undefined) {
+    const b = u.board as BoardState;
+    if (!b || typeof b !== "object" || !Array.isArray(b.players) || b.players.length !== 2 || !Array.isArray(b.extraMonster)) throw bad("board");
+    out.board = b;
+  }
+  if (u.prompts !== undefined) {
+    if (!Array.isArray(u.prompts) || u.prompts.length > 2) throw bad("prompts");
+    out.prompts = (u.prompts as { seat: unknown; prompt: unknown }[]).map((x) => {
+      if (!x || (x.seat !== 0 && x.seat !== 1) || !x.prompt || typeof x.prompt !== "object") throw bad("prompt");
+      return { seat: x.seat, prompt: x.prompt } as EnginePromptEntry;
+    });
+  }
+  if (u.log !== undefined) {
+    if (!Array.isArray(u.log)) throw bad("log");
+    out.log = u.log.filter((l): l is string => typeof l === "string").slice(0, 200).map((l) => l.slice(0, 300));
+  }
+  if (u.finished !== undefined && u.finished !== null) {
+    const f = u.finished as { winner?: unknown; reason?: unknown };
+    if (f.winner !== 0 && f.winner !== 1 && f.winner !== null) throw bad("result");
+    out.finished = { winner: f.winner as Seat | null, reason: String(f.reason ?? "Duel over").slice(0, 120) };
+  }
+  return out;
+}

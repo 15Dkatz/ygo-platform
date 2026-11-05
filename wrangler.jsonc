@@ -31,5 +31,10 @@
     ]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["DuelRoom"] }],
+  "vars": {
+    // where rules-enforced duels run: "host" = the room host's browser (free plan),
+    // "server" = the DuelRoom Durable Object (needs Workers Paid for CPU)
+    "ENGINE_RUNNER": "host"
+  },
   "observability": { "enabled": true }
 }

@@ -57,6 +57,27 @@ engine.post("/support", async (c) => {
   return c.json({ unsupported });
 });
 
+// ---- data for engines running in the host's browser (host-runs-rules rooms) ----
+
+/** POST /api/engine/cards { ids } -> { cards: EngineCardRow[] } (BabelCDB rows the core reads). */
+engine.post("/cards", async (c) => {
+  const body = await c.req.json<{ ids?: unknown }>().catch(() => ({ ids: [] }));
+  const ids = [...new Set((Array.isArray(body.ids) ? body.ids : []).map(Number).filter((x) => Number.isInteger(x) && x > 0))].slice(0, 2000);
+  const rows = await d1r2Source(c.env.DB, c.env.SCRIPTS).cards(ids);
+  c.header("Cache-Control", "no-store");
+  return c.json({ cards: [...rows.values()] });
+});
+
+/** POST /api/engine/scripts { names } -> { scripts: { name: body | null } } (Lua from the SCRIPTS bucket). */
+const SCRIPT_NAME = /^[A-Za-z0-9_.-]{1,80}\.lua$/;
+engine.post("/scripts", async (c) => {
+  const body = await c.req.json<{ names?: unknown }>().catch(() => ({ names: [] }));
+  const names = [...new Set((Array.isArray(body.names) ? body.names : []).filter((n): n is string => typeof n === "string" && SCRIPT_NAME.test(n)))].slice(0, 600);
+  const got = await d1r2Source(c.env.DB, c.env.SCRIPTS).scripts(names);
+  c.header("Cache-Control", "no-store");
+  return c.json({ scripts: Object.fromEntries(got) });
+});
+
 engine.get("/selftest", async (c) => {
   if (c.env.ENGINE_SELFTEST !== "1") return c.json({ error: "not found" }, 404);
   const seed = Number(c.req.query("seed") ?? 1) | 0;

@@ -272,6 +272,10 @@ export function DuelPage() {
             <PhaseBar board={board!} you={you} act={act} />
             {playing && engineMode && (
               <div className="duel-engine">
+                {conn.hostStatus && <p className="duel-engine-wait" role="status">{conn.hostStatus}</p>}
+                {session.engineHost !== undefined && session.engineHost !== you && !session.seats[session.engineHost]?.connected && (
+                  <p className="duel-engine-wait" role="status">{session.seats[session.engineHost]?.name ?? "The host"} is disconnected. Their browser runs the rules, so the duel continues when they're back.</p>
+                )}
                 {conn.prompt ? (
                   <EnginePromptPanel prompt={conn.prompt} onRespond={(response) => send({ t: "respond", response })} cardName={(code) => getCard(code)?.name} />
                 ) : (

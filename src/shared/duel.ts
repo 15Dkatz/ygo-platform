@@ -71,7 +71,10 @@ export type ClientMsg =
   | { t: "coinToss" }                          // either player: let a coin decide instead of RPS
   | { t: "chooseOrder"; first: boolean }       // RPS/coin winner (or previous loser) picks
   | { t: "rematch" }                           // after a finished duel; both must ask
-  | { t: "leave" };                            // give up the seat (before the duel) / forfeit (during)
+  | { t: "leave" }                             // give up the seat (before the duel) / forfeit (during)
+  // --- additive (host-runs-rules mode): only accepted from the host's socket ---
+  | { t: "hostUpdate"; update: unknown; snapshot: unknown }   // one engine step, unmasked (the server masks per viewer)
+  | { t: "hostError"; seat: 0 | 1; message: string };         // the engine refused that player's answer
 
 export type ServerMsg =
   | { t: "room"; room: RoomInfo; you: 0 | 1 | null }
@@ -82,7 +85,18 @@ export type ServerMsg =
   // --- additive (phase 3) ---
   | { t: "session"; session: SessionInfo }    // seats, pre-duel stage, winner; sent on every change
   | { t: "peek"; title: string; cards: CardInstance[] }   // private: only to the player who looked (top N / deck search)
-  | { t: "event"; event: DuelEvent };         // transient effect for toasts/animations (attack, reveal, dice, coin)
+  | { t: "event"; event: DuelEvent }          // transient effect for toasts/animations (attack, reveal, dice, coin)
+  // --- additive (host-runs-rules mode): only sent to the host ---
+  | { t: "engineHost"; start?: EngineHostStart; snapshot?: unknown }   // run (or resume) this duel's engine
+  | { t: "engineRespond"; seat: 0 | 1; response: unknown };            // a player's answer, for the host's engine
+
+/** What the host's browser needs to create the duel (same as the server's RoomEngineOptions). */
+export interface EngineHostStart {
+  names: [string, string];
+  decks: [{ main: number[]; extra: number[] }, { main: number[]; extra: number[] }];
+  first: 0 | 1;
+  seed: number[];   // 32-bit words
+}
 
 /** Log lines may contain card tokens `[[12345]]` that the client renders as the card's name. */
 export const cardToken = (code: number) => `[[${code}]]`;
@@ -116,6 +130,8 @@ export interface SessionInfo {
   /** Engine mode is not playable yet: the room asks both players to agree to play manually. */
   engineNotice?: string;
   switchVotes?: [boolean, boolean];
+  /** Rules-enforced room whose engine runs in a player's browser: that player's seat. */
+  engineHost?: 0 | 1;
 }
 
 export type DuelEvent =

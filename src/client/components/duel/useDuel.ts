@@ -45,14 +45,18 @@ export interface DuelConn {
   toasts: Toast[];
   /** Rules-enforced mode: the engine's open question for you (null when you have nothing to answer). */
   prompt: EnginePrompt | null;
+  /** Host-runs-rules mode, on the host's page: what the local rules engine is doing (null = running fine). */
+  hostStatus: string | null;
 }
 
 let toastSeq = 0;
 
 export function useDuelSocket(roomId: string) {
-  const [conn, setConn] = useState<DuelConn>({ status: "connecting", room: null, you: null, session: null, board: null, chat: [], peek: null, toasts: [], prompt: null });
+  const [conn, setConn] = useState<DuelConn>({ status: "connecting", room: null, you: null, session: null, board: null, chat: [], peek: null, toasts: [], prompt: null, hostStatus: null });
   const wsRef = useRef<WebSocket | null>(null);
   const queue = useRef<ClientMsg[]>([]);
+  // host-runs-rules mode: the engine running in this browser (only on the host's page)
+  const host = useRef<Promise<import("../engine/hostRuntime.ts").EngineHost> | null>(null);
 
   const toast = useCallback((t: Omit<Toast, "id">, ms = 4000) => {
     const id = ++toastSeq;
@@ -87,6 +91,17 @@ export function useDuelSocket(roomId: string) {
           case "peek": setConn((c) => ({ ...c, peek: { title: msg.title, cards: msg.cards } })); break;
           case "event": toast({ event: msg.event }, msg.event.kind === "reveal" ? 7000 : 4000); break;
           case "prompt": setConn((c) => ({ ...c, prompt: (msg.prompt as EnginePrompt | null) ?? null })); break;
+          case "engineHost":
+          case "engineRespond": {
+            host.current ??= import("../engine/hostRuntime.ts").then((m) => new m.EngineHost(
+              (out) => sendRef.current(out),
+              (hostStatus) => setConn((c) => ({ ...c, hostStatus })),
+            ));
+            const m = msg;
+            host.current.then((h) => (m.t === "engineHost" ? h.run({ start: m.start, snapshot: m.snapshot }) : h.respond(m.seat, m.response)))
+              .catch((err) => setConn((c) => ({ ...c, hostStatus: `Could not load the rules engine: ${(err as Error)?.message ?? err}` })));
+            break;
+          }
           case "error": toast({ text: msg.message, error: true }); break;
           default: break;
         }
@@ -109,6 +124,7 @@ export function useDuelSocket(roomId: string) {
     };
   }, [roomId, toast]);
 
+  const sendRef = useRef<(m: ClientMsg) => void>(() => {});
   const send = useCallback((m: ClientMsg) => {
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(m));
@@ -116,6 +132,7 @@ export function useDuelSocket(roomId: string) {
     // the answer is on its way: hide the prompt until the server sends the next one
     if (m.t === "respond") setConn((c) => ({ ...c, prompt: null }));
   }, []);
+  sendRef.current = send;
 
   const clearPeek = useCallback(() => setConn((c) => ({ ...c, peek: null })), []);
   return { conn, send, toast, clearPeek };
