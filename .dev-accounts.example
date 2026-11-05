@@ -1,0 +1,5 @@
+# Throwaway accounts for LOCAL dev only (.wrangler/state D1). Never valid anywhere else.
+# Created while verifying phase 2 (accounts) in the browser at http://localhost:5175/login.
+# The integration script (scripts/auth-integration.mjs) makes its own random it_* users each run.
+DEV_USERNAME=qa_57c7c3
+DEV_PASSWORD=qZewh7u82uU12cxV
