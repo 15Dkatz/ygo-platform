@@ -5,3 +5,4 @@ dist/
 data/
 *.log
 worker-configuration.d.ts
+.claude/worktrees/
