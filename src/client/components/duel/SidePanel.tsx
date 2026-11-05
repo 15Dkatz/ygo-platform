@@ -4,15 +4,17 @@ import type { ChatLine } from "./useDuel.ts";
 import { getCard } from "./useDuel.ts";
 
 /** Big card preview with its text. */
-export function CardPreview({ code }: { code: number | null }) {
+export function CardPreview({ code, onZoom, large }: { code: number | null; onZoom?: (code: number) => void; large?: boolean }) {
   const card = code ? getCard(code) : null;
-  if (!code || code <= 0) return <div className="duel-preview is-empty muted">Hover a card to see it here.</div>;
+  if (!code || code <= 0) return <div className="duel-preview is-empty muted">Hover a card (long-press on touch) to read it here.</div>;
   const stats = card && card.category === "Monster"
     ? [card.attribute, card.race, card.linkval ? `LINK-${card.linkval}` : card.level ? `${/XYZ/i.test(card.type ?? "") ? "Rank" : "Level"} ${card.level}` : null, card.scale != null ? `Scale ${card.scale}` : null].filter(Boolean).join(" · ")
     : card ? [card.race, card.category].filter(Boolean).join(" ") : "";
   return (
-    <div className="duel-preview">
-      <img src={cardImage(code, "full")} alt={card?.name ?? ""} />
+    <div className={`duel-preview ${large ? "is-large" : ""}`}>
+      {onZoom
+        ? <button className="duel-preview-zoom" onClick={() => onZoom(code)} title="Zoom" aria-label={`Zoom ${card?.name ?? "card"}`}><img src={cardImage(code, "full")} alt={card?.name ?? ""} /></button>
+        : <img src={cardImage(code, "full")} alt={card?.name ?? ""} />}
       <div className="duel-preview-text">
         <h3>{card?.name ?? `Card ${code}`}</h3>
         {card && <div className="muted">{card.type}{stats ? ` — ${stats}` : ""}</div>}

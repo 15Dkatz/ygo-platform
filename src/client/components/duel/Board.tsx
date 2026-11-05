@@ -135,6 +135,7 @@ function Hand({ cards, player, ui, own }: { cards: CardInstance[]; player: Seat;
               selected={ui.selectedUid === c.uid}
               mark={mark}
               badge={ui.marks?.badges.get(c.uid)}
+              style={{ ["--i" as string]: i - (cards.length - 1) / 2 }}
               onHover={ui.onHover}
               onClick={own || mark ? (e) => { e.stopPropagation(); ui.onCard(c, { zone: "hand", player, slot: i }, e); } : undefined}
             />

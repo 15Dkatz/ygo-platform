@@ -1,4 +1,5 @@
-import type { DragEvent, MouseEvent } from "react";
+import type React from "react";
+import type { CSSProperties, DragEvent, MouseEvent } from "react";
 import { cardImage } from "../../api.ts";
 import { HIDDEN_CODE, type CardInstance } from "../../../shared/duel.ts";
 import { getCard } from "./useDuel.ts";
@@ -36,10 +37,26 @@ interface Props {
   onHover?: (code: number | null) => void;
   onDragStart?: (e: DragEvent) => void;
   showCounters?: boolean;
+  style?: CSSProperties;
 }
 
+// Touch: holding a card for a moment inspects it (big preview) instead of opening its menu.
+const LONG_PRESS_MS = 450;
+let pressTimer: ReturnType<typeof setTimeout> | undefined;
+let longPressAt = 0;
+const justLongPressed = () => Date.now() - longPressAt < 800;
+function startPress(e: React.PointerEvent, code: number) {
+  if (e.pointerType !== "touch" || code <= 0) return;
+  clearTimeout(pressTimer);
+  pressTimer = setTimeout(() => {
+    longPressAt = Date.now();
+    dispatchEvent(new CustomEvent("duel-inspect", { detail: code }));
+  }, LONG_PRESS_MS);
+}
+const endPress = () => clearTimeout(pressTimer);
+
 /** One card on the board / in a hand / in a viewer. Rotated for DEF, translucent when you can see your own face-down card. */
-export function CardView({ card, draggable, selected, flash, onClick, onHover, onDragStart, showCounters = true, mark, badge }: Props) {
+export function CardView({ card, draggable, selected, flash, onClick, onHover, onDragStart, showCounters = true, mark, badge, style }: Props) {
   const known = card.code !== HIDDEN_CODE || card.token;
   const def = card.position === "def" || card.position === "faceDownDef";
   const ownFaceDown = !card.faceUp && known;
@@ -49,10 +66,15 @@ export function CardView({ card, draggable, selected, flash, onClick, onHover, o
     <div
       className={cls}
       data-uid={card.uid}
+      style={style}
       draggable={draggable}
       onDragStart={onDragStart}
-      onClick={onClick}
-      onContextMenu={onClick ? (e) => { e.preventDefault(); onClick(e); } : undefined}
+      onClick={onClick ? (e) => { if (justLongPressed()) return; onClick(e); } : undefined}
+      onContextMenu={(e) => { if (justLongPressed() || e.nativeEvent instanceof PointerEvent && e.nativeEvent.pointerType === "touch") { e.preventDefault(); return; } if (onClick) { e.preventDefault(); onClick(e); } }}
+      onPointerDown={(e) => startPress(e, known ? card.code : 0)}
+      onPointerUp={endPress}
+      onPointerCancel={endPress}
+      onPointerMove={(e) => { if (e.pointerType === "touch" && (Math.abs(e.movementX) > 4 || Math.abs(e.movementY) > 4)) endPress(); }}
       onMouseEnter={() => onHover?.(known ? card.code : null)}
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}

@@ -16,6 +16,7 @@ import {
   selectItems, selectResponse, selectStatus, type CardAction, type SelectItem,
 } from "./boardPrompt.ts";
 import { EnginePromptPanel, title } from "./EnginePrompt.tsx";
+import { play as sfx } from "../duel/anim/sfx.ts";
 
 export interface EngineBoardOpts {
   prompt: EnginePrompt | null;
@@ -28,8 +29,8 @@ export interface EngineBoardOpts {
   onHover(code: number | null): void;
   showMaterials(uid: string): void;
   toast(text: string): void;
-  /** Chain Link badges from the animation layer (uid -> link). */
-  chainBadges?: Map<string, number>;
+  /** Chain Link badges from the animation layer (uid -> "1" or "1·3"). */
+  chainBadges?: Map<string, string>;
 }
 
 export interface PhaseActions { battle?: () => void; main2?: () => void; end?: () => void; shuffle?: () => void }
@@ -44,6 +45,8 @@ export interface EngineBoard {
   phase: PhaseActions;
   /** One line for the panel under the board ("Your Main Phase: …"). */
   status: string | null;
+  /** The engine is waiting for you. */
+  yourMove: boolean;
   /** Floating bar / dialogs / pile picker, rendered by the page. */
   overlay: ReactNode;
 }
@@ -142,6 +145,7 @@ export function useEngineBoard(o: EngineBoardOpts): EngineBoard {
 
   const pickItem = (it: SelectItem) => {
     if (!mine || !isSelectPrompt(mine)) return;
+    sfx("pick");
     if (mine.kind === "selectUnselect") return send({ kind: "selectUnselect", index: it.index });
     if (it.fixed) return;
     if (mine.kind === "selectCounter") {
@@ -169,6 +173,7 @@ export function useEngineBoard(o: EngineBoardOpts): EngineBoard {
 
   const choosePlace = (p: EnginePlace) => {
     if (!mine || mine.kind !== "selectPlace") return;
+    sfx("pick");
     const next = places.some((x) => sameZone(x, p)) ? places.filter((x) => !sameZone(x, p)) : [...places, p];
     if (next.length >= mine.count) send({ kind: "selectPlace", places: next.slice(0, mine.count) });
     else setPlaces(next);
@@ -207,7 +212,39 @@ export function useEngineBoard(o: EngineBoardOpts): EngineBoard {
   const status = !mine ? null
     : mine.kind === "idle" ? (mine.hint ?? `Your ${board.phase === "main2" ? "Main Phase 2" : "Main Phase"}: click a highlighted card to play it${actions.size ? "" : " (nothing to play right now)"}, or use the phase buttons.`)
     : mine.kind === "battle" ? (mine.hint ?? "Battle Phase: click a highlighted monster to attack, or move on with the phase buttons.")
-    : null;
+    : "Your move: choose on the board.";
+
+  // ---------- keyboard: Enter confirms, Esc cancels / passes, Space ends the turn or passes ----------
+
+  const onKey = useRef<(e: KeyboardEvent) => void>(() => undefined);
+  onKey.current = (e: KeyboardEvent) => {
+    if (!mine || e.ctrlKey || e.metaKey || e.altKey) return;
+    const t = e.target as HTMLElement;
+    if (t.closest?.("input, textarea, select") || document.querySelector(".duel-menu")) return;
+    const sel = isSelectPrompt(mine) ? mine : null;
+    let r: EngineResponseBody | null = null;
+    if (e.key === "Enter") {
+      if (t.closest?.("button")) return;   // let the focused button do its own thing
+      if (sel && !answersOnClick(sel)) r = selectResponse(sel, picked, counts);
+      else if (sel?.kind === "selectUnselect" && sel.canFinish) r = { kind: "selectUnselect", index: null };
+    } else if (e.key === "Escape") {
+      if (pile) { setPile(null); return; }
+      if ((mine.kind === "selectCard" || mine.kind === "selectTribute") && mine.canCancel) r = { kind: mine.kind, indices: null };
+      else if (mine.kind === "selectUnselect" && mine.canCancel && !mine.canFinish) r = { kind: "selectUnselect", index: null };
+      else if (mine.kind === "selectChain" && !mine.forced) r = { kind: "selectChain", index: null };
+      else if (picked.length || places.length) { setPicked([]); setPlaces([]); return; }
+    } else if (e.key === " ") {
+      if (t.closest?.("button")) return;
+      if (mine.kind === "selectChain" && !mine.forced) r = { kind: "selectChain", index: null };
+      else if (phase.end) { e.preventDefault(); phase.end(); return; }
+    }
+    if (r) { e.preventDefault(); send(r); }
+  };
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => onKey.current(e);
+    addEventListener("keydown", h);
+    return () => removeEventListener("keydown", h);
+  }, []);
 
   // ---------- overlay ----------
 
@@ -275,7 +312,7 @@ export function useEngineBoard(o: EngineBoardOpts): EngineBoard {
     return { title: `${whose} ${PILE_TITLE[zone]}: ${list.length} to choose from`, cards };
   }
 
-  return { marks, onCard, onZone, onDrop, phase, status, overlay };
+  return { marks, onCard, onZone, onDrop, phase, status, overlay, yourMove: !!mine };
 }
 
 // ---------------------------------------------------------------------------------------
@@ -310,7 +347,7 @@ function PromptBar({ prompt: p, picked, counts, places, send, onList }: {
   }
   return (
     <div className="duel-engine-bar" role="status" aria-live="polite">
-      <span className="duel-engine-bar-hint">{p.kind === "selectChain" ? `${hint} Click a highlighted card to chain it.` : p.kind === "selectPlace" ? `${hint} Click a highlighted zone.` : hint}</span>
+      <span className="duel-engine-bar-hint">{p.kind === "selectChain" ? `${hint} Click a highlighted card to chain it.` : p.kind === "selectPlace" ? (p.hint && !/^Select/.test(p.hint) ? `${p.hint}: choose a zone on the board.` : `${hint}. Click a highlighted zone.`) : hint}</span>
       {progress && <span className="duel-engine-bar-count">{progress}</span>}
       {buttons}
       <button className="duel-engine-bar-list" onClick={onList} title="Show this choice as a list">List</button>

@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { reducedMotion } from "./animator.ts";
 
 /** Life Points that count up / down to a new value, with a colour flash and a floating delta. */
-export function AnimatedLp({ value }: { value: number }) {
+export function AnimatedLp({ value, onChange }: { value: number; onChange?: (delta: number) => void }) {
+  const changed = useRef(onChange);
+  changed.current = onChange;
   const [shown, setShown] = useState(value);
   const [delta, setDelta] = useState<{ n: number; id: number } | null>(null);
   const from = useRef(value);
@@ -15,6 +17,7 @@ export function AnimatedLp({ value }: { value: number }) {
     const d = value - from.current;
     from.current = value;
     setDelta({ n: d, id: Date.now() });
+    if (d) changed.current?.(d);
     const clear = setTimeout(() => setDelta(null), 1100);
     if (reducedMotion()) { setShown(value); return () => clearTimeout(clear); }
     const t0 = performance.now(), ms = 450;

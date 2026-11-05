@@ -5,34 +5,42 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { BoardState } from "../../../../shared/duel.ts";
 import type { EngineEvent } from "../../../../shared/enginePrompts.ts";
 import { refUid } from "../../engine/boardRefs.ts";
-import { BoardAnimator, reducedMotion } from "./animator.ts";
+import { BoardAnimator } from "./animator.ts";
 import { engineIntents, manualIntents } from "./intents.ts";
+import { unlockAudioOnGesture } from "./sfx.ts";
 
 export function useBoardAnimations() {
   /** Set every render: the room is rules-enforced (boards name cards by position, so only events animate). */
   const engineMode = useRef(false);
   const animator = useRef<BoardAnimator>(null);
   animator.current ??= new BoardAnimator();
-  const [chainBadges, setChainBadges] = useState<Map<string, number>>(() => new Map());
+  /** Open chain: link -> uid of the card that started it. */
+  const chain = useRef(new Map<number, string>());
+  /** uid -> chain link numbers on that card ("1", or "1·3" when a card activates twice). */
+  const [chainBadges, setChainBadges] = useState<Map<string, string>>(() => new Map());
 
   const beforeState = useCallback((prev: BoardState | null, next: BoardState, events: EngineEvent[] | null) => {
     if (events?.length) {
-      setChainBadges((cur) => {
-        let m = cur;
+      const intents = prev ? engineIntents(events, prev, next, chain.current) : [];
+      if (!prev) {
         for (const ev of events) {
-          if (ev.e === "chain") { m = new Map(m); m.set(refUid(ev.card), ev.link); }
-          else if (ev.e === "chainEnd" || ev.e === "turn") m = new Map();
+          if (ev.e === "chain") chain.current.set(ev.link, refUid(ev.card));
+          else if (ev.e === "chainEnd") chain.current.clear();
         }
-        return m;
-      });
+      }
+      if (events.some((e) => e.e === "turn")) chain.current.clear();
+      const badges = new Map<string, string>();
+      for (const [link, uid] of [...chain.current].sort((a, b) => a[0] - b[0])) badges.set(uid, badges.has(uid) ? `${badges.get(uid)}·${link}` : String(link));
+      setChainBadges(badges);
+      if (prev) animator.current!.capture(intents);
+      return;
     }
-    if (!prev || reducedMotion()) return;
-    // engine boards name cards by position: only the engine's events say what moved where
-    if (events) animator.current!.capture(engineIntents(events, prev, next));
-    else if (!engineMode.current) animator.current!.capture(manualIntents(prev, next), true);
+    if (!prev) return;
+    if (!events && !engineMode.current) animator.current!.capture(manualIntents(prev, next), true);
   }, []);
 
   const rootRef = useCallback((el: HTMLElement | null) => { animator.current!.root = el; }, []);
+  useEffect(() => unlockAudioOnGesture(), []);
   useEffect(() => () => { animator.current!.root = null; }, []);
 
   return { animator: animator.current, beforeState, rootRef, chainBadges, engineMode };

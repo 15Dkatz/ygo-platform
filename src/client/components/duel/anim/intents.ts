@@ -18,8 +18,10 @@ export type Intent =
   | { t: "rotate"; uid: string; from?: Position; to?: Position; reveal?: boolean }
   | { t: "shuffle"; zone: string }
   | { t: "attack"; attacker: string; target: string | null; side: Seat }
-  /** A short glow: activation, summon landing, targeting. */
-  | { t: "pulse"; uid: string; tone: "activate" | "summon" | "target" };
+  /** A short glow: activation, summon landing, targeting, a chain link resolving. */
+  | { t: "pulse"; uid: string; tone: "activate" | "summon" | "target" | "resolve" }
+  /** A short text ribbon over the board ("Chain Link 2 resolves"). */
+  | { t: "banner"; text: string };
 
 const pileKey = (zone: ZoneRef["zone"], player: Seat) => zoneKey({ zone, player });
 const PILES = new Set(["deck", "extra", "gy", "banished"]);
@@ -34,7 +36,8 @@ const faceDown = (p?: Position) => p === "faceDown" || p === "faceDownDef";
 const hiddenLoc = (r: EngineCardRef) => r.location === "deck" || r.location === "hand" || faceDown(r.position);
 
 /** Engine mode: intents from one step's (already masked) events. `prev` / `next` = boards before / after. */
-export function engineIntents(events: EngineEvent[], prev: BoardState, next: BoardState): Intent[] {
+/** `chainUid`: link -> uid of the open chain, kept by the caller across steps. */
+export function engineIntents(events: EngineEvent[], prev: BoardState, next: BoardState, chainUid: Map<number, string> = new Map()): Intent[] {
   const first = engineFirst(next);
   const before = indexBoard(prev), after = indexBoard(next);
   const out: Intent[] = [];
@@ -83,7 +86,14 @@ export function engineIntents(events: EngineEvent[], prev: BoardState, next: Boa
         out.push({ t: "rotate", uid, from: was.position, to: now.position, reveal: !was.faceUp && now.faceUp });
         return;
       }
-      case "chain": out.push({ t: "pulse", uid: refUid(ev.card), tone: "activate" }); return;
+      case "chain": chainUid.set(ev.link, refUid(ev.card)); out.push({ t: "pulse", uid: refUid(ev.card), tone: "activate" }); return;
+      case "chainSolving": {
+        const uid = chainUid.get(ev.link);
+        if (chainUid.size > 1) out.push({ t: "banner", text: `Chain Link ${ev.link} resolves` });
+        if (uid) out.push({ t: "pulse", uid, tone: "resolve" });
+        return;
+      }
+      case "chainEnd": chainUid.clear(); return;
       case "target": ev.cards.forEach((c) => out.push({ t: "pulse", uid: refUid(c), tone: "target" })); return;
       case "attack":
         out.push({ t: "attack", attacker: refUid(ev.attacker), target: ev.target ? refUid(ev.target) : null, side: (1 - ev.attacker.controller) as Seat });

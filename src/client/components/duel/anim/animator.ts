@@ -8,17 +8,18 @@
 //
 // Nothing here blocks input: animations are transforms on elements that stay clickable, ghosts
 // live in a pointer-events:none layer, and every timeline is capped well under a second.
-// prefers-reduced-motion: nothing is captured or played (the board just updates).
+// prefers-reduced-motion: no motion at all (the board just updates); sounds still play.
 
 import { cardImage } from "../../../api.ts";
 import type { Position } from "../../../../shared/duel.ts";
 import type { Intent, Spot } from "./intents.ts";
+import { play as sfx, type Sfx } from "./sfx.ts";
 
 export const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const MOVE_MS = 330, ROTATE_MS = 280, SHUFFLE_MS = 420, ATTACK_MS = 440, PULSE_MS = 600;
 /** Gap between consecutive intents of one update, and the cap on the whole timeline's start offsets. */
-const STAGGER: Record<Intent["t"], number> = { move: 90, rotate: 60, shuffle: 80, attack: 380, pulse: 40 };
+const STAGGER: Record<Intent["t"], number> = { banner: 120, move: 90, rotate: 60, shuffle: 80, attack: 380, pulse: 40 };
 const MAX_OFFSET = 800;
 
 type Rects = Map<string, DOMRect>;
@@ -40,13 +41,13 @@ export class BoardAnimator {
 
   /** Record the current layout for `intents`. Merges with a capture that hasn't been played yet. */
   capture(intents: Intent[], flipRest = false) {
-    if (!this.root || reducedMotion()) { this.pending = null; return; }
+    if (!this.root) { this.pending = null; return; }
     if (this.pending) {   // two updates before one render: the DOM still shows the first layout
       this.pending.intents.push(...intents);
       this.pending.flipRest ||= flipRest;
       return;
     }
-    this.pending = { intents: [...intents], rects: this.measure(), flipRest };
+    this.pending = { intents: [...intents], rects: reducedMotion() ? new Map() : this.measure(), flipRest };
   }
 
   private measure(): Rects {
@@ -79,7 +80,9 @@ export class BoardAnimator {
   play() {
     const p = this.pending;
     this.pending = null;
-    if (!p || !this.root || reducedMotion()) return;
+    if (!p || !this.root) return;
+    this.sounds(p.intents);
+    if (reducedMotion()) return;
     const flipped = new Set<string>();
     let offset = 0;
     const total = p.intents.reduce((t, i) => t + STAGGER[i.t], 0);
@@ -94,10 +97,36 @@ export class BoardAnimator {
           case "shuffle": this.shuffle(it.zone, delay); break;
           case "attack": this.attack(it.attacker, it.target, it.side, delay); break;
           case "pulse": this.pulse(it.uid, it.tone, delay); break;
+          case "banner": this.banner(it.text, delay); break;
         }
       } catch (e) { console.warn("animation", e); }
     }
     if (p.flipRest) this.flipRest(p.rects, flipped);
+  }
+
+  /** One sound per kind of thing that happened, in timeline order. */
+  private sounds(intents: Intent[]) {
+    const seen = new Set<Sfx>();
+    let offset = 0;
+    for (const it of intents) {
+      let s: Sfx | null = null;
+      if (it.t === "move") {
+        const to = it.to.zone.split(":")[0], from = it.from.zone.split(":")[0];
+        s = from === "deck" && to === "hand" ? "draw"
+          : to === "monster" || to === "extraMonster" ? (it.faceUp ? "summon" : "set")
+          : to === "spelltrap" || to === "field" ? (it.faceUp ? "chain" : "set")
+          : null;
+      } else if (it.t === "attack") s = "attack";
+      else if (it.t === "shuffle") s = "shuffle";
+      else if (it.t === "pulse") s = it.tone === "activate" ? "chain" : it.tone === "resolve" ? "resolve" : null;
+      else if (it.t === "rotate" && it.reveal) s = "summon";
+      if (s && !seen.has(s)) {
+        seen.add(s);
+        const name = s;
+        setTimeout(() => sfx(name), Math.min(offset, MAX_OFFSET));
+      }
+      offset += STAGGER[it.t];
+    }
   }
 
   /** Manual mode: every other card that changed place (hand reflow, ...) slides there. */
@@ -225,7 +254,8 @@ export class BoardAnimator {
   }
 
   /** The attacker lunges at its target (or at the defending player's side) and back. Usable without a capture. */
-  attack(attackerUid: string, targetUid: string | null, side: 0 | 1, delay = 0) {
+  attack(attackerUid: string, targetUid: string | null, side: 0 | 1, delay = 0, sound = false) {
+    if (sound) sfx("attack");
     if (!this.root || reducedMotion()) return;
     const a = this.el(attackerUid);
     if (!a) return;
@@ -235,6 +265,7 @@ export class BoardAnimator {
     if (!tr) return;
     const p = center(ar), q = center(tr);
     const dx = (q.x - p.x) * 0.72, dy = (q.y - p.y) * (targetUid ? 0.72 : 0.5);
+    this.arrow(p, q, delay);
     this.run(a, [
       { transform: "none", zIndex: 30 },
       { offset: 0.25, transform: `translate(${-dx * 0.08}px, ${-dy * 0.08}px) scale(1.06)`, zIndex: 30 },
@@ -249,10 +280,70 @@ export class BoardAnimator {
     }
   }
 
-  private pulse(uid: string, tone: "activate" | "summon" | "target", delay: number) {
+  /** A line from the attacker to its target that draws itself, then fades. */
+  private arrow(p: { x: number; y: number }, q: { x: number; y: number }, delay: number) {
+    const layer = this.layer();
+    if (!layer) return;
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("class", "duel-attack-arrow");
+    svg.setAttribute("width", String(innerWidth));
+    svg.setAttribute("height", String(innerHeight));
+    const len = Math.hypot(q.x - p.x, q.y - p.y);
+    const line = document.createElementNS(NS, "line");
+    line.setAttribute("x1", String(p.x)); line.setAttribute("y1", String(p.y));
+    line.setAttribute("x2", String(q.x)); line.setAttribute("y2", String(q.y));
+    line.setAttribute("stroke-dasharray", String(len));
+    line.setAttribute("marker-end", "url(#duel-arrowhead)");
+    const defs = document.createElementNS(NS, "defs");
+    const marker = document.createElementNS(NS, "marker");
+    marker.setAttribute("id", "duel-arrowhead"); marker.setAttribute("viewBox", "0 0 10 10");
+    marker.setAttribute("refX", "6"); marker.setAttribute("refY", "5");
+    marker.setAttribute("markerWidth", "5"); marker.setAttribute("markerHeight", "5"); marker.setAttribute("orient", "auto-start-reverse");
+    const head = document.createElementNS(NS, "path");
+    head.setAttribute("d", "M 0 0 L 10 5 L 0 10 z");
+    marker.appendChild(head); defs.appendChild(marker); svg.appendChild(defs); svg.appendChild(line);
+    layer.appendChild(svg);
+    this.run(line, [{ strokeDashoffset: len }, { offset: 0.4, strokeDashoffset: 0 }, { strokeDashoffset: 0 }], { duration: ATTACK_MS + 200, delay, easing: "ease-out", fill: "both" });
+    const fade = this.run(svg, [{ opacity: 1 }, { offset: 0.7, opacity: 1 }, { opacity: 0 }], { duration: ATTACK_MS + 260, delay, fill: "both" });
+    const done = () => svg.remove();
+    fade.onfinish = done; fade.oncancel = done;
+    setTimeout(done, ATTACK_MS + delay + 900);
+  }
+
+  /** A short centred text ribbon over the board (chain resolving, ...). */
+  private banner(text: string, delay: number) {
+    const layer = this.layer();
+    if (!layer) return;
+    const el = document.createElement("div");
+    el.className = "duel-ribbon";
+    el.textContent = text;
+    layer.appendChild(el);
+    const a = this.run(el, [
+      { opacity: 0, transform: "translate(-50%, -50%) scaleX(.6)" },
+      { offset: 0.2, opacity: 1, transform: "translate(-50%, -50%) scaleX(1)" },
+      { offset: 0.8, opacity: 1, transform: "translate(-50%, -50%) scaleX(1)" },
+      { opacity: 0, transform: "translate(-50%, -50%) scaleX(1.05)" },
+    ], { duration: 900, delay, fill: "both" });
+    const done = () => el.remove();
+    a.onfinish = done; a.oncancel = done;
+    setTimeout(done, delay + 1500);
+  }
+
+  /** Brief shake of the whole board (damage). */
+  shake() {
+    const b = this.root?.querySelector(".duel-board-wrap");
+    if (!b || reducedMotion()) return;
+    this.run(b, [
+      { transform: "none" }, { offset: 0.2, transform: "translate(-4px, 1px)" }, { offset: 0.4, transform: "translate(4px, -1px)" },
+      { offset: 0.6, transform: "translate(-3px, 0)" }, { offset: 0.8, transform: "translate(2px, 1px)" }, { transform: "none" },
+    ], { duration: 320, easing: "ease-in-out" });
+  }
+
+  private pulse(uid: string, tone: "activate" | "summon" | "target" | "resolve", delay: number) {
     const el = this.el(uid);
     if (!el) return;
-    const color = tone === "target" ? "var(--danger)" : tone === "summon" ? "var(--ok)" : "var(--accent)";
+    const color = tone === "target" ? "var(--danger)" : tone === "summon" ? "var(--ok)" : tone === "resolve" ? "var(--warn)" : "var(--accent)";
     this.run(el, [
       { boxShadow: `0 0 0 0 ${color}` },
       { offset: 0.4, boxShadow: `0 0 0 5px ${color}` },
