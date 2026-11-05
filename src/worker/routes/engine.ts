@@ -6,6 +6,7 @@ import { loadCore, wasmMemoryMB } from "../duel/engine/core.ts";
 import { EngineData, d1r2Source } from "../duel/engine/data.ts";
 import { EngineDuel } from "../duel/engine/EngineDuel.ts";
 import { TEST_DECK_A, TEST_DECK_B } from "../duel/engine/testDecks.ts";
+import { LICENSE_NAME, SOURCE_URL } from "../../shared/project.ts";
 
 // PHASE 4 (rules engine) routes.
 //   GET /api/engine/source    where to get the source of the AGPL engine components (AGPL §13)
@@ -21,7 +22,7 @@ engine.get("/source", (c) => c.json({
     { name: "ProjectIgnis CardScripts", url: "https://github.com/ProjectIgnis/CardScripts", license: "AGPL-3.0" },
     { name: "ProjectIgnis BabelCDB", url: "https://github.com/ProjectIgnis/BabelCDB", license: "see repository" },
   ],
-  app: "The source of this service, including its engine integration, is available from the project repository.",
+  app: { name: "YGO Duel Hub (this service, including its engine integration)", url: SOURCE_URL, license: LICENSE_NAME },
 }));
 
 engine.get("/selftest", async (c) => {

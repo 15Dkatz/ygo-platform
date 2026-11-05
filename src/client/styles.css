@@ -101,3 +101,5 @@ button:disabled { opacity: 0.5; cursor: default; }
   .topbar .brand { display: none; }
   .content { padding: 12px 16px; }
 }
+
+.site-footer { padding: 12px 16px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; text-align: center; }

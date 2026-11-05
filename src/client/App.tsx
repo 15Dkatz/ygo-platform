@@ -6,6 +6,7 @@ import { LoginPage } from "./pages/LoginPage.tsx";
 import { LobbyPage } from "./pages/LobbyPage.tsx";
 import { DuelPage } from "./pages/DuelPage.tsx";
 import { AccountBadge } from "./components/AccountBadge.tsx";
+import { LICENSE_NAME, SOURCE_URL } from "../shared/project.ts";
 
 // Route ownership: library/decks = phase 1, login/account = phase 2,
 // lobby/duel = phase 3 (manual) + phase 4 (engine).
@@ -33,6 +34,13 @@ export function App() {
           <Route path="*" element={<p className="muted">Page not found.</p>} />
         </Routes>
       </main>
+      <footer className="site-footer">
+        <a href={SOURCE_URL} target="_blank" rel="noreferrer">Source code</a> ({LICENSE_NAME})
+        <span aria-hidden="true"> · </span>
+        Card data from <a href="https://ygoprodeck.com/" target="_blank" rel="noreferrer">YGOPRODeck</a>
+        <span aria-hidden="true"> · </span>
+        Yu-Gi-Oh! cards © Konami. Non-commercial fan project.
+      </footer>
     </div>
   );
 }

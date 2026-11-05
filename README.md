@@ -43,6 +43,28 @@ npx vitest run src/worker/duel/engine   # bot-vs-bot duels through the adapter (
 
 The engine is AGPL-3.0: see `LICENSES/NOTICE.md` for what that requires of a deployment.
 
+## Deploy (Cloudflare)
+
+Needs the Workers Paid plan: rules-engine duel creation and password hashing exceed the free plan's 10 ms CPU limit.
+
+```bash
+npx wrangler login
+npx wrangler d1 create ygo-platform          # put the printed database_id into wrangler.jsonc
+npx wrangler r2 bucket create ygo-platform-images
+npx wrangler r2 bucket create ygo-platform-scripts
+npm run db:migrate:remote
+npm run cards:import:remote                  # ~14.6k cards from YGOPRODeck
+npm run engine:import:remote                 # engine card data + all ~13.5k card scripts
+npm run deploy
+```
+
+Set `SOURCE_URL` in `src/shared/project.ts` to the public repository first (AGPL §13).
+
+## License
+
+AGPL-3.0-or-later (see `LICENSE`), because the bundled rules engine (ygopro-core) and card
+scripts are AGPL-3.0. Third-party notices: `LICENSES/NOTICE.md`.
+
 ## Legal
 
 Card names, text and images are © Konami. Card data from [YGOPRODeck](https://ygoprodeck.com/api-guide/).
