@@ -29,6 +29,20 @@ npm run dev                  # http://localhost:5173
 - Pages read and write decks only through `useDeckStore()`.
 - D1 statements bind at most ~90 parameters; chunk bigger `IN (...)` lists.
 
+## Rules engine (phase 4)
+
+Rules-enforced duels run EDOPro's core (ygopro-core, AGPL-3.0) as WebAssembly inside the
+DuelRoom Durable Object (`src/worker/duel/engine/`), with ProjectIgnis card scripts in R2
+(`SCRIPTS`) and BabelCDB card data in D1 (`engine_cards`). Setup — download the sources into
+`data/vendor/` as described at the top of `scripts/import-engine-data.ts`, then:
+
+```bash
+npm run engine:import:local    # engine_cards -> local D1, base + test-deck scripts -> local R2
+npx vitest run src/worker/duel/engine   # bot-vs-bot duels through the adapter (Node)
+```
+
+The engine is AGPL-3.0: see `LICENSES/NOTICE.md` for what that requires of a deployment.
+
 ## Legal
 
 Card names, text and images are © Konami. Card data from [YGOPRODeck](https://ygoprodeck.com/api-guide/).

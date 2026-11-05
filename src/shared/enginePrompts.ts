@@ -104,6 +104,9 @@ export type EngineResponse = { promptId: number } & (
   | { kind: "announceCard"; code: number }
 );
 
+/** A response without its `promptId` (distributes over the union, unlike `Omit`). */
+export type EngineResponseBody = EngineResponse extends infer R ? R extends unknown ? Omit<R, "promptId"> : never : never;
+
 /** Things that happened, for the log and animations. Hidden codes are already 0 for the viewer. */
 export type EngineEvent =
   | { e: "start" }
