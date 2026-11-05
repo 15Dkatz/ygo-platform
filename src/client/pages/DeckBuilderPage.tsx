@@ -1,9 +1,288 @@
 // PHASE 1 owns this page (deck builder for /decks/:deckId).
+import { useCallback, useEffect, useMemo, useState, type DragEvent, type MouseEvent } from "react";
+import { Link, useParams } from "react-router-dom";
+import type { Card, Deck, Section } from "../../shared/types.ts";
+import { toYdk } from "../../shared/ydk.ts";
+import { isExtraDeckType, unknownCard } from "../../shared/library.ts";
+import { useDeckStore } from "../store/deckStore.ts";
+import { catalog, ensureCards } from "../components/cards/catalog.ts";
+import { CardImage } from "../components/cards/CardImage.tsx";
+import { CardPreviewLayer, preview, previewHandlers } from "../components/cards/CardPreview.tsx";
+import { CARD_DRAG_TYPE, CardSearchPanel } from "../components/cards/CardSearchPanel.tsx";
+import { banLimit, downloadText, safeFileName } from "../components/cards/cardInfo.ts";
+import "./DeckBuilderPage.css";
+
+const SECTIONS: { key: Section; label: string; min?: number; max: number }[] = [
+  { key: "main", label: "Main Deck", min: 40, max: 60 },
+  { key: "extra", label: "Extra Deck", max: 15 },
+  { key: "side", label: "Side Deck", max: 15 },
+];
+const MAX_COPIES = 3;
+const SERVER_MAX_IDS = 100; // per section, enforced by the accounts API
+const CAT_ORDER: Record<string, number> = { Monster: 0, Spell: 1, Trap: 2 };
+
+interface Problem { level: "error" | "warn"; text: string }
+interface Menu { x: number; y: number; section: Section; index: number }
+type DragData = { id: number; from?: Section; index?: number };
+
+const cardOf = (id: number): Card => catalog.get(id) ?? unknownCard(id);
+
+/** Validation: section sizes, copies per card across sections, TCG banlist, unknown ids. */
+function validateDeck(deck: Pick<Deck, "main" | "extra" | "side">, get: (id: number) => Card = cardOf): Problem[] {
+  const out: Problem[] = [];
+  for (const s of SECTIONS) {
+    const n = deck[s.key].length;
+    if (s.min !== undefined && n < s.min) out.push({ level: "error", text: `${s.label} has ${n} cards (minimum ${s.min}).` });
+    if (n > s.max) out.push({ level: "error", text: `${s.label} has ${n} cards (maximum ${s.max}).` });
+    if (n > SERVER_MAX_IDS) out.push({ level: "error", text: `${s.label} has more than ${SERVER_MAX_IDS} cards and cannot be saved to an account.` });
+  }
+  const counts = new Map<number, number>();
+  for (const id of [...deck.main, ...deck.extra, ...deck.side]) counts.set(id, (counts.get(id) ?? 0) + 1);
+  for (const [id, n] of counts) {
+    const c = get(id);
+    const lim = Math.min(MAX_COPIES, banLimit(c.ban_tcg));
+    if (c.category === "Unknown") out.push({ level: "warn", text: `Unknown card id ${id} (×${n}) is not in the catalogue.` });
+    if (n > lim) {
+      const why = lim === MAX_COPIES ? `max ${MAX_COPIES} copies` : `${c.ban_tcg} in the TCG: max ${lim}`;
+      out.push({ level: "error", text: `${c.name}: ${n} ${n === 1 ? "copy" : "copies"} (${why}).` });
+    }
+  }
+  for (const id of deck.main) {
+    const c = get(id);
+    if (isExtraDeckType(c.type)) { out.push({ level: "error", text: `${c.name} is an Extra Deck monster in the Main Deck.` }); break; }
+  }
+  for (const id of deck.extra) {
+    const c = get(id);
+    if (c.category !== "Unknown" && !isExtraDeckType(c.type)) { out.push({ level: "error", text: `${c.name} cannot go in the Extra Deck.` }); break; }
+  }
+  return out;
+}
+
+function sortSection(ids: number[]): number[] {
+  return [...ids].sort((a, b) => {
+    const x = cardOf(a), y = cardOf(b);
+    return (CAT_ORDER[x.category] ?? 3) - (CAT_ORDER[y.category] ?? 3) || x.name.localeCompare(y.name) || a - b;
+  });
+}
+
+const breakdown = (ids: number[]) => {
+  const n = { Monster: 0, Spell: 0, Trap: 0 } as Record<string, number>;
+  for (const id of ids) n[cardOf(id).category] = (n[cardOf(id).category] ?? 0) + 1;
+  return n;
+};
+
 export function DeckBuilderPage() {
+  const { deckId } = useParams();
+  const store = useDeckStore();
+  const [deck, setDeck] = useState<Deck | null>(null);
+  const [savedJson, setSavedJson] = useState("");
+  const [state, setState] = useState<"loading" | "ready" | "missing" | "error">("loading");
+  const [message, setMessage] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [, setVersion] = useState(0);
+  const [menu, setMenu] = useState<Menu | null>(null);
+  const [over, setOver] = useState<Section | null>(null);
+  const [tab, setTab] = useState<"search" | "deck">("deck");
+
+  useEffect(() => {
+    let alive = true;
+    setState("loading");
+    (async () => {
+      try {
+        const d = deckId ? await store.get(deckId) : null;
+        if (!alive) return;
+        if (!d) { setState("missing"); return; }
+        await ensureCards([...d.main, ...d.extra, ...d.side]);
+        if (!alive) return;
+        setDeck(d);
+        setSavedJson(JSON.stringify([d.name, d.main, d.extra, d.side]));
+        setVersion(catalog.version);
+        setState("ready");
+      } catch (e) {
+        if (alive) { setMessage(e instanceof Error ? e.message : String(e)); setState("error"); }
+      }
+    })();
+    return () => { alive = false; };
+  }, [deckId, store]);
+
+  const dirty = !!deck && JSON.stringify([deck.name, deck.main, deck.extra, deck.side]) !== savedJson;
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    window.addEventListener("click", close);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("keydown", close);
+    return () => { window.removeEventListener("click", close); window.removeEventListener("scroll", close, true); window.removeEventListener("keydown", close); };
+  }, [menu]);
+
+  const update = useCallback((fn: (d: Deck) => Deck) => setDeck((d) => (d ? fn(d) : d)), []);
+  const counts = useMemo(() => {
+    const m = new Map<number, number>();
+    if (deck) for (const id of [...deck.main, ...deck.extra, ...deck.side]) m.set(id, (m.get(id) ?? 0) + 1);
+    return m;
+  }, [deck]);
+  const problems = useMemo(() => (deck ? validateDeck(deck) : []), [deck]);
+
+  /** Add a card; Extra Deck monsters go to the Extra Deck unless sent to the Side Deck. */
+  const add = useCallback((card: Card, target?: Section) => {
+    catalog.remember([card]);
+    const extra = isExtraDeckType(card.type);
+    let to: Section = target ?? (extra ? "extra" : "main");
+    if (to === "main" && extra) to = "extra";
+    if (to === "extra" && !extra) { setMessage(`${card.name} is not an Extra Deck monster.`); return; }
+    update((d) => ({ ...d, [to]: [...d[to], card.id] }));
+    setMessage(null);
+  }, [update]);
+  const removeAt = (section: Section, index: number) => {
+    preview.hide();
+    update((d) => ({ ...d, [section]: d[section].filter((_, i) => i !== index) }));
+  };
+  const move = (from: Section, index: number, to: Section) => {
+    if (from === to || !deck) return;
+    const c = cardOf(deck[from][index]);
+    const extra = isExtraDeckType(c.type);
+    const target: Section = to === "main" && extra ? "extra" : to;
+    if (target === "extra" && !extra && c.category !== "Unknown") { setMessage(`${c.name} is not an Extra Deck monster.`); return; }
+    if (target === from) return;
+    update((d) => ({ ...d, [from]: d[from].filter((_, i) => i !== index), [target]: [...d[target], d[from][index]] }));
+  };
+
+  const onDrop = (e: DragEvent, to: Section) => {
+    e.preventDefault();
+    setOver(null);
+    const raw = e.dataTransfer.getData(CARD_DRAG_TYPE);
+    if (!raw) return;
+    const data = JSON.parse(raw) as DragData;
+    if (data.from !== undefined && data.index !== undefined) move(data.from, data.index, to);
+    else add(cardOf(data.id), to);
+  };
+
+  const save = async () => {
+    if (!deck) return;
+    setSaving(true);
+    try {
+      const name = deck.name.trim().slice(0, 100) || "Untitled deck";
+      const saved = await store.save({ ...deck, name });
+      setDeck(saved);
+      setSavedJson(JSON.stringify([saved.name, saved.main, saved.extra, saved.side]));
+      const errs = validateDeck(saved).filter((p) => p.level === "error").length;
+      setMessage(errs ? `Saved (with ${errs} problem${errs === 1 ? "" : "s"}).` : "Saved.");
+    } catch (e) {
+      setMessage(`Could not save: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (state === "loading") return <section><p className="muted">Loading deck…</p></section>;
+  if (state === "missing") return <section><h1>Deck not found</h1><p><Link to="/decks">Back to decks</Link></p></section>;
+  if (state === "error" || !deck) return <section><h1>Deck builder</h1><p className="db-error">{message}</p></section>;
+
+  const total = deck.main.length + deck.extra.length + deck.side.length;
+  const errors = problems.filter((p) => p.level === "error").length;
+
   return (
-    <section>
-      <h1>Deck builder</h1>
-      <p className="muted">Coming soon.</p>
+    <section className="deck-builder">
+      <div className="db-head">
+        <Link to="/decks" className="muted db-back">← Decks</Link>
+        <input className="db-name" value={deck.name} maxLength={100} onChange={(e) => update((d) => ({ ...d, name: e.target.value }))} aria-label="Deck name" />
+        <div className="db-actions">
+          <button type="button" className="primary" onClick={() => void save()} disabled={saving || !dirty}>{saving ? "Saving…" : dirty ? "Save" : "Saved"}</button>
+          <button type="button" onClick={() => update((d) => ({ ...d, main: sortSection(d.main), extra: sortSection(d.extra), side: sortSection(d.side) }))}>Sort</button>
+          <button type="button" onClick={() => downloadText(`${safeFileName(deck.name)}.ydk`, toYdk(deck))}>Export .ydk</button>
+          <button type="button" disabled={!total} onClick={() => { if (window.confirm("Remove every card from this deck?")) update((d) => ({ ...d, main: [], extra: [], side: [] })); }}>Clear</button>
+        </div>
+      </div>
+      {message && <p className="db-message" role="status">{message}</p>}
+
+      <div className="db-tabs" role="tablist">
+        <button type="button" role="tab" aria-selected={tab === "search"} className={tab === "search" ? "on" : ""} onClick={() => setTab("search")}>Search cards</button>
+        <button type="button" role="tab" aria-selected={tab === "deck"} className={tab === "deck" ? "on" : ""} onClick={() => setTab("deck")}>
+          Deck ({deck.main.length}/{deck.extra.length}/{deck.side.length}){errors ? " (!)" : ""}
+        </button>
+      </div>
+
+      <div className="db-layout">
+        <aside className={`db-search${tab === "search" ? " active" : ""}`}>
+          <CardSearchPanel onPick={(c) => add(c)} onPickAlt={(c) => add(c, "side")} countOf={(id) => counts.get(id) ?? 0} />
+        </aside>
+        <div className={`db-deck${tab === "deck" ? " active" : ""}`}>
+          <div className={`db-problems${problems.length ? "" : " ok"}`} aria-live="polite">
+            {problems.length === 0 ? (
+              <span>Deck is legal for the TCG (Main {deck.main.length}, Extra {deck.extra.length}, Side {deck.side.length}).</span>
+            ) : (
+              <details open={problems.length <= 4}>
+                <summary>{errors} problem{errors === 1 ? "" : "s"}{problems.length > errors ? `, ${problems.length - errors} warning${problems.length - errors === 1 ? "" : "s"}` : ""} (you can still save)</summary>
+                <ul>{problems.map((p, i) => <li key={i} className={p.level}>{p.text}</li>)}</ul>
+              </details>
+            )}
+          </div>
+          {SECTIONS.map((s) => {
+            const ids = deck[s.key];
+            const n = ids.length;
+            const bad = (s.min !== undefined && n < s.min) || n > s.max;
+            const b = breakdown(ids);
+            return (
+              <div key={s.key} className={`db-section${over === s.key ? " over" : ""}`}
+                onDragOver={(e) => { if (e.dataTransfer.types.includes(CARD_DRAG_TYPE)) { e.preventDefault(); setOver(s.key); } }}
+                onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(null); }}
+                onDrop={(e) => onDrop(e, s.key)}>
+                <h2>
+                  {s.label} <span className={bad ? "count bad" : "count"}>{n}</span>
+                  <span className="muted db-breakdown">
+                    {s.min !== undefined ? `${s.min}–${s.max}` : `≤${s.max}`}
+                    {n > 0 && ` · ${b.Monster} monster${b.Monster === 1 ? "" : "s"} · ${b.Spell} spell${b.Spell === 1 ? "" : "s"} · ${b.Trap} trap${b.Trap === 1 ? "" : "s"}`}
+                  </span>
+                </h2>
+                {n === 0 ? (
+                  <p className="muted db-empty">Drop cards here{s.key === "side" ? " (or right-click a search result)" : ""}.</p>
+                ) : (
+                  <div className={`db-grid${s.key === "main" && n > 40 ? " dense" : ""}`}>
+                    {ids.map((id, i) => {
+                      const c = cardOf(id);
+                      const lim = banLimit(c.ban_tcg);
+                      const over3 = (counts.get(id) ?? 0) > Math.min(MAX_COPIES, lim);
+                      return (
+                        <button key={`${i}-${id}`} type="button" className={`db-card${over3 ? " illegal" : ""}`} title={`${c.name} — click to remove, right-click for more`}
+                          draggable
+                          onDragStart={(e) => { e.dataTransfer.setData(CARD_DRAG_TYPE, JSON.stringify({ id, from: s.key, index: i } satisfies DragData)); e.dataTransfer.effectAllowed = "move"; }}
+                          onClick={() => removeAt(s.key, i)}
+                          onContextMenu={(e: MouseEvent) => { e.preventDefault(); preview.hide(); setMenu({ x: e.clientX, y: e.clientY, section: s.key, index: i }); }}
+                          {...previewHandlers(c)}>
+                          <CardImage card={c} />
+                          {lim < 3 && <span className={`cs-ban ban-${lim}`}>{lim}</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          <p className="muted db-help">Click a card in the deck to remove it · right-click (long-press) for more · drag between sections to move.</p>
+        </div>
+      </div>
+
+      {menu && deck[menu.section][menu.index] !== undefined && (() => {
+        const c = cardOf(deck[menu.section][menu.index]);
+        const extra = isExtraDeckType(c.type);
+        const other: Section = menu.section === "side" ? (extra ? "extra" : "main") : "side";
+        return (
+          <div className="db-menu" role="menu" style={{ left: Math.min(menu.x, innerWidth - 200), top: Math.min(menu.y, innerHeight - 160) }} onClick={(e) => e.stopPropagation()}>
+            <div className="db-menu-title">{c.name}</div>
+            <button type="button" role="menuitem" onClick={() => { add(c, menu.section); setMenu(null); }}>Add a copy</button>
+            <button type="button" role="menuitem" onClick={() => { move(menu.section, menu.index, other); setMenu(null); }}>Move to {other === "side" ? "Side" : other === "extra" ? "Extra" : "Main"} Deck</button>
+            <button type="button" role="menuitem" onClick={() => { removeAt(menu.section, menu.index); setMenu(null); }}>Remove</button>
+          </div>
+        );
+      })()}
+      <CardPreviewLayer />
     </section>
   );
 }
