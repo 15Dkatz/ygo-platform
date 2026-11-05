@@ -109,6 +109,9 @@ describe("animation intents", () => {
     expect(ints).toContainEqual(expect.objectContaining({ t: "move", from: { uid: "h1", zone: "hand:0:" }, to: { uid: "h1", zone: "monster:0:1" }, flip: true }));
     expect(ints).toContainEqual({ t: "rotate", uid: "m1", from: "atk", to: "def", reveal: false });
     expect(ints).toContainEqual({ t: "shuffle", zone: "deck:0:" });
+    // the manual reducer gives every card a new uid when it shuffles
+    const reissued = boardOf({ ...player(), deck: [card("x", 0), card("y", 0), card("z", 0)] });
+    expect(manualIntents(boardOf({ ...player(), deck: [card("a", 0), card("b", 0), card("c", 0)] }), reissued)).toContainEqual({ t: "shuffle", zone: "deck:0:" });
   });
 });
 

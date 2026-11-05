@@ -133,7 +133,9 @@ export function manualIntents(prev: BoardState, next: BoardState): Intent[] {
   }
   for (const p of [0, 1] as Seat[]) {
     const a = prev.players[p].deck.map((c) => c.uid), b = next.players[p].deck.map((c) => c.uid);
-    if (a.length > 1 && a.length === b.length && a.join() !== b.join() && new Set([...a, ...b]).size === a.length) {
+    // the manual reducer re-issues every deck uid on a shuffle (so cards can't be tracked through it)
+    const same = new Set([...a, ...b]).size === a.length, fresh = !b.some((u) => a.includes(u));
+    if (a.length > 1 && a.length === b.length && a.join() !== b.join() && (same || fresh)) {
       out.push({ t: "shuffle", zone: pileKey("deck", p) });
     }
   }
