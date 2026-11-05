@@ -1,4 +1,4 @@
-// The one entry point DuelRoom uses for engine mode.
+// The engine session a DuelRoom drives (create it with `createEngineSession` from ./index.ts).
 //
 //   const engine = createEngineSession(this.env, this.ctx.storage);
 //   await engine.load();                         // on wake: true if a duel was in progress
@@ -12,13 +12,10 @@
 // "engine:r:<000123>", written as it is accepted. After eviction/hibernation `load()` replays
 // them (~0.5 ms per response) to rebuild the WASM state.
 
-import ocgWasm from "ocgcore-wasm/lib/ocgcore.sync.wasm";
-import type { OcgResponse } from "ocgcore-wasm";
+import type { OcgCoreSync, OcgResponse } from "ocgcore-wasm";
 import type { BoardState } from "../../../shared/duel.ts";
 import type { EngineEvent, EnginePrompt, EngineResponse, EngineServerMsg, EngineStatus, Seat } from "../../../shared/enginePrompts.ts";
-import type { Env } from "../../env.ts";
-import { loadCore } from "./core.ts";
-import { EngineData, d1r2Source } from "./data.ts";
+import type { EngineData } from "./data.ts";
 import { BadResponse } from "./decode.ts";
 import { EngineDuel, eventsFor, randomSeed, type DeckCodes, type DuelSetup, type SavedDuel } from "./EngineDuel.ts";
 
@@ -64,10 +61,18 @@ const respKey = (i: number) => `${RESP_PREFIX}${String(i).padStart(6, "0")}`;
 const toJson = (r: OcgResponse) => JSON.parse(JSON.stringify(r, (_k, v) => (typeof v === "bigint" ? { $big: v.toString() } : v)));
 const fromJson = (r: unknown) => JSON.parse(JSON.stringify(r), (_k, v) => (v && typeof v === "object" && "$big" in v ? BigInt(v.$big) : v)) as OcgResponse;
 
-export function createEngineSession(env: Env, storage: DurableObjectStorage): EngineSession {
+/** The storage subset the session uses (DurableObjectStorage satisfies it). */
+export type EngineStorage = Pick<DurableObjectStorage, "get" | "put" | "delete" | "list">;
+
+/** Session with injectable dependencies. Workers use `createEngineSession` from ./index.ts;
+ *  tests run this in Node with a Map-backed storage. */
+export function createSession(deps: {
+  storage: EngineStorage;
+  core: () => Promise<OcgCoreSync>;
+  data: () => EngineData;
+}): EngineSession {
   let duel: EngineDuel | null = null;
-  const data = () => new EngineData(d1r2Source(env.DB, env.SCRIPTS));
-  const core = () => loadCore(() => ocgWasm);
+  const { storage, core, data } = deps;
 
   const update = (d: EngineDuel, events: EngineEvent[]): EngineUpdate => ({ events, status: { ...d.status, lp: [...d.status.lp] as [number, number] }, prompt: d.prompt });
   const need = () => { if (!duel) throw new BadResponse("no engine duel in progress"); return duel; };

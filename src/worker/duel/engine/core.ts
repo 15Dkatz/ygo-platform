@@ -7,7 +7,13 @@
 // from a static `import ... from "*.wasm"` (Workers forbid compiling fetched bytes at
 // runtime); in Node tests it is compiled from the file on disk.
 
-import createCore, { type OcgCoreSync } from "ocgcore-wasm";
+import createCore, { OcgCoreInternal, type OcgCoreSync } from "ocgcore-wasm";
+
+/** Current size of the core's linear memory (it starts at 16 MB and only grows). */
+export function wasmMemoryMB(core: OcgCoreSync): number {
+  const internal = (core as unknown as Record<symbol, { module: { HEAP8: Int8Array } }>)[OcgCoreInternal];
+  return Math.round((internal?.module.HEAP8.byteLength ?? 0) / 1048576);
+}
 
 let corePromise: Promise<OcgCoreSync> | null = null;
 

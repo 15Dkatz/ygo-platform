@@ -3,6 +3,8 @@ export interface Env {
   IMAGES: R2Bucket;
   /** Rules-engine Lua scripts (phase 4), key "scripts/<name>". */
   SCRIPTS: R2Bucket;
+  /** "1" enables GET /api/engine/selftest (dev only; set in .dev.vars). */
+  ENGINE_SELFTEST?: string;
   DUEL_ROOM: DurableObjectNamespace;
   ASSETS: Fetcher;
 }
