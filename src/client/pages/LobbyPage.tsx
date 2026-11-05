@@ -6,6 +6,8 @@ import type { RoomInfo } from "../../shared/duel.ts";
 import type { DuelMode } from "../../shared/types.ts";
 import { DeckSelect, NameForm, useDecks } from "../components/duel/DeckPicker.tsx";
 import { useDuelIdentity } from "../components/duel/useDuel.ts";
+import { EngineSupportNote } from "../components/engine/EngineSupportNote.tsx";
+import "../components/engine/EngineSupportNote.css";
 import "./LobbyPage.css";
 
 const REFRESH_MS = 5000;
@@ -24,7 +26,7 @@ export function LobbyPage() {
   const [rooms, setRooms] = useState<RoomInfo[] | null>(null);
   const [listErr, setListErr] = useState<string | null>(null);
   const [roomName, setRoomName] = useState("");
-  const [mode, setMode] = useState<DuelMode>("manual");
+  const [mode, setMode] = useState<DuelMode>("engine");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [renaming, setRenaming] = useState(false);
@@ -93,17 +95,18 @@ export function LobbyPage() {
           <div className="lobby-field">
             <span>Mode</span>
             <div className="lobby-seg" role="radiogroup" aria-label="Mode">
+              <button type="button" role="radio" aria-checked={mode === "engine"} className={mode === "engine" ? "is-active" : ""} onClick={() => setMode("engine")}>
+                Rules-enforced
+              </button>
               <button type="button" role="radio" aria-checked={mode === "manual"} className={mode === "manual" ? "is-active" : ""} onClick={() => setMode("manual")}>
                 Manual
               </button>
-              <button type="button" role="radio" aria-checked={mode === "engine"} className={mode === "engine" ? "is-active" : ""} onClick={() => setMode("engine")}>
-                Rules-enforced <span className="lobby-beta">beta</span>
-              </button>
             </div>
             <small className="muted">
-              {mode === "manual" ? "A virtual table: you move your own cards, the server only keeps the board in sync." : "The rules engine is still being built; you can switch the room to manual."}
+              {mode === "manual" ? "A virtual table: you move your own cards, the server only keeps the board in sync." : "The official rules are enforced (EDOPro engine): you pick from legal moves only. Both players can agree to switch to manual mid-duel."}
             </small>
           </div>
+          {mode === "engine" && deck && <EngineSupportNote ids={[...deck.main, ...deck.extra, ...deck.side]} />}
           <button className="primary" disabled={busy || !identity || !deck}>{busy ? "Creating…" : "Create and sit down"}</button>
           {!deck && identity && <small className="muted">Choose a deck first.</small>}
           {err && <small className="lobby-error">{err}</small>}
@@ -126,7 +129,7 @@ export function LobbyPage() {
                 <li key={r.roomId} className="lobby-room">
                   <div className="lobby-room-main">
                     <b>{r.name}</b>
-                    <span className={`lobby-chip ${r.mode === "engine" ? "is-beta" : ""}`}>{r.mode === "engine" ? "Rules (beta)" : "Manual"}</span>
+                    <span className={`lobby-chip ${r.mode === "engine" ? "is-beta" : ""}`}>{r.mode === "engine" ? "Rules" : "Manual"}</span>
                     <span className={`lobby-chip is-${r.status}`}>{open ? "Open" : r.status === "dueling" ? "Dueling" : r.status}</span>
                   </div>
                   <div className="muted lobby-room-meta">

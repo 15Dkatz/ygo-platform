@@ -4,7 +4,9 @@
  *   - ProjectIgnis CardScripts (*.lua)  -> R2 bucket `ygo-platform-scripts` (binding SCRIPTS), key "scripts/<name>"
  *
  * Get the sources first (both AGPL-3.0, see LICENSES/NOTICE.md), into the gitignored data/ folder:
- *   curl -L -o data/vendor/babelcdb/cards.cdb https://github.com/ProjectIgnis/BabelCDB/raw/master/cards.cdb
+ *   curl -L -o data/vendor/babelcdb/BabelCDB.zip https://github.com/ProjectIgnis/BabelCDB/archive/refs/heads/master.zip
+ *   (unzip it so data/vendor/babelcdb/BabelCDB-master/cards.cdb exists; every official file is read:
+ *    cards.cdb, release-*.cdb and prerelease-*.cdb, skipping Rush / Skills / unofficial / Goat)
  *   curl -L -o data/vendor/cardscripts/CardScripts.zip https://github.com/ProjectIgnis/CardScripts/archive/refs/heads/master.zip
  *   (unzip it so data/vendor/cardscripts/CardScripts-master/utility.lua exists)
  *
@@ -17,12 +19,13 @@
  *   --all-scripts          upload every official + pre-release card script (~13.5k files),
  *                          instead of the base scripts + the test decks' cards
  *   --decks=a.json,b.json  also upload scripts for these decks ({ main: number[], extra: number[] })
- *   --cdb=PATH --scripts=DIR   override source locations
+ *   --cdb=PATH[,PATH...]  --scripts=DIR   override source locations
  *   --no-cards / --no-scripts  skip one half
  */
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { readdirSync } from "node:fs";
 import { BASE_SCRIPTS } from "../src/worker/duel/engine/data.ts";
 import { TEST_DECKS } from "../src/worker/duel/engine/testDecks.ts";
 import { indexScripts, readCdb } from "./lib/engine-files.ts";
@@ -32,7 +35,14 @@ const flag = (f: string) => argv.includes(f);
 const opt = (k: string) => argv.find((a) => a.startsWith(`--${k}=`))?.slice(k.length + 3);
 
 const target = flag("--remote") ? "--remote" : flag("--local") ? "--local" : null;
-const cdbPath = resolve(opt("cdb") ?? "data/vendor/babelcdb/cards.cdb");
+const BABEL_DIR = resolve("data/vendor/babelcdb/BabelCDB-master");
+/** Official card databases in BabelCDB, main file first (first file wins on duplicate ids). */
+function defaultCdbs(): string[] {
+  if (!existsSync(BABEL_DIR)) return [resolve("data/vendor/babelcdb/cards.cdb")];
+  const names = readdirSync(BABEL_DIR).filter((f) => /^(cards|release-.*|prerelease-.*)\.cdb$/.test(f) && !/rush/i.test(f));
+  return names.sort((a, b) => (a === "cards.cdb" ? -1 : b === "cards.cdb" ? 1 : a.localeCompare(b))).map((f) => join(BABEL_DIR, f));
+}
+const cdbPaths = opt("cdb") ? opt("cdb")!.split(",").map((p) => resolve(p)) : defaultCdbs();
 const scriptsRoot = resolve(opt("scripts") ?? "data/vendor/cardscripts/CardScripts-master");
 const outDir = resolve("data/engine");
 const BUCKET = "ygo-platform-scripts";
@@ -44,13 +54,19 @@ function run(cmd: string) {
 }
 const sql = (v: string | number) => (typeof v === "number" ? String(v) : `'${v.replace(/'/g, "''")}'`);
 
-if (!existsSync(cdbPath)) throw new Error(`missing ${cdbPath} (see the header of this script)`);
+for (const p of cdbPaths) if (!existsSync(p)) throw new Error(`missing ${p} (see the header of this script)`);
 if (!existsSync(join(scriptsRoot, "utility.lua"))) throw new Error(`missing CardScripts checkout at ${scriptsRoot}`);
 mkdirSync(outDir, { recursive: true });
 
 const scripts = indexScripts(scriptsRoot);
-const cards = await readCdb(cdbPath, scripts);
-console.log(`cards.cdb: ${cards.length} cards; CardScripts: ${scripts.size} scripts (${cards.filter((c) => c.has_script).length} cards have one)`);
+const cards: Awaited<ReturnType<typeof readCdb>> = [];
+const seen = new Set<number>();
+for (const p of cdbPaths) {
+  let added = 0;
+  for (const c of await readCdb(p, scripts)) if (!seen.has(c.id)) { seen.add(c.id); cards.push(c); added++; }
+  console.log(`  ${p.split(/[\/]/).pop()}: +${added}`);
+}
+console.log(`card databases: ${cards.length} cards; CardScripts: ${scripts.size} scripts (${cards.filter((c) => c.has_script).length} cards have one)`);
 
 // ---- cards -> D1 -------------------------------------------------------------------------
 if (!flag("--no-cards")) {

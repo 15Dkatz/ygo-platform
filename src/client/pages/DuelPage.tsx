@@ -246,7 +246,7 @@ export function DuelPage() {
       <div className="duel-topline">
         <Link to="/lobby" className="duel-back">‹ Lobby</Link>
         <h1>{room?.name ?? "Duel"}</h1>
-        {room && <span className={`duel-chip ${room.mode === "engine" ? "is-beta" : ""}`}>{room.mode === "engine" ? "Rules-enforced (beta)" : "Manual"}</span>}
+        {room && <span className={`duel-chip ${room.mode === "engine" ? "is-beta" : ""}`}>{room.mode === "engine" ? "Rules-enforced" : "Manual"}</span>}
         {you === null && <span className="duel-chip">Spectating</span>}
         <span className="muted duel-topline-meta">
           {conn.status !== "open" ? (conn.status === "connecting" ? "Connecting…" : "Reconnecting…") : session ? `${session.spectators} watching` : ""}

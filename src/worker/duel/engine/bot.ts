@@ -45,7 +45,10 @@ export function botResponse(p: EnginePrompt, rng: Rng): EngineResponse {
       return options.length ? pick(rng, options) : { promptId, kind: "idle", action: "end" };
     }
     case "battle": {
-      if (p.attacks.length && rng() < 0.85) return { promptId, kind: "battle", action: "attack", index: pickIndex(rng, p.attacks.length) };
+      // forced attacks (some effects): neither Main Phase 2 nor End is allowed, so attack or activate
+      const mustAct = !p.canMain2 && !p.canEnd;
+      if (p.attacks.length && (mustAct || rng() < 0.85)) return { promptId, kind: "battle", action: "attack", index: pickIndex(rng, p.attacks.length) };
+      if (mustAct && p.activates.length) return { promptId, kind: "battle", action: "activate", index: pickIndex(rng, p.activates.length) };
       if (p.activates.length && rng() < 0.3) return { promptId, kind: "battle", action: "activate", index: pickIndex(rng, p.activates.length) };
       if (p.canMain2 && rng() < 0.5) return { promptId, kind: "battle", action: "main2" };
       return p.canEnd ? { promptId, kind: "battle", action: "end" } : { promptId, kind: "battle", action: "main2" };

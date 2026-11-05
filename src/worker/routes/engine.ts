@@ -25,6 +25,38 @@ engine.get("/source", (c) => c.json({
   app: { name: "YGO Duel Hub (this service, including its engine integration)", url: SOURCE_URL, license: LICENSE_NAME },
 }));
 
+/**
+ * POST /api/engine/support { ids: number[] } -> { unsupported: { id, reason }[] }
+ * Cards the rules engine can't play properly: unknown to its card database, or effect cards
+ * without a script (they would have no effects). Alternate artworks count as their original.
+ */
+const TYPE_NORMAL = 0x10, TYPE_PENDULUM = 0x1000000, TYPE_TOKEN = 0x4000;
+engine.post("/support", async (c) => {
+  const body = await c.req.json<{ ids?: unknown }>().catch(() => ({ ids: [] }));
+  const ids = [...new Set((Array.isArray(body.ids) ? body.ids : []).map(Number).filter((x) => Number.isInteger(x) && x > 0))].slice(0, 300);
+  const rows = new Map<number, { id: number; alias: number; type: number; has_script: number }>();
+  const fetchRows = async (list: number[]) => {
+    for (let i = 0; i < list.length; i += 90) {
+      const chunk = list.slice(i, i + 90);
+      const r = await c.env.DB.prepare(`SELECT id, alias, type, has_script FROM engine_cards WHERE id IN (${chunk.map(() => "?").join(",")})`)
+        .bind(...chunk).all<{ id: number; alias: number; type: number; has_script: number }>();
+      for (const row of r.results) rows.set(row.id, row);
+    }
+  };
+  await fetchRows(ids);
+  const canonical = (id: number) => { const a = rows.get(id)?.alias ?? 0; return a && Math.abs(a - id) < 20 ? a : id; };
+  await fetchRows(ids.map(canonical).filter((id) => !rows.has(id)));
+  const unsupported: { id: number; reason: string }[] = [];
+  for (const id of ids) {
+    const row = rows.get(canonical(id));
+    if (!row) unsupported.push({ id, reason: "not in the rules engine yet" });
+    else if (!row.has_script && !(row.type & TYPE_TOKEN) && (!(row.type & TYPE_NORMAL) || row.type & TYPE_PENDULUM)) {
+      unsupported.push({ id, reason: "its effects aren't scripted yet" });
+    }
+  }
+  return c.json({ unsupported });
+});
+
 engine.get("/selftest", async (c) => {
   if (c.env.ENGINE_SELFTEST !== "1") return c.json({ error: "not found" }, 404);
   const seed = Number(c.req.query("seed") ?? 1) | 0;

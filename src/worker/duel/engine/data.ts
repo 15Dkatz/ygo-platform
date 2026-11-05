@@ -45,6 +45,9 @@ export const BASE_SCRIPTS = [
 const cardCache = new Map<number, EngineCardRow | null>();
 const scriptCache = new Map<string, string | null>();
 
+/** EDOPro: alias codes closer than this to the card code are alternate artworks. */
+export const ARTWORK_OFFSET = 20;
+
 export class EngineData {
   private missingCards = new Set<number>();
   private missingScripts = new Set<string>();
@@ -63,6 +66,12 @@ export class EngineData {
     };
   }
   row(code: number): EngineCardRow | null { return cardCache.get(code) ?? null; }
+  /** Alternate artworks share the original's rules and script: like EDOPro, an alias within
+   *  ARTWORK_OFFSET of the code means "same card, other art". Needs the row loaded. */
+  canonical(code: number): number {
+    const alias = cardCache.get(code)?.alias ?? 0;
+    return alias && Math.abs(alias - code) < ARTWORK_OFFSET ? alias : code;
+  }
   script(name: string): string | null {
     const key = normalizeScriptName(name);
     const body = scriptCache.get(key);
@@ -102,8 +111,11 @@ export class EngineData {
   }
 
   /** Load cards + scripts for the given decks, plus cards their scripts mention (tokens etc.). */
-  async preload(codes: number[]): Promise<void> {
-    await Promise.all([this.ensureCards(codes), this.ensureScripts(BASE_SCRIPTS)]);
+  async preload(deckCodes: number[]): Promise<void> {
+    await Promise.all([this.ensureCards(deckCodes), this.ensureScripts(BASE_SCRIPTS)]);
+    // alternate artworks play as their original card
+    const codes = [...new Set(deckCodes.map((c) => this.canonical(c)))];
+    await this.ensureCards(codes);
     await this.ensureScripts(codes.filter((c) => cardCache.get(c)?.has_script).map((c) => `c${c}.lua`));
     // One hop of "listed" codes: 5-9 digit numbers in the deck's scripts that are real cards.
     const mentioned = new Set<number>();

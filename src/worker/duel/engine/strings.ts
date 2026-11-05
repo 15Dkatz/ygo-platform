@@ -32,6 +32,7 @@ const HINTS: Record<number, string> = {
 export function hintText(id: number, cardString: (d: bigint) => string, cardName?: (code: number) => string | null): string {
   if (id >= 1 << 20) return cardString(BigInt(id));
   if (HINTS[id]) return HINTS[id];
-  const name = id >= 10_000 ? cardName?.(id) : null;
-  return name ?? `#${id}`;
+  if (id === 0) return "";                         // no hint
+  if (id >= 10_000) return cardName?.(id) ?? "";   // a card code: its name, or nothing if unknown
+  return `#${id}`;
 }

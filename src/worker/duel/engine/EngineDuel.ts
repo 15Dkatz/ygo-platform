@@ -163,7 +163,7 @@ export class EngineDuel {
     for (const seat of [0, 1] as const) {
       const t = this.ctx.teamOf(seat) as 0 | 1;
       const add = (code: number, location: number) => this.core.duelNewCard(h, {
-        team: t, duelist: 0, code, controller: t, location: location as never, sequence: 0, position: OcgPosition.FACEDOWN_DEFENSE as never,
+        team: t, duelist: 0, code: this.data.canonical(code), controller: t, location: location as never, sequence: 0, position: OcgPosition.FACEDOWN_DEFENSE as never,
       });
       for (const c of s.decks[seat].main) add(c, OcgLocation.DECK);
       for (const c of s.decks[seat].extra) add(c, OcgLocation.EXTRA);
@@ -214,6 +214,9 @@ export class EngineDuel {
     switch (m.type) {
       case OcgMessageType.RETRY:
         this.retries++;
+        // The core listed a choice whose activation then failed its own checks (cost, zones...):
+        // it asks again, so tell the player why the same question came back.
+        this.pendingHint = "That choice can't be made right now. Choose again.";
         if (this.lastSelect) this.setPrompt(this.lastSelect);
         return;
       case OcgMessageType.HINT:

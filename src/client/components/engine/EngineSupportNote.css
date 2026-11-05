@@ -1,0 +1,9 @@
+.engine-support { display: block; font-size: 12px; }
+.engine-support.is-ok { color: var(--ok); }
+.engine-support.is-warn {
+  padding: 8px 10px; border-radius: var(--radius); border: 1px solid var(--warn);
+  background: var(--danger-soft); color: var(--fg);
+}
+.engine-support ul { margin: 6px 0 0; padding-left: 18px; }
+.engine-support li { margin: 1px 0; }
+.duel-deckrow .engine-support { flex-basis: 100%; }

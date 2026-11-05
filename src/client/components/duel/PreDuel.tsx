@@ -2,6 +2,8 @@ import type { ClientMsg, RpsChoice, SessionInfo } from "../../../shared/duel.ts"
 import type { Seat } from "../../../shared/duelActions.ts";
 import type { Deck } from "../../../shared/types.ts";
 import { DeckSelect } from "./DeckPicker.tsx";
+import { EngineSupportNote } from "../engine/EngineSupportNote.tsx";
+import "../engine/EngineSupportNote.css";
 
 const RPS: { choice: RpsChoice; label: string; glyph: string }[] = [
   { choice: "rock", label: "Rock", glyph: "✊" },
@@ -73,6 +75,7 @@ export function PreDuel({ session, you, hasIdentity, decks, deckId, setDeckId, d
               <button className="primary" disabled={!deck} onClick={sendDeck}>
                 {!seated ? "Take a seat with this deck" : stage === "finished" ? "Use this deck (side deck)" : seats[you!]?.ready ? "Change deck" : "Ready with this deck"}
               </button>
+              {session.mode === "engine" && deck && <EngineSupportNote ids={[...deck.main, ...deck.extra, ...deck.side]} />}
             </div>
           ) : (
             <p className="muted">Both seats are taken — you are spectating.</p>
