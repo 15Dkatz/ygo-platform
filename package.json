@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "hono": "^4.13.16",
+    "ocgcore-wasm": "^0.1.6",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-router-dom": "^7.18.5"

@@ -1,6 +1,8 @@
 export interface Env {
   DB: D1Database;
   IMAGES: R2Bucket;
+  /** Rules-engine Lua scripts (phase 4), key "scripts/<name>". */
+  SCRIPTS: R2Bucket;
   DUEL_ROOM: DurableObjectNamespace;
   ASSETS: Fetcher;
 }
