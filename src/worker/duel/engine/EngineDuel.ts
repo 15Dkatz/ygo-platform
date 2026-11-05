@@ -48,6 +48,21 @@ export function randomSeed(): DuelSetup["seed"] {
 
 const MAX_REBUILDS = 8;
 
+/** Deterministic Fisher-Yates shuffle of a deck list from the duel seed (mulberry32 per seat). */
+export function shuffled(cards: number[], seed: DuelSetup["seed"], seat: number): number[] {
+  let a = Number((BigInt(seed[0]) ^ (BigInt(seed[1]) >> 7n) ^ (BigInt(seed[2 + (seat & 1)]) << 3n)) & 0xffffffffn) ^ Math.imul(seat + 1, 0x9e3779b9);
+  const rnd = () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const out = [...cards];
+  for (let i = out.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [out[i], out[j]] = [out[j], out[i]]; }
+  return out;
+}
+
 export class EngineDuel {
   private handle: ReturnType<OcgCoreSync["createDuel"]> = null;
   private replayPos = 0;
@@ -165,7 +180,9 @@ export class EngineDuel {
       const add = (code: number, location: number) => this.core.duelNewCard(h, {
         team: t, duelist: 0, code: this.data.canonical(code), controller: t, location: location as never, sequence: 0, position: OcgPosition.FACEDOWN_DEFENSE as never,
       });
-      for (const c of s.decks[seat].main) add(c, OcgLocation.DECK);
+      // The core does not shuffle the Main Decks at the start (every duel opened with the same
+      // hands). Shuffle them here from the duel's seed, so a replay rebuilds the same order.
+      for (const c of shuffled(s.decks[seat].main, s.seed, seat)) add(c, OcgLocation.DECK);
       for (const c of s.decks[seat].extra) add(c, OcgLocation.EXTRA);
     }
     this.core.startDuel(h);
