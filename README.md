@@ -56,7 +56,7 @@ npm run engine:import:remote                 # engine card data + all ~13.5k car
 npm run deploy
 ```
 
-Set `SOURCE_URL` in `src/shared/project.ts` to the public repository first (AGPL §13).
+Live: https://ygo-platform.stevenbliu.workers.dev — `SOURCE_URL` in `src/shared/project.ts` points at this repository (AGPL §13).
 
 ## License
 
