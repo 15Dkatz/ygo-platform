@@ -5,7 +5,7 @@ import { api, lookupCards } from "../../api.ts";
 import type { BoardState, CardInstance, ClientMsg, DuelEvent, RoomInfo, ServerMsg, SessionInfo } from "../../../shared/duel.ts";
 import type { Seat } from "../../../shared/duelActions.ts";
 import type { Card } from "../../../shared/types.ts";
-import type { EnginePrompt } from "../../../shared/enginePrompts.ts";
+import type { EngineEvent, EnginePrompt } from "../../../shared/enginePrompts.ts";
 
 // ---------- identity ----------
 
@@ -51,7 +51,17 @@ export interface DuelConn {
 
 let toastSeq = 0;
 
-export function useDuelSocket(roomId: string) {
+export interface DuelSocketHooks {
+  /** Called synchronously before a new board is stored (the DOM still shows `prev`), with the
+   *  engine events that led to it (rules-enforced mode; null in manual mode). For animations. */
+  beforeState?(prev: BoardState | null, next: BoardState, events: EngineEvent[] | null): void;
+}
+
+export function useDuelSocket(roomId: string, hooks?: DuelSocketHooks) {
+  const hooksRef = useRef(hooks);
+  hooksRef.current = hooks;
+  const boardRef = useRef<BoardState | null>(null);
+  const eventsRef = useRef<EngineEvent[] | null>(null);
   const [conn, setConn] = useState<DuelConn>({ status: "connecting", room: null, you: null, session: null, board: null, chat: [], peek: null, toasts: [], prompt: null, hostStatus: null });
   const wsRef = useRef<WebSocket | null>(null);
   const queue = useRef<ClientMsg[]>([]);
@@ -85,8 +95,28 @@ export function useDuelSocket(roomId: string) {
         try { msg = JSON.parse(e.data); } catch { return; }
         switch (msg.t) {
           case "room": setConn((c) => ({ ...c, room: msg.room, you: msg.you })); break;
-          case "session": setConn((c) => ({ ...c, session: msg.session, board: msg.session.stage === "lobby" ? null : c.board })); break;
-          case "state": setConn((c) => ({ ...c, board: msg.state })); break;
+          case "session":
+            if (msg.session.stage === "lobby") boardRef.current = null;
+            setConn((c) => ({ ...c, session: msg.session, board: msg.session.stage === "lobby" ? null : c.board }));
+            break;
+          case "state": {
+            const events = eventsRef.current;
+            eventsRef.current = null;
+            try { hooksRef.current?.beforeState?.(boardRef.current, msg.state, events); } catch (err) { console.warn("beforeState", err); }
+            boardRef.current = msg.state;
+            setConn((c) => ({ ...c, board: msg.state }));
+            break;
+          }
+          case "engineEvents": {
+            const events = (Array.isArray(msg.events) ? msg.events : []) as EngineEvent[];
+            eventsRef.current = [...(eventsRef.current ?? []), ...events];
+            // coins and dice get the same toasts as manual mode
+            for (const ev of events) {
+              if (ev.e === "coin") ev.results.forEach((heads) => toast({ event: { kind: "coin", player: ev.player, heads } }));
+              if (ev.e === "dice") ev.results.forEach((value) => toast({ event: { kind: "dice", player: ev.player, value } }));
+            }
+            break;
+          }
           case "chat": setConn((c) => ({ ...c, chat: [...c.chat.slice(-199), msg] })); break;
           case "peek": setConn((c) => ({ ...c, peek: { title: msg.title, cards: msg.cards } })); break;
           case "event": toast({ event: msg.event }, msg.event.kind === "reveal" ? 7000 : 4000); break;

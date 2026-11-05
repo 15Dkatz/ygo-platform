@@ -73,7 +73,8 @@ export type ClientMsg =
   | { t: "rematch" }                           // after a finished duel; both must ask
   | { t: "leave" }                             // give up the seat (before the duel) / forfeit (during)
   // --- additive (host-runs-rules mode): only accepted from the host's socket ---
-  | { t: "hostUpdate"; update: unknown; snapshot: unknown }   // one engine step, unmasked (the server masks per viewer)
+  | { t: "hostUpdate"; update: unknown; snapshot: unknown }   // one engine step, unmasked (the server masks per viewer);
+                                                              // update.events (optional) = [seat 0's, seat 1's] masked events
   | { t: "hostError"; seat: 0 | 1; message: string };         // the engine refused that player's answer
 
 export type ServerMsg =
@@ -88,7 +89,10 @@ export type ServerMsg =
   | { t: "event"; event: DuelEvent }          // transient effect for toasts/animations (attack, reveal, dice, coin)
   // --- additive (host-runs-rules mode): only sent to the host ---
   | { t: "engineHost"; start?: EngineHostStart; snapshot?: unknown }   // run (or resume) this duel's engine
-  | { t: "engineRespond"; seat: 0 | 1; response: unknown };            // a player's answer, for the host's engine
+  | { t: "engineRespond"; seat: 0 | 1; response: unknown }             // a player's answer, for the host's engine
+  // --- additive (engine animations): what one engine step did, masked for this viewer.
+  //     Sent right before the `state` it led to (EngineEvent[] from enginePrompts.ts). ---
+  | { t: "engineEvents"; events: unknown[] };
 
 /** What the host's browser needs to create the duel (same as the server's RoomEngineOptions). */
 export interface EngineHostStart {

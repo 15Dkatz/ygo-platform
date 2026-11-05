@@ -1,7 +1,7 @@
 // PHASE 3 owns this page (duel board). PHASE 4 adds engine-mode prompts.
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import type { CardInstance } from "../../shared/duel.ts";
+import type { BoardState, CardInstance } from "../../shared/duel.ts";
 import { PHASES, PHASE_LABEL, type DuelAction, type Phase, type Seat } from "../../shared/duelActions.ts";
 import { Board, PendulumStrip, type BoardUI, type ZoneRef } from "../components/duel/Board.tsx";
 import { CardView } from "../components/duel/CardView.tsx";
@@ -11,7 +11,9 @@ import { ContextMenu, Modal, Toasts } from "../components/duel/Overlays.tsx";
 import { PreDuel } from "../components/duel/PreDuel.tsx";
 import { CardPreview, LogChat } from "../components/duel/SidePanel.tsx";
 import { boardCodes, getCard, useCardData, useDuelIdentity, useDuelSocket } from "../components/duel/useDuel.ts";
-import { EnginePromptPanel } from "../components/engine/EnginePrompt.tsx";
+import { AnimatedLp } from "../components/duel/anim/AnimatedLp.tsx";
+import { useBoardAnimations } from "../components/duel/anim/useBoardAnimations.ts";
+import { useEngineBoard, type PhaseActions } from "../components/engine/EngineBoard.tsx";
 import "../components/duel/duel.css";
 import "./DuelPage.css";
 
@@ -22,11 +24,14 @@ type Viewer =
 
 const PHASE_SHORT: Record<Phase, string> = { draw: "DP", standby: "SP", main1: "M1", battle: "BP", main2: "M2", end: "EP" };
 const other = (p: Seat): Seat => (p === 0 ? 1 : 0);
+const NO_PLAYER = { name: "", lp: 0, deck: [], hand: [], extra: [], gy: [], banished: [], monster: [], spelltrap: [], field: null, pendulum: [] };
+const NO_BOARD: BoardState = { players: [NO_PLAYER, NO_PLAYER], extraMonster: [], turn: 1, turnPlayer: 0, phase: "draw", log: [] };
 
 export function DuelPage() {
   const { roomId = "" } = useParams();
   const [params] = useSearchParams();
-  const { conn, send, toast, clearPeek } = useDuelSocket(roomId);
+  const anim = useBoardAnimations();
+  const { conn, send, toast, clearPeek } = useDuelSocket(roomId, { beforeState: anim.beforeState });
   const { identity } = useDuelIdentity();
   const { decks, deck, deckId, setDeckId } = useDecks();
   const { board, session, room, you } = conn;
@@ -43,7 +48,10 @@ export function DuelPage() {
   const live = !!board && (session?.stage === "duel" || session?.stage === "finished");
   const playing = live && session?.stage === "duel" && you !== null;
   const me: Seat = you ?? 0;
-  const engineMode = conn.room?.mode === "engine";
+  const engineMode = (session?.mode ?? conn.room?.mode) === "engine";
+  anim.engineMode.current = engineMode;
+  // play the animations captured for this board as soon as it is on screen
+  useLayoutEffect(() => { anim.animator.play(); }, [board, anim.animator]);
   // card codes mentioned anywhere in an engine prompt, so their names/images load
   const promptCodes = useMemo(() => {
     const out: { code: number }[] = [];
@@ -79,11 +87,12 @@ export function DuelPage() {
     for (const t of conn.toasts) {
       if (seenToasts.current.has(t.id) || t.event?.kind !== "attack") continue;
       seenToasts.current.add(t.id);
+      anim.animator.attack(t.event.attacker, t.event.target, other(t.event.player));
       const uids = [t.event.attacker, t.event.target].filter(Boolean) as string[];
       setFlash((f) => new Set([...f, ...uids]));
       setTimeout(() => setFlash((f) => { const n = new Set(f); uids.forEach((u) => n.delete(u)); return n; }), 1600);
     }
-  }, [conn.toasts]);
+  }, [conn.toasts, anim.animator]);
 
   const act = useCallback((a: DuelAction) => send({ t: "action", action: a }), [send]);
   const askNumber = (label: string, def: number) => {
@@ -110,6 +119,22 @@ export function DuelPage() {
     setMenu({ x, y, title: data?.name ?? (card.token ? "Token" : card.code ? `Card ${card.code}` : "Face-down card"), items });
   };
 
+  // rules-enforced: the engine's prompt, played on the board
+  const engineBoard = useEngineBoard({
+    prompt: playing && engineMode ? conn.prompt : null,
+    board: board ?? NO_BOARD,
+    you: me,
+    respond: (response) => send({ t: "respond", response }),
+    openMenu: setMenu,
+    cardName: (code) => getCard(code)?.name,
+    preview: (code) => setZoomCard(code),
+    onHover: (code) => { if (code) setPreview(code); },
+    showMaterials: (uid) => setViewer({ kind: "materials", uid }),
+    toast: (text) => toast({ text, error: true }),
+    chainBadges: anim.chainBadges,
+  });
+  const engineUi = engineMode && board;
+
   const resolvePending = (at: ZoneRef, target: CardInstance | null) => {
     if (!board || !pending || you === null) return;
     const p = pending;
@@ -131,12 +156,19 @@ export function DuelPage() {
 
   const ui: BoardUI = {
     me, you, pending: !!pending, flash, selectedUid: pending?.uid ?? null,
+    marks: engineUi ? engineBoard.marks : undefined,
     onHover: (code) => { if (code) setPreview(code); },
     onCard: (card, at, e) => {
+      if (engineUi) return engineBoard.onCard(card, at, e);
       if (pending) return resolvePending(at, card);
       cardMenu(card, at, e.clientX, e.clientY);
     },
     onZone: (at, e) => {
+      if (engineUi) {
+        if (engineBoard.onZone(at, e)) return;
+        if ((at.zone === "gy" || at.zone === "banished" || at.zone === "extra") && board.players[at.player][at.zone].length) setViewer({ kind: "pile", player: at.player, zone: at.zone });
+        return;
+      }
       if (pending) return resolvePending(at, null);
       if (!board) return;
       if (at.zone === "gy" || at.zone === "banished" || at.zone === "extra") {
@@ -148,7 +180,8 @@ export function DuelPage() {
         if (items.length) setMenu({ x: e.clientX, y: e.clientY, title: "Deck", items });
       }
     },
-    onDrop: (at, uid) => {
+    onDrop: (at, uid, e) => {
+      if (engineUi) return engineBoard.onDrop(at, uid, e);
       if (!board || you === null) return;
       const src = locate(board, uid);
       if (!src) return;
@@ -166,7 +199,7 @@ export function DuelPage() {
       if (t.closest("input, textarea, select") || e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key === "Escape") { setPending(null); return; }
       if (e.key === "?") { setHelp((h) => !h); return; }
-      if (!playing || !board || menu) return;
+      if (!playing || !board || menu || engineMode) return;
       const k = e.key.toLowerCase();
       if (k === "d") act({ type: "draw" });
       else if (k === "h") act({ type: "shuffle" });
@@ -179,7 +212,7 @@ export function DuelPage() {
     };
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
-  }, [playing, board, you, menu, act]);
+  }, [playing, board, you, menu, act, engineMode]);
 
   const describe = (uid: string) => {
     const f = board && locate(board, uid);
@@ -224,6 +257,10 @@ export function DuelPage() {
   const closeViewer = () => { if (viewer?.kind === "peek") clearPeek(); setViewer(null); };
 
   const onViewerCard = (card: CardInstance, at: ZoneRef, host: CardInstance | undefined, e: MouseEvent) => {
+    if (engineUi) {
+      if (host) { if (card.code > 0) setZoomCard(card.code); return; }
+      return engineBoard.onCard(card, at, e);
+    }
     if (host) {
       if (you === null || (host.controller ?? at.player) !== you) return;
       const det = (zone: "gy" | "banished" | "hand") => act({ type: "detach", targetUid: host.uid, materialUid: card.uid, to: { zone } });
@@ -242,7 +279,7 @@ export function DuelPage() {
   };
 
   return (
-    <section className="duel-page">
+    <section className="duel-page" ref={anim.rootRef}>
       <div className="duel-topline">
         <Link to="/lobby" className="duel-back">‹ Lobby</Link>
         <h1>{room?.name ?? "Duel"}</h1>
@@ -269,7 +306,8 @@ export function DuelPage() {
             <Board board={board!} ui={ui} />
             <PendulumStrip board={board!} player={me} ui={ui} />
             <PlayerBar board={board!} player={me} you={you} onLp={setLpFor} connected={session.seats[me]?.connected} />
-            <PhaseBar board={board!} you={you} act={act} />
+            <PhaseBar board={board!} you={you} act={act} engine={engineMode ? engineBoard.phase : undefined}
+              onMore={engineBoard.phase.shuffle ? (e) => setMenu({ x: e.clientX, y: e.clientY, title: "More", items: [{ label: "Shuffle hand", run: engineBoard.phase.shuffle }] }) : undefined} />
             {playing && engineMode && (
               <div className="duel-engine">
                 {conn.hostStatus && <p className="duel-engine-wait" role="status">{conn.hostStatus}</p>}
@@ -277,7 +315,7 @@ export function DuelPage() {
                   <p className="duel-engine-wait" role="status">{session.seats[session.engineHost]?.name ?? "The host"} is disconnected. Their browser runs the rules, so the duel continues when they're back.</p>
                 )}
                 {conn.prompt ? (
-                  <EnginePromptPanel prompt={conn.prompt} onRespond={(response) => send({ t: "respond", response })} cardName={(code) => getCard(code)?.name} />
+                  engineBoard.status && <p className={`duel-engine-status ${conn.prompt.hint ? "is-hint" : ""}`} role="status">{engineBoard.status}</p>
                 ) : (
                   <p className="muted duel-engine-wait">Waiting for {session.seats[other(me)]?.name ?? "your opponent"}…</p>
                 )}
@@ -328,6 +366,7 @@ export function DuelPage() {
             <div className="duel-viewer-grid">
               {vc.cards.map((c, i) => (
                 <CardView key={c.uid} card={{ ...c, faceUp: c.faceUp || c.code > 0 }} onHover={setPreview}
+                  mark={engineUi ? (engineBoard.marks.actionable.has(c.uid) ? "actionable" : engineBoard.marks.selectable.has(c.uid) ? "selectable" : undefined) : undefined}
                   onClick={(e) => onViewerCard(c, vc.at(i), vc.host, e)} />
               ))}
             </div>
@@ -350,7 +389,16 @@ export function DuelPage() {
       )}
 
       {help && (
-        <Modal title="How to play (manual mode)" onClose={() => setHelp(false)}>
+        <Modal title={engineMode ? "How to play (rules-enforced)" : "How to play (manual mode)"} onClose={() => setHelp(false)}>
+          {engineMode ? (
+            <ul className="duel-help">
+              <li>Cards you can use right now glow. Click (or tap) one for its legal actions: summon, Set, activate, change position, attack.</li>
+              <li>Drag a glowing card from your hand onto a zone to play it there when only one action fits.</li>
+              <li>Move to the Battle Phase, Main Phase 2 or end your turn with the phase bar under the board.</li>
+              <li>When the rules ask you to choose (targets, Tributes, zones, chains), the choices light up on the board and a bar at the bottom shows what to pick. Glowing piles (GY, Deck…) open to show their choices. "List" shows the same choice as a list.</li>
+              <li>The rules engine enforces everything; both players can agree to switch the duel to manual mode.</li>
+            </ul>
+          ) : (
           <ul className="duel-help">
             <li>Click (or tap) a card for everything you can do with it. Right-click works too.</li>
             <li>Drag cards between zones: hand → Monster Zone summons, → S/T Zone sets a Trap / activates a Spell, onto a monster attaches it as Xyz material.</li>
@@ -358,9 +406,11 @@ export function DuelPage() {
             <li>The server does not enforce the rules: agree with your opponent like on a real table. Everything is logged.</li>
             <li>Shortcuts: <kbd>D</kbd> draw, <kbd>H</kbd> shuffle, <kbd>N</kbd> next phase, <kbd>E</kbd> end turn, <kbd>Esc</kbd> cancel, <kbd>?</kbd> this help.</li>
           </ul>
+          )}
         </Modal>
       )}
 
+      {engineUi && engineBoard.overlay}
       {menu && <ContextMenu {...menu} onClose={() => setMenu(null)} />}
       <Toasts toasts={conn.toasts} names={names} describe={describe} />
     </section>
@@ -377,14 +427,35 @@ function PlayerBar({ board, player, you, onLp, connected }: { board: NonNullable
       {turn && <span className="duel-chip is-turn">Turn {board.turn}</span>}
       <span className="muted duel-pcounts">Hand {pb.hand.length} · Deck {pb.deck.length}</span>
       <button className={`duel-lp ${pb.lp <= 2000 ? "is-low" : ""}`} onClick={() => onLp(player)} disabled={you === null} title="Change LP">
-        <span>LP</span> {pb.lp}
+        <span>LP</span> <AnimatedLp value={pb.lp} />
       </button>
     </div>
   );
 }
 
-function PhaseBar({ board, you, act }: { board: NonNullable<ReturnType<typeof useDuelSocket>["conn"]["board"]>; you: Seat | null; act(a: DuelAction): void }) {
+function PhaseBar({ board, you, act, engine, onMore }: {
+  board: NonNullable<ReturnType<typeof useDuelSocket>["conn"]["board"]>; you: Seat | null; act(a: DuelAction): void;
+  /** Rules-enforced: only the moves the engine allows right now. */
+  engine?: PhaseActions; onMore?: (e: MouseEvent) => void;
+}) {
   const mine = board.turnPlayer === you;
+  if (engine) {
+    const go: Partial<Record<Phase, (() => void) | undefined>> = { battle: engine.battle, main2: engine.main2 };
+    return (
+      <div className="duel-phasebar" aria-label="Phases">
+        <span className="duel-turninfo">Turn {board.turn} · {mine ? "Your turn" : `${board.players[board.turnPlayer].name}'s turn`}</span>
+        <div className="duel-phases">
+          {PHASES.map((p) => (
+            <button key={p} className={board.phase === p ? "is-active" : go[p] ? "is-next" : ""} disabled={!go[p]} title={go[p] ? `Go to the ${PHASE_LABEL[p]}` : PHASE_LABEL[p]} onClick={go[p]}>
+              {PHASE_SHORT[p]}
+            </button>
+          ))}
+          {onMore && <button onClick={onMore} title="More actions" aria-label="More actions">⋯</button>}
+          <button className="primary" disabled={!engine.end} onClick={engine.end} title="End your turn">End turn</button>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="duel-phasebar" aria-label="Phases">
       <span className="duel-turninfo">Turn {board.turn} · {mine ? "Your turn" : `${board.players[board.turnPlayer].name}'s turn`}</span>

@@ -317,7 +317,7 @@ export class EngineDuel {
       // Extra Monster Zones are shared: team 0's seq 5 is the left one from team 0's side.
       for (const s of [5, 6]) {
         const c = make(mz[s], OcgLocation.MZONE, s);
-        if (c) extraMonster[team === 0 ? s - 5 : 6 - s] = c;
+        if (c) { c.controller = seat; extraMonster[team === 0 ? s - 5 : 6 - s] = c; }
       }
       return {
         name: names[seat],
@@ -325,7 +325,7 @@ export class EngineDuel {
         deck: list(OcgLocation.DECK).reverse(),   // core: last = top; BoardState: index 0 = top
         hand: list(OcgLocation.HAND),
         extra: list(OcgLocation.EXTRA),
-        gy: list(OcgLocation.GRAVE).reverse(),
+        gy: list(OcgLocation.GRAVE),             // like manual mode: newest last (top of the pile)
         banished: list(OcgLocation.REMOVED),
         monster,
         spelltrap: [0, 1, 2, 3, 4].map((i) => make(sz[i], OcgLocation.SZONE, i)),

@@ -1,9 +1,27 @@
 import { useState, type DragEvent, type MouseEvent, type ReactNode } from "react";
 import type { BoardState, CardInstance, Zone } from "../../../shared/duel.ts";
 import type { Seat } from "../../../shared/duelActions.ts";
-import { CardBack, CardView } from "./CardView.tsx";
+import { zoneKey as zoneKeyOf } from "../engine/boardRefs.ts";
+import { CardBack, CardView, type CardMark } from "./CardView.tsx";
 
 export interface ZoneRef { zone: Zone; player: Seat; slot?: number }
+
+/** Engine-mode highlights (see components/engine/EngineBoard.tsx). Keys are card uids / zoneKeys. */
+export interface BoardMarks {
+  actionable: Set<string>;     // cards with at least one legal action
+  selectable: Set<string>;     // cards a selection prompt lets you pick
+  picked: Set<string>;         // cards already picked
+  places: Set<string>;         // zones a select-place prompt offers
+  piles: Map<string, number>;  // pile zoneKey -> how many of its cards are actionable / selectable
+  badges: Map<string, string>; // uid -> small badge text (chain link, counters to remove)
+}
+
+
+function markOf(ui: BoardUI, uid: string): CardMark | undefined {
+  const m = ui.marks;
+  if (!m) return undefined;
+  return m.picked.has(uid) ? "picked" : m.selectable.has(uid) ? "selectable" : m.actionable.has(uid) ? "actionable" : undefined;
+}
 
 export interface BoardUI {
   /** Bottom side of the board (your seat; seat 0 for spectators). */
@@ -16,9 +34,15 @@ export interface BoardUI {
   onCard(card: CardInstance, at: ZoneRef, e: MouseEvent): void;
   onZone(at: ZoneRef, e: MouseEvent): void;
   onHover(code: number | null): void;
-  onDrop(at: ZoneRef, uid: string): void;
+  onDrop(at: ZoneRef, uid: string, e: DragEvent): void;
   onLp(player: Seat, e: MouseEvent): void;
+  /** Rules-enforced mode: highlights, and only actionable hand cards can be dragged. */
+  marks?: BoardMarks;
 }
+
+/** Can the viewer drag this card? (manual: any card you control; engine: hand cards with a legal action) */
+const canDrag = (ui: BoardUI, card: CardInstance, controller: Seat | undefined, zone: Zone) =>
+  ui.you !== null && controller === ui.you && (!ui.marks || (zone === "hand" && ui.marks.actionable.has(card.uid)));
 
 export const DRAG_MIME = "application/x-ygo-uid";
 
@@ -33,9 +57,12 @@ function dragStart(card: CardInstance) {
 function DropZone({ at, ui, className, label, children, onClick }: { at: ZoneRef; ui: BoardUI; className: string; label?: string; children?: ReactNode; onClick?: (e: MouseEvent) => void }) {
   const [over, setOver] = useState(false);
   const canDrop = ui.you !== null;
+  const key = zoneKeyOf(at);
+  const place = ui.marks?.places.has(key);
+  const pick = ui.marks?.piles.get(key);
   return (
     <div
-      className={`duel-zone ${className} ${over ? "is-over" : ""} ${ui.pending ? "is-targetable" : ""}`}
+      className={`duel-zone ${className} ${over ? "is-over" : ""} ${ui.pending || place ? "is-targetable" : ""} ${place ? "is-place" : ""} ${pick ? "is-pick" : ""}`}
       data-zone={at.zone}
       data-player={at.player}
       data-slot={at.slot}
@@ -46,11 +73,12 @@ function DropZone({ at, ui, className, label, children, onClick }: { at: ZoneRef
         e.preventDefault();
         setOver(false);
         const uid = e.dataTransfer.getData(DRAG_MIME);
-        if (uid) ui.onDrop(at, uid);
+        if (uid) ui.onDrop(at, uid, e);
       } : undefined}
     >
       {label && <span className="duel-zone-label">{label}</span>}
       {children}
+      {!!pick && <span className="duel-pick-count" title={`${pick} card${pick === 1 ? "" : "s"} you can use here`}>{pick}</span>}
     </div>
   );
 }
@@ -62,10 +90,12 @@ function Slot({ card, at, ui, label, className = "" }: { card: CardInstance | nu
       {card && (
         <CardView
           card={card}
-          draggable={ui.you !== null && controller === ui.you}
+          draggable={canDrag(ui, card, controller, at.zone)}
           onDragStart={dragStart(card)}
           selected={ui.selectedUid === card.uid}
           flash={ui.flash.has(card.uid)}
+          mark={markOf(ui, card.uid)}
+          badge={ui.marks?.badges.get(card.uid)}
           onHover={ui.onHover}
           onClick={(e) => { e.stopPropagation(); ui.onCard(card, at, e); }}
         />
@@ -82,7 +112,7 @@ function Pile({ cards, at, ui }: { cards: CardInstance[]; at: ZoneRef; ui: Board
   return (
     <DropZone at={at} ui={ui} className={`duel-pile duel-pile-${at.zone}`} label={cards.length ? undefined : PILE_LABEL[at.zone]}>
       {top && (showFace
-        ? <CardView card={top} onHover={ui.onHover} draggable={ui.you === at.player} onDragStart={dragStart(top)} />
+        ? <CardView card={top} onHover={ui.onHover} draggable={!ui.marks && ui.you === at.player} onDragStart={dragStart(top)} badge={ui.marks?.badges.get(top.uid)} />
         : <div className="duel-card"><div className="duel-card-inner"><CardBack /></div></div>)}
       <span className="duel-pile-count" title={`${PILE_LABEL[at.zone]}: ${cards.length}`}>{cards.length}</span>
       <span className="duel-pile-name">{PILE_LABEL[at.zone]}</span>
@@ -94,17 +124,22 @@ function Hand({ cards, player, ui, own }: { cards: CardInstance[]; player: Seat;
   return (
     <DropZone at={{ zone: "hand", player }} ui={ui} className={`duel-hand ${own ? "is-own" : "is-opp"}`} onClick={() => undefined}>
       <div className="duel-hand-fan" style={{ ["--n" as string]: Math.max(cards.length, 1) }}>
-        {cards.map((c, i) => (
-          <CardView
-            key={c.uid}
-            card={own ? { ...c, faceUp: true } : c}
-            draggable={own}
-            onDragStart={dragStart(c)}
-            selected={ui.selectedUid === c.uid}
-            onHover={ui.onHover}
-            onClick={own ? (e) => { e.stopPropagation(); ui.onCard(c, { zone: "hand", player, slot: i }, e); } : undefined}
-          />
-        ))}
+        {cards.map((c, i) => {
+          const mark = markOf(ui, c.uid);
+          return (
+            <CardView
+              key={c.uid}
+              card={own ? { ...c, faceUp: true } : c}
+              draggable={own && canDrag(ui, c, player, "hand")}
+              onDragStart={dragStart(c)}
+              selected={ui.selectedUid === c.uid}
+              mark={mark}
+              badge={ui.marks?.badges.get(c.uid)}
+              onHover={ui.onHover}
+              onClick={own || mark ? (e) => { e.stopPropagation(); ui.onCard(c, { zone: "hand", player, slot: i }, e); } : undefined}
+            />
+          );
+        })}
         {!cards.length && <span className="duel-zone-label">{own ? "Your hand is empty" : "Empty hand"}</span>}
       </div>
     </DropZone>

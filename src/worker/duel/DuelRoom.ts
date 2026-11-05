@@ -11,6 +11,8 @@ import { maskBoard } from "./manual/mask.ts";
 import { identityFromHeaders } from "./identity.ts";
 import { ENGINE_NOTICE, engineAvailable } from "./engineHook.ts";
 import { BadResponse, restoreRoomEngine, startRoomEngine, type RoomEngineSession, type RoomEngineUpdate } from "./engine/roomHook.ts";
+import { eventsFor } from "./engine/EngineDuel.ts";
+import type { EngineEvent } from "../../shared/enginePrompts.ts";
 
 /** DO storage key of the engine snapshot (seed + decks + responses; replayed on wake). */
 const ENGINE_KEY = "engine";
@@ -602,8 +604,20 @@ export class DuelRoom extends DurableObject<Env> {
       await this.ctx.storage.put(ENGINE_KEY, this.engine.snapshot());
     }
     await this.save();
+    this.sendEngineEvents(u.events);
     this.broadcastAll();
     if (u.finished) await this.updateIndex();
+  }
+
+  /** Each seat gets its own (masked) events for animations; spectators get the public ones. Sent before the new state. */
+  private sendEngineEvents(events: RoomEngineUpdate["events"]) {
+    if (!events || (!events[0].length && !events[1].length)) return;
+    const pub = eventsFor(events[0], 1);   // seat 0's view with seat 0's secrets removed too
+    for (const ws of this.ctx.getWebSockets()) {
+      const seat = this.att(ws).seat;
+      const list = seat === null ? pub : events[seat];
+      if (list.length) this.send(ws, { t: "engineEvents", events: list });
+    }
   }
 
   private finish(winner: Seat | null, reason: string) {
@@ -825,6 +839,12 @@ function checkHostUpdate(raw: unknown): RoomEngineUpdate {
     const f = u.finished as { winner?: unknown; reason?: unknown };
     if (f.winner !== 0 && f.winner !== 1 && f.winner !== null) throw bad("result");
     out.finished = { winner: f.winner as Seat | null, reason: String(f.reason ?? "Duel over").slice(0, 120) };
+  }
+  // optional per-seat animation events; the host already masked them for each seat
+  if (Array.isArray(u.events) && u.events.length === 2 && u.events.every((l) => Array.isArray(l))) {
+    const clean = (l: unknown[]) => l.filter((e): e is EngineEvent => !!e && typeof e === "object" && typeof (e as { e?: unknown }).e === "string").slice(0, 400);
+    const ev = [clean(u.events[0] as unknown[]), clean(u.events[1] as unknown[])] as [EngineEvent[], EngineEvent[]];
+    if (JSON.stringify(ev).length <= 200_000) out.events = ev;
   }
   return out;
 }

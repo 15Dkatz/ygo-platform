@@ -21,8 +21,14 @@ export function CardFace({ code, token, size = "small" }: { code: number; token?
   );
 }
 
+/** Engine-mode highlight: has a legal action / can be picked now / already picked. */
+export type CardMark = "actionable" | "selectable" | "picked";
+
 interface Props {
   card: CardInstance;
+  mark?: CardMark;
+  /** Small corner badge (chain link number, counters to remove). */
+  badge?: string;
   draggable?: boolean;
   selected?: boolean;
   flash?: boolean;
@@ -33,12 +39,12 @@ interface Props {
 }
 
 /** One card on the board / in a hand / in a viewer. Rotated for DEF, translucent when you can see your own face-down card. */
-export function CardView({ card, draggable, selected, flash, onClick, onHover, onDragStart, showCounters = true }: Props) {
+export function CardView({ card, draggable, selected, flash, onClick, onHover, onDragStart, showCounters = true, mark, badge }: Props) {
   const known = card.code !== HIDDEN_CODE || card.token;
   const def = card.position === "def" || card.position === "faceDownDef";
   const ownFaceDown = !card.faceUp && known;
   const counters = card.counters ? Object.entries(card.counters) : [];
-  const cls = ["duel-card", def ? "is-def" : "", ownFaceDown ? "is-own-facedown" : "", selected ? "is-selected" : "", flash ? "is-flash" : "", onClick ? "is-clickable" : ""].join(" ");
+  const cls = ["duel-card", def ? "is-def" : "", ownFaceDown ? "is-own-facedown" : "", selected ? "is-selected" : "", flash ? "is-flash" : "", onClick ? "is-clickable" : "", mark ? `is-${mark}` : ""].join(" ");
   return (
     <div
       className={cls}
@@ -57,6 +63,7 @@ export function CardView({ card, draggable, selected, flash, onClick, onHover, o
         {ownFaceDown && <span className="duel-badge duel-badge-fd" title="Face-down (only you can see it)">set</span>}
       </div>
       {!!card.materials?.length && <span className="duel-badge duel-badge-mat" title="Xyz materials">{card.materials.length}</span>}
+      {badge && <span className="duel-badge duel-badge-chain" title={/^\d+$/.test(badge) ? `Chain Link ${badge}` : badge}>{badge}</span>}
       {showCounters && counters.length > 0 && (
         <span className="duel-badge duel-badge-ctr" title={counters.map(([k, v]) => `${k}: ${v}`).join(", ")}>
           {counters.reduce((s, [, v]) => s + v, 0)}

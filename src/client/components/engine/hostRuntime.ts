@@ -67,7 +67,8 @@ export class EngineHost {
       this.session = session;
       const update = await session.start();
       this.onStatus(null);
-      this.push(update);
+      // resuming replays old moves: their events were animated when they happened
+      this.push(job.snapshot ? { ...update, events: undefined } : update);
     });
   }
 
@@ -85,8 +86,8 @@ export class EngineHost {
   }
 
   private push(u: RoomEngineUpdate) {
-    // per-seat `events` are for animations; the room doesn't need them
-    const update = { board: u.board, prompts: u.prompts, log: u.log, finished: u.finished };
+    // per-seat `events` (already masked for each seat) drive the animations; the room forwards them
+    const update = { board: u.board, prompts: u.prompts, log: u.log, finished: u.finished, events: u.events };
     this.send({ t: "hostUpdate", update, snapshot: this.session!.snapshot() });
   }
 
