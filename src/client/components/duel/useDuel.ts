@@ -5,6 +5,7 @@ import { api, lookupCards } from "../../api.ts";
 import type { BoardState, CardInstance, ClientMsg, DuelEvent, RoomInfo, ServerMsg, SessionInfo } from "../../../shared/duel.ts";
 import type { Seat } from "../../../shared/duelActions.ts";
 import type { Card } from "../../../shared/types.ts";
+import type { EnginePrompt } from "../../../shared/enginePrompts.ts";
 
 // ---------- identity ----------
 
@@ -42,12 +43,14 @@ export interface DuelConn {
   chat: ChatLine[];
   peek: { title: string; cards: CardInstance[] } | null;
   toasts: Toast[];
+  /** Rules-enforced mode: the engine's open question for you (null when you have nothing to answer). */
+  prompt: EnginePrompt | null;
 }
 
 let toastSeq = 0;
 
 export function useDuelSocket(roomId: string) {
-  const [conn, setConn] = useState<DuelConn>({ status: "connecting", room: null, you: null, session: null, board: null, chat: [], peek: null, toasts: [] });
+  const [conn, setConn] = useState<DuelConn>({ status: "connecting", room: null, you: null, session: null, board: null, chat: [], peek: null, toasts: [], prompt: null });
   const wsRef = useRef<WebSocket | null>(null);
   const queue = useRef<ClientMsg[]>([]);
 
@@ -83,6 +86,7 @@ export function useDuelSocket(roomId: string) {
           case "chat": setConn((c) => ({ ...c, chat: [...c.chat.slice(-199), msg] })); break;
           case "peek": setConn((c) => ({ ...c, peek: { title: msg.title, cards: msg.cards } })); break;
           case "event": toast({ event: msg.event }, msg.event.kind === "reveal" ? 7000 : 4000); break;
+          case "prompt": setConn((c) => ({ ...c, prompt: (msg.prompt as EnginePrompt | null) ?? null })); break;
           case "error": toast({ text: msg.message, error: true }); break;
           default: break;
         }
@@ -109,6 +113,8 @@ export function useDuelSocket(roomId: string) {
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(m));
     else queue.current.push(m);
+    // the answer is on its way: hide the prompt until the server sends the next one
+    if (m.t === "respond") setConn((c) => ({ ...c, prompt: null }));
   }, []);
 
   const clearPeek = useCallback(() => setConn((c) => ({ ...c, peek: null })), []);

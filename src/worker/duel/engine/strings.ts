@@ -27,7 +27,11 @@ const HINTS: Record<number, string> = {
   1155: "Change to Defense Position", 1156: "Change to Attack Position",
 };
 
-export function hintText(id: number, cardString: (d: bigint) => string): string {
+/** `cardName` resolves a plain card code: the core sends one as the select hint when a
+ *  specific card is being placed (e.g. "choose a zone" while Setting it). */
+export function hintText(id: number, cardString: (d: bigint) => string, cardName?: (code: number) => string | null): string {
   if (id >= 1 << 20) return cardString(BigInt(id));
-  return HINTS[id] ?? `#${id}`;
+  if (HINTS[id]) return HINTS[id];
+  const name = id >= 10_000 ? cardName?.(id) : null;
+  return name ?? `#${id}`;
 }

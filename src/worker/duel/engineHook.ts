@@ -32,8 +32,9 @@ export interface EngineSession {
   snapshot(): unknown;
 }
 
+/** DuelRoom now drives the engine directly through ./engine/roomHook.ts (it needs `env`). */
 export function engineAvailable(): boolean {
-  return false;
+  return true;
 }
 
 export function startEngineDuel(_opts: { names: [string, string]; decks: [DeckList, DeckList]; first: Seat; seed: Uint32Array }): EngineSession {

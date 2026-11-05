@@ -11,6 +11,7 @@ import { ContextMenu, Modal, Toasts } from "../components/duel/Overlays.tsx";
 import { PreDuel } from "../components/duel/PreDuel.tsx";
 import { CardPreview, LogChat } from "../components/duel/SidePanel.tsx";
 import { boardCodes, getCard, useCardData, useDuelIdentity, useDuelSocket } from "../components/duel/useDuel.ts";
+import { EnginePromptPanel } from "../components/engine/EnginePrompt.tsx";
 import "../components/duel/duel.css";
 import "./DuelPage.css";
 
@@ -42,7 +43,22 @@ export function DuelPage() {
   const live = !!board && (session?.stage === "duel" || session?.stage === "finished");
   const playing = live && session?.stage === "duel" && you !== null;
   const me: Seat = you ?? 0;
-  useCardData(boardCodes(board, [...(conn.peek?.cards ?? []), ...conn.toasts.flatMap((t) => (t.event?.kind === "reveal" ? t.event.cards : []))]));
+  const engineMode = conn.room?.mode === "engine";
+  // card codes mentioned anywhere in an engine prompt, so their names/images load
+  const promptCodes = useMemo(() => {
+    const out: { code: number }[] = [];
+    const walk = (v: unknown) => {
+      if (Array.isArray(v)) v.forEach(walk);
+      else if (v && typeof v === "object") {
+        const o = v as Record<string, unknown>;
+        if (typeof o.code === "number" && o.code > 0) out.push({ code: o.code });
+        Object.values(o).forEach(walk);
+      }
+    };
+    walk(conn.prompt);
+    return out;
+  }, [conn.prompt]);
+  useCardData(boardCodes(board, [...(conn.peek?.cards ?? []), ...conn.toasts.flatMap((t) => (t.event?.kind === "reveal" ? t.event.cards : [])), ...(promptCodes as CardInstance[])]));
 
   // auto-join from the lobby (?join=1) once identity + deck are known
   const autoJoined = useRef(false);
@@ -254,7 +270,23 @@ export function DuelPage() {
             <PendulumStrip board={board!} player={me} ui={ui} />
             <PlayerBar board={board!} player={me} you={you} onLp={setLpFor} connected={session.seats[me]?.connected} />
             <PhaseBar board={board!} you={you} act={act} />
-            {playing && (
+            {playing && engineMode && (
+              <div className="duel-engine">
+                {conn.prompt ? (
+                  <EnginePromptPanel prompt={conn.prompt} onRespond={(response) => send({ t: "respond", response })} cardName={(code) => getCard(code)?.name} />
+                ) : (
+                  <p className="muted duel-engine-wait">Waiting for {session.seats[other(me)]?.name ?? "your opponent"}…</p>
+                )}
+                <div className="duel-tools">
+                  <button disabled={session.switchVotes?.[me]} onClick={() => send({ t: "switchMode", mode: "manual" })}
+                    title="If both players agree, the duel continues in manual mode from the current board.">
+                    {session.switchVotes?.[me] ? "Waiting for opponent to agree…" : session.switchVotes?.[other(me)] ? "Opponent wants manual: agree" : "Switch to manual"}
+                  </button>
+                  <button className="is-danger" onClick={() => { if (confirm("Concede this duel?")) send({ t: "concede" }); }}>Concede</button>
+                </div>
+              </div>
+            )}
+            {playing && !engineMode && (
               <div className="duel-tools">
                 <button onClick={() => act({ type: "draw" })} title="Draw (D)">Draw</button>
                 <button onClick={() => act({ type: "dice" })}>Roll die</button>

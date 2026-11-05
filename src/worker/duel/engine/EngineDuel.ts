@@ -217,9 +217,9 @@ export class EngineDuel {
         if (this.lastSelect) this.setPrompt(this.lastSelect);
         return;
       case OcgMessageType.HINT:
-        if (m.hint_type === OcgHintType.SELECTMSG) this.pendingHint = hintText(Number(m.hint), (d) => this.describe(d));
+        if (m.hint_type === OcgHintType.SELECTMSG) this.pendingHint = hintText(Number(m.hint), (d) => this.describe(d), (c) => this.cardName(c));
         else if (m.hint_type === OcgHintType.MESSAGE || m.hint_type === OcgHintType.EVENT) {
-          this.events.push({ e: "hint", player: ctx.seatOf(m.player), text: hintText(Number(m.hint), (d) => this.describe(d)) });
+          this.events.push({ e: "hint", player: ctx.seatOf(m.player), text: hintText(Number(m.hint), (d) => this.describe(d), (c) => this.cardName(c)) });
         }
         return;
       case OcgMessageType.NEW_TURN:

@@ -19,3 +19,6 @@
   .duel-layout, .duel-layout.is-preduel { grid-template-columns: minmax(0, 1fr); }
   .duel-side { position: static; max-height: none; }
 }
+
+.duel-engine { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.duel-engine-wait { margin: 0; padding: 10px 12px; border: 1px dashed var(--border); border-radius: var(--radius); }
