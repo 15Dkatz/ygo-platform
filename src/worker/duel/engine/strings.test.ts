@@ -10,6 +10,7 @@ describe("engine hint text", () => {
     expect(hintText(0, () => "", names)).toBe("");
     expect(hintText(662857, () => "", names)).toBe("");
   });
+  it("shows a card's name for passcodes above 1 << 20", () => expect(hintText(44095762, (d) => `str ${d}`, (c) => (c === 44095762 ? "Mirror Force" : null))).toBe("Mirror Force"));
   it("resolves card strings (code << 20 | index)", () => expect(hintText((5 << 20) | 1, (d) => `str ${d}`)).toBe(`str ${(5 << 20) | 1}`));
 });
 

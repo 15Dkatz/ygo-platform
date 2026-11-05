@@ -30,7 +30,12 @@ const HINTS: Record<number, string> = {
 /** `cardName` resolves a plain card code: the core sends one as the select hint when a
  *  specific card is being placed (e.g. "choose a zone" while Setting it). */
 export function hintText(id: number, cardString: (d: bigint) => string, cardName?: (code: number) => string | null): string {
-  if (id >= 1 << 20) return cardString(BigInt(id));
+  if (id >= 1 << 20) {
+    // ambiguous: a plain passcode (e.g. Mirror Force 44095762) is also >= 1 << 20; real card strings
+    // of real cards are >= 10000 << 20. Prefer the card's name when the id is a known passcode.
+    const name = id < 2 ** 32 ? cardName?.(id) : null;
+    return name ?? cardString(BigInt(id));
+  }
   if (HINTS[id]) return HINTS[id];
   if (id === 0) return "";                         // no hint
   if (id >= 10_000) return cardName?.(id) ?? "";   // a card code: its name, or nothing if unknown
