@@ -1,4 +1,6 @@
 import type { CustomTags, Deck } from "../../shared/types.ts";
+import { useOptionalAuth } from "../auth.tsx";
+import { authPendingStore, serverDeckStore } from "./serverDeckStore.ts";
 
 /**
  * Where the user's decks and custom tags live.
@@ -65,9 +67,14 @@ export const localDeckStore: DeckStore = {
   },
 };
 
-/** Phase 2 replaces the body of this hook to return the server store when signed in. */
+/** The server store when signed in, the local store otherwise. While the session check is
+ *  in flight it returns a store whose calls wait for the answer. The returned object changes
+ *  on sign-in/out, so include it in effect dependencies to reload. */
 export function useDeckStore(): DeckStore {
-  return localDeckStore;
+  const auth = useOptionalAuth();
+  if (!auth) return localDeckStore;
+  if (auth.loading) return authPendingStore(localDeckStore);
+  return auth.user ? serverDeckStore : localDeckStore;
 }
 
 export function newDeck(name: string, partial: Partial<Deck> = {}): Deck {

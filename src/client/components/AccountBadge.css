@@ -1,0 +1,36 @@
+/* Account badge in the top bar + local-deck upload offer (phase 2). Tokens from styles.css. */
+.account-loading { display: inline-block; width: 64px; height: 28px; border-radius: 6px; background: var(--surface-2); }
+.account-signin { padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border); white-space: nowrap; }
+.account-signin:hover { background: var(--surface-2); }
+
+.account-menu { position: relative; }
+.account-button {
+  display: flex; align-items: center; gap: 8px; max-width: 200px; padding: 4px 10px 4px 4px;
+  border-radius: 999px; background: var(--surface-2);
+}
+.account-avatar {
+  flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
+  background: var(--accent); color: var(--accent-fg); font-weight: 700; font-size: 12px;
+}
+.account-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.account-dropdown {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; min-width: 200px; padding: 8px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.account-who { margin: 4px 6px 8px; overflow-wrap: anywhere; }
+.account-dropdown button { width: 100%; text-align: left; border: 0; background: transparent; padding: 8px 6px; border-radius: 6px; }
+.account-dropdown button:hover, .account-dropdown button:focus-visible { background: var(--surface-2); }
+
+.upload-offer {
+  position: fixed; right: 16px; bottom: 16px; z-index: 30; width: min(380px, calc(100vw - 32px)); padding: 16px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.upload-offer p { margin: 0 0 12px; }
+.upload-offer-error { color: var(--danger); }
+.upload-offer-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+@media (max-width: 600px) {
+  .account-name { max-width: 90px; }
+  .account-button { padding-right: 8px; }
+}
