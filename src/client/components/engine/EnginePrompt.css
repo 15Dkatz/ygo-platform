@@ -1,0 +1,62 @@
+/* Rules-engine prompt panel (phase 4). Colours come from the tokens in styles.css. */
+.engine-prompt {
+  background: var(--surface);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 100%;
+}
+.engine-prompt__title { font-weight: 600; }
+.engine-prompt__hint, .engine-prompt__desc { margin: 0; color: var(--muted); font-size: 0.9em; }
+.engine-prompt__error { margin: 0; color: var(--danger); font-size: 0.9em; }
+.engine-prompt__row { display: flex; flex-direction: column; gap: 4px; }
+.engine-prompt__label { font-size: 0.8em; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.engine-prompt__cards { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.engine-prompt__list, .engine-prompt__actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.engine-prompt button {
+  font: inherit;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--fg);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.engine-prompt button:disabled { opacity: 0.5; cursor: default; }
+.engine-prompt button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.engine-prompt button.is-selected, .engine-card.is-selected { outline: 2px solid var(--accent); outline-offset: 1px; }
+.engine-prompt input {
+  font: inherit; padding: 5px 8px; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface); color: var(--fg); width: 9em;
+}
+.engine-prompt__counter { display: flex; gap: 8px; align-items: center; font-size: 0.9em; }
+
+.engine-prompt .engine-card {
+  flex: 0 0 auto;
+  width: 84px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  position: relative;
+  text-align: center;
+}
+.engine-card img, .engine-card__back {
+  width: 100%;
+  aspect-ratio: 59 / 86;
+  object-fit: cover;
+  border-radius: 4px;
+  display: block;
+}
+.engine-card__back { background: linear-gradient(135deg, var(--monster), var(--trap)); }
+.engine-card__name { font-size: 0.72em; line-height: 1.2; overflow-wrap: anywhere; }
+.engine-card__desc { font-size: 0.65em; color: var(--muted); line-height: 1.2; }
+.engine-card__badge {
+  position: absolute; top: 6px; right: 6px; font-size: 0.65em;
+  background: var(--accent); color: var(--accent-fg); border-radius: 4px; padding: 0 4px;
+}
