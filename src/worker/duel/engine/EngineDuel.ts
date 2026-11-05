@@ -91,6 +91,9 @@ export class EngineDuel {
 
   get finished(): boolean { return this.status.finished; }
 
+  /** Card name from engine_cards (BabelCDB), for log lines. */
+  cardName(code: number): string | null { return this.data.row(code)?.name || null; }
+
   /** Answer the current prompt. Throws BadResponse for an invalid answer (state unchanged). */
   async respond(seat: Seat, res: EngineResponse): Promise<EngineEvent[]> {
     const p = this.prompt;
@@ -261,6 +264,7 @@ export class EngineDuel {
   }
 
   private describe(d: bigint): string {
+    if (d === 0n) return "";
     const code = Number(d >> 20n), idx = Number(d & 0xfffffn);
     if (code > 0) {
       const row = this.data.row(code);
