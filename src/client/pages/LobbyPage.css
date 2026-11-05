@@ -1,0 +1,43 @@
+.lobby { display: flex; flex-direction: column; gap: 16px; }
+.lobby-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.lobby-card, .lobby-rooms {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0;
+}
+.lobby-card p { margin: 0; }
+.lobby-field { display: flex; flex-direction: column; gap: 6px; }
+.lobby-field > span { font-weight: 600; font-size: 13px; }
+.lobby-field input, .lobby-field select { width: 100%; }
+.lobby-seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; width: fit-content; max-width: 100%; }
+.lobby-seg button { border: 0; border-radius: 0; background: var(--surface); }
+.lobby-seg button + button { border-left: 1px solid var(--border); }
+.lobby-seg button.is-active { background: var(--accent); color: var(--accent-fg); }
+.lobby-beta {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  background: var(--warn); color: var(--surface); border-radius: 4px; padding: 1px 4px; margin-left: 4px; vertical-align: 1px;
+}
+.lobby-link { background: none; border: 0; color: var(--accent); padding: 0 6px; text-decoration: underline; }
+.lobby-error { color: var(--danger); }
+.lobby-rooms-head { display: flex; align-items: center; justify-content: space-between; }
+.lobby-rooms-head h2 { margin: 0; }
+.lobby-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.lobby-room {
+  display: grid; grid-template-columns: 1fr auto; grid-template-areas: "main actions" "meta actions";
+  gap: 2px 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2);
+}
+.lobby-room-main { grid-area: main; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.lobby-room-main b { overflow-wrap: anywhere; }
+.lobby-room-meta { grid-area: meta; font-size: 13px; }
+.lobby-room-actions { grid-area: actions; display: flex; gap: 6px; align-items: center; }
+.lobby-chip { font-size: 11px; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); }
+.lobby-chip.is-beta { border-color: var(--warn); color: var(--warn); }
+.lobby-chip.is-waiting { border-color: var(--ok); color: var(--ok); }
+.lobby-chip.is-dueling { border-color: var(--accent); color: var(--accent); }
+.duel-nameform { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+.duel-nameform label { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 160px; }
+.duel-nameform label span { font-weight: 600; font-size: 13px; }
+
+@media (max-width: 600px) {
+  .lobby-room { grid-template-columns: 1fr; grid-template-areas: "main" "meta" "actions"; }
+  .lobby-room-actions { margin-top: 6px; }
+}
