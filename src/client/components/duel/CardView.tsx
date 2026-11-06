@@ -3,10 +3,11 @@ import type { CSSProperties, DragEvent, MouseEvent } from "react";
 import { cardImage } from "../../api.ts";
 import { HIDDEN_CODE, type CardInstance } from "../../../shared/duel.ts";
 import { getCard } from "./useDuel.ts";
+import { CARD_BACK_SVG } from "./cardBack.ts";
 
-/** Plain CSS card back (no artwork). */
+/** The original card back (CSS layers + inline SVG emblem, see cardBack.ts). */
 export function CardBack({ className = "" }: { className?: string }) {
-  return <div className={`duel-card-back ${className}`} aria-label="Face-down card"><span /></div>;
+  return <div className={`duel-card-back ${className}`} aria-label="Face-down card" dangerouslySetInnerHTML={{ __html: CARD_BACK_SVG }} />;
 }
 
 export function CardFace({ code, token, size = "small" }: { code: number; token?: boolean; size?: "small" | "full" }) {
@@ -76,6 +77,7 @@ export function CardView({ card, draggable, selected, flash, onClick, onHover, o
       onPointerCancel={endPress}
       onPointerMove={(e) => { if (e.pointerType === "touch" && (Math.abs(e.movementX) > 4 || Math.abs(e.movementY) > 4)) endPress(); }}
       onMouseEnter={() => onHover?.(known ? card.code : null)}
+      onMouseLeave={() => onHover?.(null)}
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
       onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(e as unknown as MouseEvent); } } : undefined}

@@ -18,6 +18,7 @@ import { EndOverlay, MuteToggle, ReconnectOverlay, TurnBanner } from "../compone
 import { useEngineBoard, type PhaseActions } from "../components/engine/EngineBoard.tsx";
 import "../components/duel/duel.css";
 import "./DuelPage.css";
+import "../components/duel/duel-scene.css";
 
 type Viewer =
   | { kind: "pile"; player: Seat; zone: "gy" | "banished" | "extra" }
@@ -47,6 +48,14 @@ export function DuelPage() {
   const [flash, setFlash] = useState<Set<string>>(new Set());
   const [help, setHelp] = useState(false);
   const [endShown, setEndShown] = useState(false);
+  // PC scene: log + chat live in a drawer (closed by default), the card preview floats on hover
+  const [drawer, setDrawer] = useState(false);
+  const [hovering, setHovering] = useState(false);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const onHoverCard = useCallback((code: number | null) => {
+    clearTimeout(hoverTimer.current);
+    if (code) { setPreview(code); setHovering(true); } else hoverTimer.current = setTimeout(() => setHovering(false), 350);
+  }, []);
 
   const live = !!board && (session?.stage === "duel" || session?.stage === "finished");
   const playing = live && session?.stage === "duel" && you !== null;
@@ -90,6 +99,12 @@ export function DuelPage() {
     if (session?.stage !== "finished") setEndShown(false);
   }, [session?.stage]);
 
+  // unread lines while the log / chat drawer is closed
+  const lineCount = (board?.log.length ?? 0) + conn.chat.length;
+  const seenLines = useRef(lineCount);
+  if (drawer) seenLines.current = lineCount;
+  const unread = Math.max(0, lineCount - seenLines.current);
+
   // long-press on a card (touch) opens the big preview
   useEffect(() => {
     const onInspect = (e: Event) => { const code = (e as CustomEvent<number>).detail; if (code > 0) { setPreview(code); setZoomCard(code); } };
@@ -111,7 +126,7 @@ export function DuelPage() {
     for (const t of conn.toasts) {
       if (seenToasts.current.has(t.id) || t.event?.kind !== "attack") continue;
       seenToasts.current.add(t.id);
-      anim.animator.attack(t.event.attacker, t.event.target, other(t.event.player), 0, true);
+      anim.animator.attack(t.event.attacker, t.event.target, other(t.event.player), 0, true, (board && locate(board, t.event.attacker)?.card.code) || undefined);
       const uids = [t.event.attacker, t.event.target].filter(Boolean) as string[];
       setFlash((f) => new Set([...f, ...uids]));
       setTimeout(() => setFlash((f) => { const n = new Set(f); uids.forEach((u) => n.delete(u)); return n; }), 1600);
@@ -181,7 +196,7 @@ export function DuelPage() {
   const ui: BoardUI = {
     me, you, pending: !!pending, flash, selectedUid: pending?.uid ?? null,
     marks: engineUi ? engineBoard.marks : undefined,
-    onHover: (code) => { if (code) setPreview(code); },
+    onHover: onHoverCard,
     onCard: (card, at, e) => {
       if (engineUi) return engineBoard.onCard(card, at, e);
       if (pending) return resolvePending(at, card);
@@ -303,7 +318,7 @@ export function DuelPage() {
   };
 
   return (
-    <section className="duel-page" ref={anim.rootRef}>
+    <section className={`duel-page ${live ? "is-live" : ""} ${drawer ? "is-drawer-open" : ""}`} ref={anim.rootRef}>
       <div className="duel-topline">
         <Link to="/lobby" className="duel-back">‹ Lobby</Link>
         <h1>{room?.name ?? "Duel"}</h1>
@@ -312,6 +327,11 @@ export function DuelPage() {
         <span className="muted duel-topline-meta">
           {conn.status !== "open" ? (conn.status === "connecting" ? "Connecting…" : "Reconnecting…") : session ? `${session.spectators} watching` : ""}
         </span>
+        {live && (
+          <button className="duel-drawer-btn" onClick={() => setDrawer((d) => !d)} aria-expanded={drawer} title="Duel log and chat">
+            Log &amp; chat{unread > 0 && !drawer && <span className="duel-unread">{unread > 99 ? "99+" : unread}</span>}
+          </button>
+        )}
         <MuteToggle />
         <button className="duel-help-btn" onClick={() => setHelp(true)} aria-label="Help and shortcuts">?</button>
       </div>
@@ -327,52 +347,60 @@ export function DuelPage() {
       ) : (
         <div className="duel-layout">
           <div className="duel-main">
-            <PlayerBar board={board!} player={other(me)} you={you} onLp={engineMode ? undefined : setLpFor} onLpChange={onLpChange} connected={session.seats[other(me)]?.connected} />
             <PendulumStrip board={board!} player={other(me)} ui={ui} />
-            <Board board={board!} ui={ui} />
+            <Board board={board!} ui={ui}
+              top={<PlayerBar board={board!} player={other(me)} you={you} onLp={engineMode ? undefined : setLpFor} onLpChange={onLpChange} connected={session.seats[other(me)]?.connected} />}
+              bottom={<PlayerBar board={board!} player={me} you={you} onLp={engineMode ? undefined : setLpFor} onLpChange={onLpChange} connected={session.seats[me]?.connected} />}
+              rail={<>
+                <PhaseBar board={board!} you={you} act={act} engine={engineMode ? engineBoard.phase : undefined}
+                  move={session.stage !== "duel" ? null : engineMode
+                    ? (you === null ? null : engineBoard.yourMove ? { mine: true, text: "Your move" } : { mine: false, text: `Waiting for ${session.seats[other(me)]?.name ?? "your opponent"}…` })
+                    : (board!.turnPlayer === you ? { mine: true, text: "Your turn" } : null)}
+                  onMore={engineBoard.phase.shuffle ? (e) => setMenu({ x: e.clientX, y: e.clientY, title: "More", items: [{ label: "Shuffle hand", run: engineBoard.phase.shuffle }] }) : undefined} />
+                {playing && engineMode && (
+                  <div className="duel-engine">
+                    {conn.hostStatus && <p className="duel-engine-wait" role="status">{conn.hostStatus}</p>}
+                    {session.engineHost !== undefined && session.engineHost !== you && !session.seats[session.engineHost]?.connected && (
+                      <p className="duel-engine-wait" role="status">{session.seats[session.engineHost]?.name ?? "The host"} is disconnected. Their browser runs the rules, so the duel continues when they're back.</p>
+                    )}
+                    {conn.prompt ? (
+                      engineBoard.status && <p className={`duel-engine-status ${conn.prompt.hint ? "is-hint" : ""}`} role="status">{engineBoard.status}</p>
+                    ) : (
+                      <p className="muted duel-engine-wait">Waiting for {session.seats[other(me)]?.name ?? "your opponent"}…</p>
+                    )}
+                    <div className="duel-tools">
+                      {/* no manual switch against a bot (it can't agree) */}
+                      {!session.seats.some((x) => (x as { bot?: boolean } | null)?.bot) && (
+                        <button disabled={session.switchVotes?.[me]} onClick={() => send({ t: "switchMode", mode: "manual" })}
+                          title="If both players agree, the duel continues in manual mode from the current board.">
+                          {session.switchVotes?.[me] ? "Waiting for opponent…" : session.switchVotes?.[other(me)] ? "Agree to manual" : "Switch to manual"}
+                        </button>
+                      )}
+                      <button className="is-danger" onClick={() => { if (confirm("Concede this duel?")) send({ t: "concede" }); }}>Concede</button>
+                    </div>
+                  </div>
+                )}
+                {playing && !engineMode && (
+                  <div className="duel-tools">
+                    <button onClick={() => act({ type: "draw" })} title="Draw (D)">Draw</button>
+                    <button onClick={() => act({ type: "dice" })}>Roll die</button>
+                    <button onClick={() => act({ type: "coin" })}>Flip coin</button>
+                    <button onClick={() => act({ type: "token", position: "atk" })}>Token</button>
+                    <button onClick={() => act({ type: "revealHand" })}>Reveal hand</button>
+                    <button onClick={() => setLpFor(other(me))}>LP…</button>
+                    <button className="is-danger" onClick={() => { if (confirm("Concede this duel?")) send({ t: "concede" }); }}>Concede</button>
+                  </div>
+                )}
+              </>} />
             <PendulumStrip board={board!} player={me} ui={ui} />
-            <PlayerBar board={board!} player={me} you={you} onLp={engineMode ? undefined : setLpFor} onLpChange={onLpChange} connected={session.seats[me]?.connected} />
-            <PhaseBar board={board!} you={you} act={act} engine={engineMode ? engineBoard.phase : undefined}
-              move={session.stage !== "duel" ? null : engineMode
-                ? (you === null ? null : engineBoard.yourMove ? { mine: true, text: "Your move" } : { mine: false, text: `Waiting for ${session.seats[other(me)]?.name ?? "your opponent"}…` })
-                : (board!.turnPlayer === you ? { mine: true, text: "Your turn" } : null)}
-              onMore={engineBoard.phase.shuffle ? (e) => setMenu({ x: e.clientX, y: e.clientY, title: "More", items: [{ label: "Shuffle hand", run: engineBoard.phase.shuffle }] }) : undefined} />
-            {playing && engineMode && (
-              <div className="duel-engine">
-                {conn.hostStatus && <p className="duel-engine-wait" role="status">{conn.hostStatus}</p>}
-                {session.engineHost !== undefined && session.engineHost !== you && !session.seats[session.engineHost]?.connected && (
-                  <p className="duel-engine-wait" role="status">{session.seats[session.engineHost]?.name ?? "The host"} is disconnected. Their browser runs the rules, so the duel continues when they're back.</p>
-                )}
-                {conn.prompt ? (
-                  engineBoard.status && <p className={`duel-engine-status ${conn.prompt.hint ? "is-hint" : ""}`} role="status">{engineBoard.status}</p>
-                ) : (
-                  <p className="muted duel-engine-wait">Waiting for {session.seats[other(me)]?.name ?? "your opponent"}…</p>
-                )}
-                <div className="duel-tools">
-                  <button disabled={session.switchVotes?.[me]} onClick={() => send({ t: "switchMode", mode: "manual" })}
-                    title="If both players agree, the duel continues in manual mode from the current board.">
-                    {session.switchVotes?.[me] ? "Waiting for opponent to agree…" : session.switchVotes?.[other(me)] ? "Opponent wants manual: agree" : "Switch to manual"}
-                  </button>
-                  <button className="is-danger" onClick={() => { if (confirm("Concede this duel?")) send({ t: "concede" }); }}>Concede</button>
-                </div>
-              </div>
-            )}
-            {playing && !engineMode && (
-              <div className="duel-tools">
-                <button onClick={() => act({ type: "draw" })} title="Draw (D)">Draw</button>
-                <button onClick={() => act({ type: "dice" })}>Roll die</button>
-                <button onClick={() => act({ type: "coin" })}>Flip coin</button>
-                <button onClick={() => act({ type: "token", position: "atk" })}>Token</button>
-                <button onClick={() => act({ type: "revealHand" })}>Reveal hand</button>
-                <button onClick={() => setLpFor(other(me))}>LP…</button>
-                <button className="is-danger" onClick={() => { if (confirm("Concede this duel?")) send({ t: "concede" }); }}>Concede</button>
-              </div>
-            )}
             {session.stage === "finished" && (
               <div className="duel-finished">
                 <PreDuel session={session} you={you} hasIdentity={!!identity} decks={decks} deckId={deckId} setDeckId={setDeckId} deck={deck} send={send} />
               </div>
             )}
+          </div>
+          <div className={`duel-floatpreview ${hovering && preview ? "is-shown" : ""}`} aria-hidden={!hovering}>
+            <CardPreview code={preview} onZoom={(code) => setZoomCard(code)} />
           </div>
           <aside className="duel-side">
             <CardPreview code={preview} onZoom={(code) => setZoomCard(code)} />
@@ -465,13 +493,14 @@ function PlayerBar({ board, player, you, onLp, onLpChange, connected }: {
     setTimeout(() => setHit(""), 650);
   };
   return (
-    <div className={`duel-playerbar ${turn ? "is-turn" : ""} ${player === you ? "is-you" : ""} ${hit}`}>
+    <div className={`duel-playerbar ${turn ? "is-turn" : ""} ${player === you ? "is-you" : ""} ${hit}`} data-seat={player}>
       <span className="duel-avatar" aria-hidden="true">
         {(pb.name.trim()[0] ?? "?").toUpperCase()}
         <span className={`duel-dot ${connected === false ? "is-off" : "is-on"}`} title={connected === false ? "Disconnected" : "Connected"} />
       </span>
       <span className="duel-pinfo">
         <b className="duel-pname">{pb.name}{player === you ? " (you)" : ""}</b>
+        <span className="duel-lpbar" aria-hidden="true"><i style={{ width: `${Math.max(0, Math.min(100, pb.lp / 80))}%` }} /></span>
         <span className="muted duel-pcounts">
           <span title="Cards in hand">✋ {pb.hand.length}</span>
           <span title="Cards in Deck">🂠 {pb.deck.length}</span>

@@ -2,29 +2,40 @@
 // modes. Engine mode derives them from the engine's events (its board uids are positions, so
 // cards can't be followed by uid); manual mode diffs the two boards by uid (stable per copy).
 // The animator (animator.ts) resolves each Spot to a screen rectangle and plays them in order.
+//
+// Only codes the viewer can already see are used (events and boards arrive masked), so no
+// effect ever hints at a hidden card.
 
 import type { BoardState, CardInstance, Position } from "../../../../shared/duel.ts";
 import type { EngineCardRef, EngineEvent, Seat } from "../../../../shared/enginePrompts.ts";
 import { engineFirst, indexBoard, overlayHostUid, refUid, refZone, zoneKey, type Located } from "../../engine/boardRefs.ts";
 import type { ZoneRef } from "../Board.tsx";
+import type { EffectKind } from "./categories.ts";
 
 /** A place on screen: a card element by uid when there is one, else the zone / pile element. */
 export interface Spot { uid?: string; zone: string }
 
+/** How a moving card leaves / arrives: destroyed cards shatter, banished ones dissolve, revived ones rise in light… */
+export type MoveStyle = "shatter" | "dissolve" | "pillar" | "sparkle" | "whoosh";
+
 export type Intent =
   /** A card travels from -> to. `flip`: animate the real element at `to.uid` (FLIP); otherwise a ghost card flies. */
-  | { t: "move"; from: Spot; to: Spot; code: number; faceUp: boolean; flip: boolean; reveal?: boolean }
+  | { t: "move"; from: Spot; to: Spot; code: number; faceUp: boolean; flip: boolean; reveal?: boolean; style?: MoveStyle }
   /** Battle position / face-up change in place. */
   | { t: "rotate"; uid: string; from?: Position; to?: Position; reveal?: boolean }
   | { t: "shuffle"; zone: string }
-  | { t: "attack"; attacker: string; target: string | null; side: Seat }
+  /** `code`: the attacker's (visible) code, for its attribute / type themed strike. */
+  | { t: "attack"; attacker: string; target: string | null; side: Seat; code?: number }
   /** A short glow: activation, summon landing, targeting, a chain link resolving. */
   | { t: "pulse"; uid: string; tone: "activate" | "summon" | "target" | "resolve" }
   /** A short text ribbon over the board ("Chain Link 2 resolves"). */
-  | { t: "banner"; text: string };
+  | { t: "banner"; text: string }
+  /** A card effect's visual: `source` = the card, `targets` = cards it hit, `side` = whose field (wipes), `to` = burn victim. */
+  | { t: "effect"; kind: EffectKind; source?: string; targets: Spot[]; side?: Seat; to?: Seat };
 
 const pileKey = (zone: ZoneRef["zone"], player: Seat) => zoneKey({ zone, player });
 const PILES = new Set(["deck", "extra", "gy", "banished"]);
+const FIELD = new Set(["monster", "spelltrap", "field", "pendulum", "extraMonster", "overlay"]);
 
 function refSpot(r: EngineCardRef, first: Seat): Spot {
   if (r.location === "overlay") return { uid: overlayHostUid(r), zone: zoneKey(refZone(r, first)) };
@@ -35,9 +46,24 @@ function refSpot(r: EngineCardRef, first: Seat): Spot {
 const faceDown = (p?: Position) => p === "faceDown" || p === "faceDownDef";
 const hiddenLoc = (r: EngineCardRef) => r.location === "deck" || r.location === "hand" || faceDown(r.position);
 
-/** Engine mode: intents from one step's (already masked) events. `prev` / `next` = boards before / after. */
-/** `chainUid`: link -> uid of the open chain, kept by the caller across steps. */
-export function engineIntents(events: EngineEvent[], prev: BoardState, next: BoardState, chainUid: Map<number, string> = new Map()): Intent[] {
+function moveStyle(from: string, to: string, engineSearch: boolean): MoveStyle | undefined {
+  if (FIELD.has(from) && to === "gy") return "shatter";
+  if (to === "banished") return "dissolve";
+  if ((from === "gy" || from === "banished") && (to === "monster" || to === "extraMonster")) return "pillar";
+  if (from === "deck" && to === "hand") return engineSearch ? "sparkle" : undefined;
+  if (FIELD.has(from) && (to === "hand" || to === "deck" || to === "extra")) return "whoosh";
+  return undefined;
+}
+
+export interface EngineChain { uid: Map<number, string>; code: Map<number, number> }
+
+/**
+ * Engine mode: intents from one step's (already masked) events. `prev` / `next` = boards before
+ * / after; `chain` (kept by the caller across steps) remembers each open chain link's card;
+ * `kindOf` classifies a visible card code.
+ */
+export function engineIntents(events: EngineEvent[], prev: BoardState, next: BoardState,
+  chain: EngineChain = { uid: new Map(), code: new Map() }, kindOf: (code: number) => EffectKind = () => "generic"): Intent[] {
   const first = engineFirst(next);
   const before = indexBoard(prev), after = indexBoard(next);
   const out: Intent[] = [];
@@ -48,13 +74,14 @@ export function engineIntents(events: EngineEvent[], prev: BoardState, next: Boa
     return [];
   });
   const finalAt = (i: number, uid: string) => !touches.slice(i + 1).some((t) => t.includes(uid));
+  let resolving: number | null = null;
 
   events.forEach((ev, i) => {
     switch (ev.e) {
       case "draw": {
         ev.codes.forEach((code, k) => {
           const uid = `e${ev.player}-2-${handLen[ev.player] + k}`;
-          out.push({ t: "move", from: { zone: pileKey("deck", ev.player) }, to: { uid, zone: pileKey("hand", ev.player) }, code, faceUp: code > 0, flip: finalAt(i, uid) });
+          out.push({ t: "move", from: { zone: pileKey("deck", ev.player) }, to: { uid, zone: pileKey("hand", ev.player) }, code, faceUp: code > 0, flip: finalAt(i, uid), style: resolving !== null ? "sparkle" : undefined });
         });
         handLen[ev.player] += ev.codes.length;
         return;
@@ -68,7 +95,7 @@ export function engineIntents(events: EngineEvent[], prev: BoardState, next: Boa
         if (a.zone === b.zone && a.uid === b.uid) return;
         const up = !hiddenLoc(to) && to.location !== "extra" && ev.code > 0 || (to.location === "hand" && ev.code > 0);
         const flip = !!b.uid && to.location !== "overlay" && finalAt(i, b.uid);
-        out.push({ t: "move", from: a, to: b, code: ev.code, faceUp: up, flip, reveal: up && hiddenLoc(from) && to.location !== "hand" });
+        out.push({ t: "move", from: a, to: b, code: ev.code, faceUp: up, flip, reveal: up && hiddenLoc(from) && to.location !== "hand", style: moveStyle(from.location, to.location, resolving !== null) });
         return;
       }
       case "summon": {
@@ -86,18 +113,49 @@ export function engineIntents(events: EngineEvent[], prev: BoardState, next: Boa
         out.push({ t: "rotate", uid, from: was.position, to: now.position, reveal: !was.faceUp && now.faceUp });
         return;
       }
-      case "chain": chainUid.set(ev.link, refUid(ev.card)); out.push({ t: "pulse", uid: refUid(ev.card), tone: "activate" }); return;
-      case "chainSolving": {
-        const uid = chainUid.get(ev.link);
-        if (chainUid.size > 1) out.push({ t: "banner", text: `Chain Link ${ev.link} resolves` });
-        if (uid) out.push({ t: "pulse", uid, tone: "resolve" });
+      case "chain": {
+        const uid = refUid(ev.card);
+        chain.uid.set(ev.link, uid);
+        if (ev.card.code) chain.code.set(ev.link, ev.card.code);
+        out.push({ t: "pulse", uid, tone: "activate" });
+        // hand traps flash and slam forward as they are activated
+        if (ev.card.location === "hand" && ev.card.code && kindOf(ev.card.code) === "handtrap") out.push({ t: "effect", kind: "handtrap", source: uid, targets: [] });
         return;
       }
-      case "chainEnd": chainUid.clear(); return;
-      case "target": ev.cards.forEach((c) => out.push({ t: "pulse", uid: refUid(c), tone: "target" })); return;
-      case "attack":
-        out.push({ t: "attack", attacker: refUid(ev.attacker), target: ev.target ? refUid(ev.target) : null, side: (1 - ev.attacker.controller) as Seat });
+      case "chainSolving": {
+        resolving = ev.link;
+        const uid = chain.uid.get(ev.link), code = chain.code.get(ev.link);
+        if (chain.uid.size > 1) out.push({ t: "banner", text: `Chain Link ${ev.link} resolves` });
+        if (uid) out.push({ t: "pulse", uid, tone: "resolve" });
+        if (!code) return;
+        // what this link does: look ahead to its chainSolved for the cards it moved / the LP it burned
+        const end = events.findIndex((x, j) => j > i && (x.e === "chainSolved" || x.e === "chainSolving") && x.link !== undefined);
+        const window = events.slice(i + 1, end < 0 ? undefined : end);
+        const hit = window.filter((x): x is Extract<EngineEvent, { e: "move" }> => x.e === "move" && !!x.from && FIELD.has(x.from.location));
+        const kind = kindOf(code);
+        const targets = hit.map((x) => refSpot(x.from!, first));
+        const sides = new Set(hit.map((x) => x.from!.controller));
+        const burn = window.find((x) => x.e === "lp" && x.delta < 0 && x.cause === "damage");
+        if (kind === "burn" || burn) out.push({ t: "effect", kind: "burn", source: uid, targets: [], to: burn && burn.e === "lp" ? burn.player : undefined });
+        else if (kind === "wipe" || kind === "trapHole" || kind === "destroy" || kind === "banish" || kind === "bounce") {
+          if (targets.length || kind === "wipe") out.push({ t: "effect", kind, source: uid, targets, side: sides.size === 1 ? [...sides][0] : undefined });
+        } else if (kind === "revive" || kind === "search" || kind === "negate") out.push({ t: "effect", kind: kind === "negate" ? "generic" : kind, source: uid, targets });
+        else out.push({ t: "effect", kind: "generic", source: uid, targets: [] });
         return;
+      }
+      case "chainSolved": resolving = null; return;
+      case "chainNegated": case "chainDisabled": {
+        const uid = chain.uid.get(ev.link);
+        if (uid) out.push({ t: "effect", kind: "negate", targets: [{ uid, zone: "" }] });
+        return;
+      }
+      case "chainEnd": chain.uid.clear(); chain.code.clear(); resolving = null; return;
+      case "target": ev.cards.forEach((c) => out.push({ t: "pulse", uid: refUid(c), tone: "target" })); return;
+      case "attack": {
+        const attacker = refUid(ev.attacker);
+        out.push({ t: "attack", attacker, target: ev.target ? refUid(ev.target) : null, side: (1 - ev.attacker.controller) as Seat, code: after.get(attacker)?.card.code || before.get(attacker)?.card.code || ev.attacker.code || undefined });
+        return;
+      }
       case "shuffle": out.push({ t: "shuffle", zone: pileKey(ev.where, ev.player) }); return;
       default: return;
     }
@@ -115,21 +173,32 @@ function spotOf(l: Located): Spot {
 }
 const placeOf = (l: Located) => (l.host ? `mat:${l.host.uid}` : PILES.has(l.at.zone) || l.at.zone === "hand" ? pileKey(l.at.zone, l.at.player) : zoneKey(l.at));
 const shown = (c: CardInstance) => c.faceUp && c.code !== 0;
+const ST = new Set(["spelltrap", "field", "pendulum"]);
 
-/** Manual mode: intents from the difference between two boards. */
-export function manualIntents(prev: BoardState, next: BoardState): Intent[] {
+/** Manual mode: intents from the difference between two boards. `kindOf` classifies visible spells / traps. */
+export function manualIntents(prev: BoardState, next: BoardState, kindOf: (code: number) => EffectKind | null = () => null): Intent[] {
   const before = indexBoard(prev), after = indexBoard(next);
   const out: Intent[] = [];
+  const activated: { uid: string; code: number; controller: Seat }[] = [];
   for (const [uid, now] of after) {
     const was = before.get(uid);
     if (!was) continue;   // a new token
     if (placeOf(was) !== placeOf(now)) {
       const handUp = now.at.zone === "hand" && now.card.code !== 0;
       const up = shown(now.card) || handUp;
-      out.push({ t: "move", from: spotOf(was), to: spotOf(now), code: now.card.code, faceUp: up, flip: !now.host, reveal: up && !shown(was.card) && was.at.zone !== "hand" && now.at.zone !== "hand" });
+      const fromZone = was.host ? "overlay" : was.at.zone, toZone = now.host ? "overlay" : now.at.zone;
+      out.push({ t: "move", from: spotOf(was), to: spotOf(now), code: now.card.code, faceUp: up, flip: !now.host, reveal: up && !shown(was.card) && was.at.zone !== "hand" && now.at.zone !== "hand", style: moveStyle(fromZone, toZone, false) });
+      if (ST.has(now.at.zone) && shown(now.card)) activated.push({ uid, code: now.card.code, controller: now.at.player });
     } else if (!now.host && (was.card.position !== now.card.position || (was.card.faceUp !== now.card.faceUp && !PILES.has(now.at.zone) && now.at.zone !== "hand"))) {
       out.push({ t: "rotate", uid, from: was.card.position, to: now.card.position, reveal: !was.card.faceUp && now.card.faceUp });
+      if (ST.has(now.at.zone) && !shown(was.card) && shown(now.card)) activated.push({ uid, code: now.card.code, controller: now.at.player });
     }
+  }
+  // a Spell / Trap turned face-up = activated: play its category's flourish
+  for (const a of activated) {
+    const kind = kindOf(a.code);
+    if (!kind) continue;
+    out.push({ t: "effect", kind: kind === "trapHole" || kind === "destroy" || kind === "banish" || kind === "bounce" || kind === "handtrap" ? "generic" : kind, source: a.uid, targets: [], side: kind === "wipe" ? undefined : a.controller, to: kind === "burn" ? (1 - a.controller) as Seat : undefined });
   }
   for (const p of [0, 1] as Seat[]) {
     const a = prev.players[p].deck.map((c) => c.uid), b = next.players[p].deck.map((c) => c.uid);

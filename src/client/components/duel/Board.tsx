@@ -3,6 +3,7 @@ import type { BoardState, CardInstance, Zone } from "../../../shared/duel.ts";
 import type { Seat } from "../../../shared/duelActions.ts";
 import { zoneKey as zoneKeyOf } from "../engine/boardRefs.ts";
 import { CardBack, CardView, type CardMark } from "./CardView.tsx";
+import { Ambience } from "./anim/Ambience.tsx";
 
 export interface ZoneRef { zone: Zone; player: Seat; slot?: number }
 
@@ -148,7 +149,11 @@ function Hand({ cards, player, ui, own }: { cards: CardInstance[]; player: Seat;
 }
 
 /** Both fields: opponent mirrored at the top, the 2 shared Extra Monster Zones in the middle. */
-export function Board({ board, ui }: { board: BoardState; ui: BoardUI }) {
+export function Board({ board, ui, top, bottom, rail }: {
+  board: BoardState; ui: BoardUI;
+  /** Drawn on the board itself: the opponent's plate (top edge), yours (bottom edge), and the turn / phase rail. */
+  top?: ReactNode; bottom?: ReactNode; rail?: ReactNode;
+}) {
   const me = ui.me;
   const opp: Seat = me === 0 ? 1 : 0;
   const P = board.players;
@@ -160,6 +165,8 @@ export function Board({ board, ui }: { board: BoardState; ui: BoardUI }) {
 
   return (
     <div className="duel-board-wrap">
+      <Ambience />
+      {top && <div className="duel-plate duel-plate-top">{top}</div>}
       <Hand cards={P[opp].hand} player={opp} ui={ui} own={ui.you === opp} />
       <div className="duel-field">
         {/* opponent: S/T row then monster row, mirrored */}
@@ -188,6 +195,8 @@ export function Board({ board, ui }: { board: BoardState; ui: BoardUI }) {
         <Pile cards={P[me].deck} at={{ zone: "deck", player: me }} ui={ui} />
       </div>
       <Hand cards={P[me].hand} player={me} ui={ui} own={ui.you === me} />
+      {bottom && <div className="duel-plate duel-plate-bottom">{bottom}</div>}
+      {rail && <div className="duel-rail">{rail}</div>}
     </div>
   );
 }

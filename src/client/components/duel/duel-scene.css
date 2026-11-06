@@ -1,0 +1,233 @@
+/* The duel scene: card back, playmat, plates + rail drawn on the board, the full-viewport PC
+   layout, the log drawer / floating preview, and the effect / attack visuals (anim/fx.ts).
+   Duel-only colours are tokens defined once here, with dark (arcane) and light (parchment) values. */
+
+/* ---------- tokens ---------- */
+.duel-page {
+  /* card back (the same in both themes: a card back is a printed object) */
+  --back-1: #2b2470; --back-2: #0d0b26; --back-glow: rgb(124 104 255 / .38);
+  --back-ink: #d9b45c; --back-edge: #06051a; --back-hi: rgb(255 232 170 / .38); --back-gem: #a3284e;
+  /* playmat: parchment in light mode */
+  --scene-bg: radial-gradient(120% 90% at 50% 40%, #efe6d2, #ddcfb2);
+  --mat-top: #efe2c4; --mat-mid: #f7efdc; --mat-bottom: #e9dbbb;
+  --mat-glow: rgb(190 140 60 / .22); --mat-edge: rgb(120 84 30 / .35);
+  --mat-circle: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cg fill='none' stroke='%235a3d12' stroke-opacity='.16'%3E%3Ccircle cx='100' cy='100' r='97'/%3E%3Ccircle cx='100' cy='100' r='91' stroke-dasharray='2 3'/%3E%3Ccircle cx='100' cy='100' r='62'/%3E%3Ccircle cx='100' cy='100' r='58'/%3E%3Cpath d='M100 9L179 146H21Z M100 191L21 54H179Z'/%3E%3Cpath d='M100 3V15M100 185V197M3 100H15M185 100H197M31 31L40 40M169 169L160 160M31 169L40 160M169 31L160 40'/%3E%3Ccircle cx='100' cy='100' r='20'/%3E%3C/g%3E%3C/svg%3E");
+  --mat-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .3 0 0 0 0 .2 0 0 0 0 .05 0 0 0 .09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --mat-mote: rgb(170 120 40 / .55);
+  --zone-fill: rgb(255 250 235 / .45); --zone-edge: rgb(120 84 30 / .32); --zone-hi: rgb(255 255 255 / .6); --zone-shade: rgb(90 60 20 / .22);
+  --zone-label: rgb(90 62 20 / .55);
+  --plate-bg: color-mix(in srgb, var(--surface) 82%, transparent);
+  /* effects */
+  --fx-holy: #fff0b0; --fx-void: #a46bff; --fx-dark: rgb(40 10 80 / .85); --fx-dark-core: rgb(10 0 25 / .95);
+  --fx-bolt: #c9b6ff; --fx-negate: #e0263a; --fx-pit-rim: #6b4a2a;
+  --el-fire: #ff6a2b; --el-water: #2fa8ff; --el-wind: #3fd391; --el-earth: #c08a4a; --el-light: #ffd95a; --el-dark: #9b5cff; --el-divine: #ffc21a; --el-none: var(--accent);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .duel-page {
+    --scene-bg: radial-gradient(120% 90% at 50% 40%, #171331, #07060f);
+    --mat-top: #1b1636; --mat-mid: #110e24; --mat-bottom: #171b38;
+    --mat-glow: rgb(110 90 255 / .2); --mat-edge: rgb(150 130 255 / .25);
+    --mat-circle: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cg fill='none' stroke='%23b9a8ff' stroke-opacity='.13'%3E%3Ccircle cx='100' cy='100' r='97'/%3E%3Ccircle cx='100' cy='100' r='91' stroke-dasharray='2 3'/%3E%3Ccircle cx='100' cy='100' r='62'/%3E%3Ccircle cx='100' cy='100' r='58'/%3E%3Cpath d='M100 9L179 146H21Z M100 191L21 54H179Z'/%3E%3Cpath d='M100 3V15M100 185V197M3 100H15M185 100H197M31 31L40 40M169 169L160 160M31 169L40 160M169 31L160 40'/%3E%3Ccircle cx='100' cy='100' r='20'/%3E%3C/g%3E%3C/svg%3E");
+    --mat-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .8 0 0 0 0 .8 0 0 0 0 1 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    --mat-mote: rgb(170 160 255 / .6);
+    --zone-fill: rgb(8 6 22 / .45); --zone-edge: rgb(150 130 255 / .18); --zone-hi: rgb(255 255 255 / .05); --zone-shade: rgb(0 0 0 / .55);
+    --zone-label: rgb(185 175 255 / .38);
+    --plate-bg: color-mix(in srgb, var(--surface) 72%, transparent);
+  }
+}
+:root[data-theme="dark"] .duel-page {
+  --scene-bg: radial-gradient(120% 90% at 50% 40%, #171331, #07060f);
+  --mat-top: #1b1636; --mat-mid: #110e24; --mat-bottom: #171b38;
+  --mat-glow: rgb(110 90 255 / .2); --mat-edge: rgb(150 130 255 / .25);
+  --mat-circle: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cg fill='none' stroke='%23b9a8ff' stroke-opacity='.13'%3E%3Ccircle cx='100' cy='100' r='97'/%3E%3Ccircle cx='100' cy='100' r='91' stroke-dasharray='2 3'/%3E%3Ccircle cx='100' cy='100' r='62'/%3E%3Ccircle cx='100' cy='100' r='58'/%3E%3Cpath d='M100 9L179 146H21Z M100 191L21 54H179Z'/%3E%3Cpath d='M100 3V15M100 185V197M3 100H15M185 100H197M31 31L40 40M169 169L160 160M31 169L40 160M169 31L160 40'/%3E%3Ccircle cx='100' cy='100' r='20'/%3E%3C/g%3E%3C/svg%3E");
+  --mat-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .8 0 0 0 0 .8 0 0 0 0 1 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --mat-mote: rgb(170 160 255 / .6);
+  --zone-fill: rgb(8 6 22 / .45); --zone-edge: rgb(150 130 255 / .18); --zone-hi: rgb(255 255 255 / .05); --zone-shade: rgb(0 0 0 / .55);
+  --zone-label: rgb(185 175 255 / .38);
+  --plate-bg: color-mix(in srgb, var(--surface) 72%, transparent);
+}
+
+/* ---------- card back ---------- */
+.duel-card-back {
+  position: absolute; inset: 0; border-radius: inherit; overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 50%, var(--back-glow) 0, transparent 46%),
+    radial-gradient(130% 75% at 50% 0%, var(--back-1), transparent 70%),
+    radial-gradient(130% 75% at 50% 100%, color-mix(in srgb, var(--back-1) 70%, var(--back-gem) 30%), transparent 70%),
+    var(--back-2);
+  border: 1px solid var(--back-edge);
+  box-shadow: inset 0 0 0 1px var(--back-hi), inset 0 0 10px rgb(0 0 0 / .65);
+}
+.duel-back-art { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.duel-back-art .bk-frame { fill: none; stroke: var(--back-ink); stroke-width: 1.1; }
+.duel-back-art .bk-inner { fill: none; stroke: var(--back-ink); stroke-opacity: .45; stroke-width: .5; }
+.duel-back-art .bk-corner, .duel-back-art .bk-tick { fill: none; stroke: var(--back-ink); stroke-width: .9; stroke-linecap: round; }
+.duel-back-art .bk-lattice { fill: none; stroke: var(--back-ink); stroke-opacity: .25; stroke-width: .5; }
+.duel-back-art .bk-halo { fill: var(--back-glow); }
+.duel-back-art .bk-ring { fill: none; stroke: var(--back-ink); stroke-width: 1; }
+.duel-back-art .bk-ring2 { fill: none; stroke: var(--back-ink); stroke-opacity: .65; stroke-width: .6; stroke-dasharray: 1.4 1.2; }
+.duel-back-art .bk-star { fill: color-mix(in srgb, var(--back-1) 75%, transparent); stroke: var(--back-ink); stroke-width: .8; stroke-linejoin: round; }
+.duel-back-art .bk-gem { fill: var(--back-gem); stroke: var(--back-ink); stroke-width: .5; }
+.duel-back-art .bk-gem-hi { fill: rgb(255 255 255 / .4); }
+/* foil sheen sweeping across on hover */
+.duel-card-back::after {
+  content: ""; position: absolute; inset: -40%; pointer-events: none;
+  background: linear-gradient(115deg, transparent 42%, rgb(255 240 200 / .26) 50%, transparent 58%);
+  transform: translateX(-55%); transition: transform .7s ease;
+}
+.duel-card:hover .duel-card-back::after, .duel-pile:hover .duel-card-back::after { transform: translateX(55%); }
+
+/* ---------- playmat ---------- */
+.duel-board-wrap {
+  position: relative; isolation: isolate; border: 1px solid var(--mat-edge);
+  background:
+    var(--mat-noise),
+    var(--mat-circle) center / min(78%, 64cqh, 620px) no-repeat,
+    radial-gradient(ellipse 55% 40% at 50% 50%, var(--mat-glow), transparent 72%),
+    linear-gradient(180deg, var(--mat-top), var(--mat-mid) 50%, var(--mat-bottom));
+  box-shadow: inset 0 0 60px rgb(0 0 0 / .28), 0 8px 30px rgb(0 0 0 / .25);
+}
+.duel-ambience { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; border-radius: inherit; }
+.duel-board-wrap > :not(.duel-ambience) { position: relative; z-index: 1; }
+/* engraved zone frames */
+.duel-slot, .duel-pile-gy, .duel-pile-banished {
+  background: var(--zone-fill); border: 1px solid var(--zone-edge); border-radius: 7px;
+  box-shadow: inset 0 2px 7px var(--zone-shade), inset 0 -1px 0 var(--zone-hi);
+  transition: box-shadow .15s ease, border-color .15s ease, background-color .15s ease;
+}
+.duel-fieldzone { border-color: color-mix(in srgb, var(--spell) 45%, var(--zone-edge)); }
+.duel-emz { border-color: color-mix(in srgb, var(--accent) 45%, var(--zone-edge)); }
+.duel-slot:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--zone-edge)); box-shadow: inset 0 2px 7px var(--zone-shade), 0 0 12px var(--mat-glow); }
+.duel-zone-label { color: var(--zone-label); text-transform: uppercase; letter-spacing: .08em; font-weight: 700; text-shadow: 0 1px 0 var(--zone-hi); }
+.duel-zone.is-targetable:hover { box-shadow: inset 0 0 0 2px var(--accent), 0 0 14px color-mix(in srgb, var(--accent) 40%, transparent); }
+
+/* ---------- plates + rail (inside the board) ---------- */
+.duel-plate .duel-playerbar { background: var(--plate-bg); backdrop-filter: blur(6px); }
+.duel-lpbar { display: block; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--danger) 25%, transparent); overflow: hidden; margin: 3px 0 2px; width: 100%; }
+.duel-lpbar i { display: block; height: 100%; background: linear-gradient(90deg, var(--danger), var(--warn) 50%, var(--ok)); transition: width .45s ease; }
+.duel-pinfo { flex: 1; }
+.duel-rail { display: flex; flex-direction: column; gap: 6px; }
+.duel-rail .duel-engine { margin-top: 0; }
+
+/* ---------- log drawer + floating preview (PC) ---------- */
+.duel-drawer-btn { position: relative; font-size: 12px; padding: 4px 10px; display: none; }
+.duel-drawer-btn .duel-unread { position: absolute; top: -6px; right: -6px; }
+.duel-floatpreview { display: none; }
+
+@media (min-width: 1001px) {
+  /* one immersive scene: the site header and footer step aside */
+  body:has(.duel-page.is-live) .topbar, body:has(.duel-page.is-live) .site-footer { display: none; }
+  .duel-page.is-live {
+    position: fixed; inset: 0; z-index: 20; padding: 6px 10px 10px; gap: 6px;
+    display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--scene-bg); overflow: hidden;
+  }
+  .duel-page.is-live .duel-topline { min-height: 32px; }
+  .duel-page.is-live .duel-topline h1 { font-size: 15px; }
+  .duel-page.is-live .duel-drawer-btn { display: inline-block; }
+  .duel-page.is-live .duel-layout { display: block; position: relative; min-height: 0; height: 100%; }
+  .duel-page.is-live .duel-main { height: 100%; display: flex; flex-direction: column; gap: 0; }
+  .duel-page.is-live .duel-pendulum { display: none; }
+  .duel-page.is-live .duel-finished { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); z-index: 30; max-width: 640px; width: 90%; border-top: 0; }
+
+  .duel-page.is-live .duel-board-wrap {
+    flex: 1; min-height: 0; container-type: size; padding: 0; border-radius: 14px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    /* card size: fit 5 field rows + the two hands' visible parts in the height, plates + rail beside it */
+    --cw: max(44px, min(122px, calc((100cqw - 500px) / 8.3), calc((100cqh - 18px) / 10)));
+  }
+  .duel-page.is-live .duel-field {
+    --cw: inherit; --gap: calc(var(--cw) * .09);
+    margin-top: calc(var(--cw) * .75); margin-bottom: calc(var(--cw) * 1.25);
+  }
+  /* hands overlap the board's top / bottom edges */
+  .duel-page.is-live .duel-hand { position: absolute; left: 50%; transform: translateX(-50%); width: min(70%, calc(var(--cw) * 9)); min-height: 0; z-index: 3; }
+  .duel-page.is-live .duel-hand.is-opp { top: 0; --hw: calc(var(--cw) * .72); transform: translate(-50%, -42%); }
+  .duel-page.is-live .duel-hand.is-own { bottom: 0; --hw: calc(var(--cw) * 1.08); transform: translate(-50%, 30%); }
+  .duel-page.is-live .duel-hand.is-own .duel-card:hover { translate: 0 -34%; }
+  .duel-page.is-live .duel-hand.is-own .duel-card.is-actionable { translate: 0 -12%; }
+  .duel-page.is-live .duel-hand .duel-zone-label { display: none; }
+  /* plates in the left corners, the turn / phase rail on the right */
+  .duel-page.is-live .duel-plate { position: absolute; left: 12px; width: min(290px, calc((100cqw - var(--cw) * 8.1) / 2 - 24px)); z-index: 4; }
+  .duel-page.is-live .duel-plate-top { top: 12px; }
+  .duel-page.is-live .duel-plate-bottom { bottom: 12px; }
+  .duel-page.is-live .duel-playerbar { flex-wrap: wrap; padding: 10px 12px; border-radius: 12px; }
+  .duel-page.is-live .duel-playerbar .duel-lp { margin-left: 0; width: 100%; text-align: left; font-size: 30px; padding: 2px 10px; }
+  .duel-page.is-live .duel-rail {
+    position: absolute; right: 12px; top: 50%; transform: translateY(-50%); z-index: 4;
+    width: min(190px, calc((100cqw - var(--cw) * 8.1) / 2 - 24px)); max-height: calc(100% - 24px); overflow: auto;
+    padding: 10px; border-radius: 12px; background: var(--plate-bg); border: 1px solid var(--mat-edge); backdrop-filter: blur(6px);
+  }
+  .duel-page.is-live .duel-rail .duel-phasebar { flex-direction: column; align-items: stretch; gap: 6px; }
+  .duel-page.is-live .duel-rail .duel-turninfo { text-align: center; }
+  .duel-page.is-live .duel-rail .duel-move { text-align: center; }
+  .duel-page.is-live .duel-rail .duel-phases { flex-direction: column; margin-left: 0; gap: 3px; }
+  .duel-page.is-live .duel-rail .duel-phases button { width: 100%; padding: 5px 8px; }
+  .duel-page.is-live .duel-rail .duel-phases button.primary { margin-top: 6px; padding: 8px; font-size: 13px; }
+  .duel-page.is-live .duel-rail .duel-engine-status, .duel-page.is-live .duel-rail .duel-engine-wait { font-size: 12px; padding: 6px 8px; }
+  .duel-page.is-live .duel-rail .duel-tools { gap: 4px; }
+  .duel-page.is-live .duel-rail .duel-tools button { font-size: 11px; padding: 3px 7px; flex: 1 1 auto; }
+
+  /* log + chat: a drawer on the right, closed by default */
+  .duel-page.is-live .duel-side {
+    position: absolute; top: 0; right: 0; bottom: 0; width: 340px; z-index: 25; max-height: none;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 8px;
+    transform: translateX(calc(100% + 16px)); transition: transform .25s ease; visibility: hidden;
+  }
+  .duel-page.is-live.is-drawer-open .duel-side { transform: none; visibility: visible; }
+  .duel-page.is-live .duel-side .duel-preview { display: none; }
+  .duel-page.is-live .duel-side .duel-loglist { max-height: none; }
+  .duel-page.is-live .duel-side .duel-logchat { height: 100%; }
+  /* big card preview: floats on the left while a card is hovered */
+  .duel-page.is-live .duel-floatpreview {
+    display: block; position: absolute; left: 12px; top: 50%; z-index: 24; width: 280px;
+    transform: translate(-12px, -50%); opacity: 0; pointer-events: none; transition: opacity .15s ease, transform .15s ease;
+  }
+  .duel-page.is-live .duel-floatpreview.is-shown { opacity: 1; transform: translate(0, -50%); pointer-events: auto; }
+  .duel-floatpreview .duel-preview { flex-direction: column; align-items: center; box-shadow: var(--shadow); }
+  .duel-floatpreview .duel-preview img { width: 220px; }
+  .duel-floatpreview .duel-preview-text { max-height: 200px; font-size: 13px; }
+  /* the selection bar sits above the opponent's hand instead of over yours */
+  .duel-page.is-live .duel-engine-bar { top: 52px; bottom: auto; }
+  .duel-page.is-live .duel-toasts { top: 52px; }
+}
+
+/* ---------- effect visuals (anim/fx.ts) ---------- */
+.duel-fx { position: absolute; pointer-events: none; will-change: transform, opacity; }
+.fx-crack { border-radius: 5px; background: rgb(255 255 255 / .35); box-shadow: 0 0 0 2px var(--fx-holy), 0 0 18px var(--fx-holy); animation: fx-flash .42s ease-out forwards; }
+@keyframes fx-flash { to { opacity: 0; transform: scale(1.08); } }
+.fx-shard { box-shadow: none; }
+.fx-shard .duel-card-inner { box-shadow: none; }
+.fx-mote { width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: var(--fx-void); box-shadow: 0 0 10px var(--fx-void); }
+.fx-pillar { border-radius: 40%; background: linear-gradient(90deg, transparent, var(--fx-holy) 35% 65%, transparent); transform-origin: 50% 100%; filter: blur(1px); mix-blend-mode: screen; }
+.fx-star { width: 12px; height: 12px; margin: -6px 0 0 -6px; background: var(--fx-holy); clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); filter: drop-shadow(0 0 4px var(--fx-holy)); }
+.fx-whoosh { border-radius: 8px; background: repeating-linear-gradient(0deg, transparent 0 7px, rgb(255 255 255 / .5) 7px 9px); }
+.fx-vortex { border-radius: 50%; background: conic-gradient(from 0deg, transparent, var(--fx-dark) 12%, transparent 30%, var(--fx-dark) 45%, transparent 62%, var(--fx-dark) 78%, transparent 92%), radial-gradient(circle, var(--fx-dark-core) 0 18%, transparent 68%); filter: blur(1px); }
+.fx-bolt { height: 6px; border-radius: 3px; background: linear-gradient(90deg, transparent, var(--fx-bolt) 20% 80%, transparent); box-shadow: 0 0 14px var(--fx-bolt), 0 0 4px #fff; clip-path: polygon(0 40%, 20% 0, 35% 60%, 55% 10%, 72% 70%, 88% 20%, 100% 50%, 100% 100%, 0 100%); }
+.fx-pit { border-radius: 50%; background: radial-gradient(ellipse, rgb(0 0 0 / .92) 0 42%, transparent 44%), repeating-conic-gradient(from 0deg, var(--fx-pit-rim) 0 7deg, transparent 7deg 20deg); -webkit-mask: radial-gradient(ellipse, #000 0 66%, transparent 70%); mask: radial-gradient(ellipse, #000 0 66%, transparent 70%); }
+.fx-stamp { border-radius: 50%; border: 5px double var(--fx-negate); background: radial-gradient(circle, color-mix(in srgb, var(--fx-negate) 22%, transparent) 0 60%, transparent 62%); box-shadow: 0 0 18px color-mix(in srgb, var(--fx-negate) 60%, transparent); }
+.fx-stamp::before, .fx-stamp::after { content: ""; position: absolute; left: 14%; right: 14%; top: calc(50% - 4px); height: 8px; border-radius: 4px; background: var(--fx-negate); transform: rotate(45deg); }
+.fx-stamp::after { transform: rotate(-45deg); }
+.fx-fireball { width: 24px; height: 24px; border-radius: 50%; background: radial-gradient(circle, #fff 0 15%, var(--el-fire) 45%, transparent 72%); box-shadow: 0 0 22px var(--el-fire); }
+.fx-ring { border-radius: 50%; border: 3px solid var(--fx-ring-c, var(--accent)); box-shadow: 0 0 14px var(--fx-ring-c, var(--accent)); }
+.fx-ring.tone-danger { --fx-ring-c: var(--danger); }
+.fx-ring.tone-void { --fx-ring-c: var(--fx-void); }
+.fx-ring.tone-fire { --fx-ring-c: var(--el-fire); }
+.fx-ring.tone-light { --fx-ring-c: var(--fx-holy); }
+.fx-ring.tone-accent { --fx-ring-c: var(--accent); }
+/* attacks: element = colour, type = shape */
+.el-fire { --el-c: var(--el-fire); } .el-water { --el-c: var(--el-water); } .el-wind { --el-c: var(--el-wind); } .el-earth { --el-c: var(--el-earth); }
+.el-light { --el-c: var(--el-light); } .el-dark { --el-c: var(--el-dark); } .el-divine { --el-c: var(--el-divine); } .el-none { --el-c: var(--el-none); }
+.fx-impact { border-radius: 50%; background: radial-gradient(circle, rgb(255 255 255 / .95) 0 14%, var(--el-c) 34%, transparent 70%); mix-blend-mode: screen; }
+.fx-beam { border-radius: 999px; background: linear-gradient(90deg, color-mix(in srgb, var(--el-c) 30%, transparent), var(--el-c) 25%, rgb(255 255 255 / .92) 55%, var(--el-c) 85%, transparent); box-shadow: 0 0 18px var(--el-c); }
+.fx-laser { box-shadow: 0 0 8px var(--el-c), 0 0 2px #fff; }
+.fx-orb { width: 26px; height: 26px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff 0 12%, var(--el-c) 40%, transparent 72%); box-shadow: 0 0 20px var(--el-c); }
+.fx-slash { height: 6px; border-radius: 3px; background: linear-gradient(90deg, transparent, rgb(255 255 255 / .95) 40%, var(--el-c) 70%, transparent); box-shadow: 0 0 12px var(--el-c); transform-origin: 50% 50%; }
+.fx-claw { height: 4px; }
+.fx-trail { border-radius: 8px; background: radial-gradient(ellipse, color-mix(in srgb, var(--el-c) 60%, transparent), transparent 70%); }
+.el-water.fx-beam { background: repeating-linear-gradient(90deg, var(--el-c) 0 10px, rgb(255 255 255 / .8) 10px 14px); }
+.el-earth.fx-orb { border-radius: 30%; }
+
+@media (prefers-reduced-motion: reduce) {
+  .duel-card-back::after { transition: none; }
+  .duel-page.is-live .duel-side, .duel-page.is-live .duel-floatpreview { transition: none; }
+}

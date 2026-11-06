@@ -10,8 +10,10 @@
 // live in a pointer-events:none layer, and every timeline is capped well under a second.
 // prefers-reduced-motion: no motion at all (the board just updates); sounds still play.
 
-import { cardImage } from "../../../api.ts";
 import type { Position } from "../../../../shared/duel.ts";
+import { getCard } from "../useDuel.ts";
+import { attackStyle } from "./categories.ts";
+import * as fx from "./fx.ts";
 import type { Intent, Spot } from "./intents.ts";
 import { play as sfx, type Sfx } from "./sfx.ts";
 
@@ -19,7 +21,7 @@ export const reducedMotion = () => typeof matchMedia === "function" && matchMedi
 
 const MOVE_MS = 330, ROTATE_MS = 280, SHUFFLE_MS = 420, ATTACK_MS = 440, PULSE_MS = 600;
 /** Gap between consecutive intents of one update, and the cap on the whole timeline's start offsets. */
-const STAGGER: Record<Intent["t"], number> = { banner: 120, move: 90, rotate: 60, shuffle: 80, attack: 380, pulse: 40 };
+const STAGGER: Record<Intent["t"], number> = { effect: 160, banner: 120, move: 90, rotate: 60, shuffle: 80, attack: 380, pulse: 40 };
 const MAX_OFFSET = 800;
 
 type Rects = Map<string, DOMRect>;
@@ -31,7 +33,7 @@ function zoneKeyOf(el: HTMLElement): string {
 }
 
 const posTransform = (p?: Position) => (p === "def" || p === "faceDownDef" ? "rotate(90deg) scale(.7)" : "none");
-const center = (r: DOMRect) => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+const center = fx.center;
 
 export class BoardAnimator {
   root: HTMLElement | null = null;
@@ -95,7 +97,8 @@ export class BoardAnimator {
           case "move": this.move(p.rects, it, delay, flipped); break;
           case "rotate": this.rotate(it, delay); break;
           case "shuffle": this.shuffle(it.zone, delay); break;
-          case "attack": this.attack(it.attacker, it.target, it.side, delay); break;
+          case "attack": this.attack(it.attacker, it.target, it.side, delay, false, it.code); break;
+          case "effect": this.effect(p.rects, it, delay); break;
           case "pulse": this.pulse(it.uid, it.tone, delay); break;
           case "banner": this.banner(it.text, delay); break;
         }
@@ -116,7 +119,9 @@ export class BoardAnimator {
           : to === "monster" || to === "extraMonster" ? (it.faceUp ? "summon" : "set")
           : to === "spelltrap" || to === "field" ? (it.faceUp ? "chain" : "set")
           : null;
+        if (it.style === "shatter") s = "damage";
       } else if (it.t === "attack") s = "attack";
+      else if (it.t === "effect") s = it.kind === "negate" ? "damage" : it.kind === "burn" ? "damage" : it.kind === "revive" || it.kind === "search" ? "gain" : "chain";
       else if (it.t === "shuffle") s = "shuffle";
       else if (it.t === "pulse") s = it.tone === "activate" ? "chain" : it.tone === "resolve" ? "resolve" : null;
       else if (it.t === "rotate" && it.reveal) s = "summon";
@@ -151,6 +156,17 @@ export class BoardAnimator {
   private move(rects: Rects, it: Extract<Intent, { t: "move" }>, delay: number, flipped: Set<string>) {
     const from = this.fromRect(rects, it.from);
     if (!from) return;
+    const layer = this.layer();
+    const run = this.run.bind(this);
+    // destroyed cards shatter where they stood, banished ones dissolve: no flight to the pile
+    if (layer && (it.style === "shatter" || it.style === "dissolve") && !it.to.zone.startsWith("hand")) {
+      (it.style === "shatter" ? fx.shatter : fx.dissolve)(layer, run, from, it.code, it.faceUp || it.code > 0, delay);
+      if (it.to.uid) flipped.add(it.to.uid);
+      return;
+    }
+    if (layer && it.style === "whoosh") fx.whoosh(layer, run, from, delay);
+    if (layer && it.style === "pillar") { const to = this.nowRect(it.to); if (to) fx.pillar(layer, run, to, delay + 120); }
+    if (layer && it.style === "sparkle") { const to = this.nowRect(it.to); if (to) fx.sparkle(layer, run, from, to, delay); }
     const target = it.flip && it.to.uid && !flipped.has(it.to.uid) ? this.el(it.to.uid) : null;
     if (target) {
       flipped.add(it.to.uid!);
@@ -175,27 +191,8 @@ export class BoardAnimator {
   private ghost(from: DOMRect, to: DOMRect, code: number, faceUp: boolean, delay: number) {
     const layer = this.layer();
     if (!layer) return;
-    const g = document.createElement("div");
-    g.className = "duel-card duel-ghost";
     const w = from.width || to.width, h = from.height || to.height;
-    Object.assign(g.style, { left: `${from.left}px`, top: `${from.top}px`, width: `${w}px`, height: `${h}px` });
-    const inner = document.createElement("div");
-    inner.className = "duel-card-inner";
-    if (faceUp && code > 0) {
-      const face = document.createElement("div");
-      face.className = "duel-card-face";
-      const img = document.createElement("img");
-      img.src = cardImage(code, "small");
-      img.alt = "";
-      face.appendChild(img);
-      inner.appendChild(face);
-    } else {
-      const back = document.createElement("div");
-      back.className = "duel-card-back";
-      back.appendChild(document.createElement("span"));
-      inner.appendChild(back);
-    }
-    g.appendChild(inner);
+    const g = fx.cardEl(code, faceUp, { left: from.left, top: from.top, width: w, height: h });
     layer.appendChild(g);
     // aim at the target's centre, scaled to its size (piles are card sized; zones a bit bigger)
     const tw = Math.min(to.width, to.height * (59 / 86)) || w;
@@ -254,18 +251,24 @@ export class BoardAnimator {
   }
 
   /** The attacker lunges at its target (or at the defending player's side) and back. Usable without a capture. */
-  attack(attackerUid: string, targetUid: string | null, side: 0 | 1, delay = 0, sound = false) {
+  attack(attackerUid: string, targetUid: string | null, side: 0 | 1, delay = 0, sound = false, code?: number) {
     if (sound) sfx("attack");
     if (!this.root || reducedMotion()) return;
     const a = this.el(attackerUid);
     if (!a) return;
-    const t = targetUid ? this.el(targetUid) : this.zoneEl(`hand:${side}:`);
+    const t = targetUid ? this.el(targetUid) : (this.plate(side) ?? this.zoneEl(`hand:${side}:`));
     const ar = a.getBoundingClientRect();
     const tr = t?.getBoundingClientRect();
     if (!tr) return;
     const p = center(ar), q = center(tr);
     const dx = (q.x - p.x) * 0.72, dy = (q.y - p.y) * (targetUid ? 0.72 : 0.5);
     this.arrow(p, q, delay);
+    const layer = this.layer();
+    if (layer) {
+      const { element, shape } = attackStyle(code ? getCard(code) : null);
+      const hitIn = fx.strike(layer, this.run.bind(this), ar, tr, element, shape, delay + 120);
+      fx.impact(layer, this.run.bind(this), tr, element, delay + 120 + hitIn);
+    }
     this.run(a, [
       { transform: "none", zIndex: 30 },
       { offset: 0.25, transform: `translate(${-dx * 0.08}px, ${-dy * 0.08}px) scale(1.06)`, zIndex: 30 },
@@ -278,6 +281,57 @@ export class BoardAnimator {
         { offset: 0.6, transform: "translateX(5px) rotate(2deg)" }, { transform: "none" },
       ], { duration: 220, delay: delay + ATTACK_MS * 0.45, easing: "ease-in-out" });
     }
+  }
+
+  /** The Life Points plate of a seat (burn / direct attack target). */
+  private plate(seat: number): HTMLElement | null {
+    return this.root?.querySelector<HTMLElement>(`.duel-playerbar[data-seat="${seat}"] .duel-lp`) ?? null;
+  }
+
+  /** A card effect's category visual. */
+  private effect(rects: Rects, it: Extract<Intent, { t: "effect" }>, delay: number) {
+    const layer = this.layer();
+    if (!layer) return;
+    const run = this.run.bind(this);
+    const rectOf = (s: Spot) => this.fromRect(rects, s) ?? this.nowRect(s);
+    const src = it.source ? (rects.get(`uid:${it.source}`) ?? this.el(it.source)?.getBoundingClientRect()) : undefined;
+    const targets = it.targets.map(rectOf).filter((r): r is DOMRect => !!r && r.width > 0);
+    switch (it.kind) {
+      case "wipe": {
+        const field = this.root!.querySelector(".duel-field")?.getBoundingClientRect();
+        if (!field) return;
+        const half = it.side === undefined ? field : this.sideRect(field, it.side);
+        fx.vortex(layer, run, half, delay);
+        return;
+      }
+      case "trapHole": targets.forEach((r) => fx.pit(layer, run, r, delay)); return;
+      case "negate": targets.forEach((r) => fx.stamp(layer, run, r, delay)); return;
+      case "destroy": targets.forEach((r) => fx.ring(layer, run, r, delay, "tone-danger")); return;
+      case "banish": targets.forEach((r) => fx.ring(layer, run, r, delay, "tone-void")); return;
+      case "bounce": targets.forEach((r) => fx.whoosh(layer, run, r, delay)); return;
+      case "burn": {
+        const to = it.to !== undefined ? this.plate(it.to)?.getBoundingClientRect() : undefined;
+        if (src && to) fx.fireball(layer, run, src, to, delay);
+        else if (src) fx.ring(layer, run, src, delay, "tone-fire");
+        return;
+      }
+      case "handtrap": {
+        const el = it.source ? this.el(it.source) : null;
+        if (el) run(el, [{ transform: "none", zIndex: 30 }, { offset: 0.4, transform: "translateY(-28px) scale(1.35)", zIndex: 30 }, { offset: 0.7, transform: "translateY(-18px) scale(1.25)", zIndex: 30 }, { transform: "none", zIndex: 30 }], { duration: 520, delay, easing: "cubic-bezier(.3,1.4,.5,1)" });
+        if (src) fx.ring(layer, run, src, delay + 200, "tone-accent");
+        return;
+      }
+      case "revive": case "search": if (src) fx.ring(layer, run, src, delay, "tone-light"); return;
+      default: if (src) fx.ring(layer, run, src, delay, "tone-accent");
+    }
+  }
+
+  /** The half of the field that belongs to `seat` (top half = the opponent of the viewer). */
+  private sideRect(field: DOMRect, seat: number): DOMRect {
+    const mine = this.root?.querySelector<HTMLElement>(`.duel-field [data-zone="monster"][data-player="${seat}"]`);
+    const z = mine?.getBoundingClientRect();
+    const top = z ? z.top < field.top + field.height / 2 : false;
+    return new DOMRect(field.left, top ? field.top : field.top + field.height / 2, field.width, field.height / 2);
   }
 
   /** A line from the attacker to its target that draws itself, then fades. */
