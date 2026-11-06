@@ -45,7 +45,8 @@ export function EnginePromptPanel({ prompt, onRespond, cardName, error }: Engine
   );
 }
 
-function title(p: EnginePrompt): string {
+/** One-line description of what a prompt asks. */
+export function title(p: EnginePrompt): string {
   switch (p.kind) {
     case "idle": return "Main Phase — choose an action";
     case "battle": return "Battle Phase — choose an action";

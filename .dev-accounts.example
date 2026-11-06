@@ -6,3 +6,5 @@ DEV_PASSWORD=qZewh7u82uU12cxV
 # Two-player duel test accounts (lead's integration check, local D1 only):
 DEV_DUEL_USERS=qa_alice,qa_bob
 DEV_DUEL_PASSWORD=QaLocal-7f3k9q-test
+# Animation / board-interaction work (worktree :8790, local D1 only): scripted host + bot players
+DEV_DUEL_BOT_USERS=qa_carol,qa_dave
