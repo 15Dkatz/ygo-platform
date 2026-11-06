@@ -31,3 +31,5 @@ button.danger:hover { border-color: var(--danger); }
   .deck-date { grid-column: 2; grid-row: 1; }
   .deck-actions { grid-column: 1 / -1; justify-content: flex-start; }
 }
+.decks-head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.decks-guest { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius); background: var(--accent-soft); }

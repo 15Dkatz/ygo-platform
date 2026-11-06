@@ -60,8 +60,9 @@ export function emptyPlayer(name: string): PlayerBoard {
 export interface DeckList { main: number[]; extra: number[] }
 
 /** New board: decks shuffled, 5 cards drawn each, 8000 LP, turn 1 for `first`. */
-export function createBoard(names: [string, string], decks: [DeckList, DeckList], first: Seat, rng: Rng): BoardState {
+export function createBoard(names: [string, string], decks: [DeckList, DeckList], first: Seat, rng: Rng, startingLP = STARTING_LP): BoardState {
   const players = [emptyPlayer(names[0]), emptyPlayer(names[1])] as [PlayerBoard, PlayerBoard];
+  for (const pl of players) pl.lp = startingLP;
   for (const p of [0, 1] as Seat[]) {
     const pb = players[p];
     pb.deck = shuffleInPlace(decks[p].main.map((code) => ({ uid: rng.uid(), code, owner: p, faceUp: false })), rng);

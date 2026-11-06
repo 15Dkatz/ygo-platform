@@ -3,6 +3,7 @@
 // duel can be switched to manual mode mid-duel without losing the board.
 
 import type { DuelMode } from "./types.ts";
+import type { RoomSettings } from "./roomSettings.ts";
 
 export type Zone =
   | "deck" | "hand" | "extra" | "gy" | "banished"
@@ -56,7 +57,12 @@ export interface RoomInfo {
   status: "waiting" | "dueling" | "finished";
   created_at: string;
   spectators?: number;   // additive (phase 3)
+  settings?: RoomSettings;
 }
+
+/** Per-player turn clock (ms). `running` = whose clock is ticking; it started at server time `since`.
+ *  Clients estimate the server clock with `serverNow` (server time when the message was sent). */
+export interface TurnClock { limitSec: number; remaining: [number, number]; running: 0 | 1 | null; since: number; serverNow: number }
 
 /** Every websocket message is one JSON envelope. Phases may add new `t` values. */
 export type ClientMsg =
@@ -72,6 +78,9 @@ export type ClientMsg =
   | { t: "chooseOrder"; first: boolean }       // RPS/coin winner (or previous loser) picks
   | { t: "rematch" }                           // after a finished duel; both must ask
   | { t: "leave" }                             // give up the seat (before the duel) / forfeit (during)
+  // --- additive (bot opponent, rules-enforced rooms): only the host (seat 0), before the duel ---
+  | { t: "addBot"; deckId: string; main: number[]; extra: number[]; side: number[] }
+  | { t: "removeBot" }
   // --- additive (host-runs-rules mode): only accepted from the host's socket ---
   | { t: "hostUpdate"; update: unknown; snapshot: unknown }   // one engine step, unmasked (the server masks per viewer)
   | { t: "hostError"; seat: 0 | 1; message: string };         // the engine refused that player's answer
@@ -87,7 +96,7 @@ export type ServerMsg =
   | { t: "peek"; title: string; cards: CardInstance[] }   // private: only to the player who looked (top N / deck search)
   | { t: "event"; event: DuelEvent }          // transient effect for toasts/animations (attack, reveal, dice, coin)
   // --- additive (host-runs-rules mode): only sent to the host ---
-  | { t: "engineHost"; start?: EngineHostStart; snapshot?: unknown }   // run (or resume) this duel's engine
+  | { t: "engineHost"; start?: EngineHostStart; snapshot?: unknown; bot?: 0 | 1 }   // run (or resume) this duel's engine; `bot`: the seat the host's engine answers itself
   | { t: "engineRespond"; seat: 0 | 1; response: unknown };            // a player's answer, for the host's engine
 
 /** What the host's browser needs to create the duel (same as the server's RoomEngineOptions). */
@@ -96,6 +105,7 @@ export interface EngineHostStart {
   decks: [{ main: number[]; extra: number[] }, { main: number[]; extra: number[] }];
   first: 0 | 1;
   seed: number[];   // 32-bit words
+  startingLP?: number;
 }
 
 /** Log lines may contain card tokens `[[12345]]` that the client renders as the card's name. */
@@ -112,6 +122,7 @@ export type DuelStage =
 
 export interface SeatInfo {
   name: string;
+  bot?: boolean;      // a computer opponent (rules-enforced rooms only)
   connected: boolean;
   ready: boolean;                                   // deck submitted
   deck?: { main: number; extra: number; side: number };
@@ -132,6 +143,8 @@ export interface SessionInfo {
   switchVotes?: [boolean, boolean];
   /** Rules-enforced room whose engine runs in a player's browser: that player's seat. */
   engineHost?: 0 | 1;
+  settings?: RoomSettings;
+  timer?: TurnClock;
 }
 
 export type DuelEvent =

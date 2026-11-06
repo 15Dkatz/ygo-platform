@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api.ts";
 import type { RoomInfo } from "../../shared/duel.ts";
 import type { DuelMode } from "../../shared/types.ts";
+import { DEFAULT_SETTINGS, LP_CHOICES, TIMER_CHOICES, cleanSettings, formatTimer, type RoomSettings } from "../../shared/roomSettings.ts";
 import { DeckSelect, NameForm, useDecks } from "../components/duel/DeckPicker.tsx";
 import { useDuelIdentity } from "../components/duel/useDuel.ts";
 import { EngineSupportNote } from "../components/engine/EngineSupportNote.tsx";
@@ -27,9 +28,24 @@ export function LobbyPage() {
   const [listErr, setListErr] = useState<string | null>(null);
   const [roomName, setRoomName] = useState("");
   const [mode, setMode] = useState<DuelMode>("engine");
+  // room settings, remembered for next time
+  const [settings, setSettingsState] = useState<RoomSettings>(() => {
+    try { return cleanSettings(JSON.parse(localStorage.getItem("ygo.roomSettings") ?? "null") ?? DEFAULT_SETTINGS); } catch { return DEFAULT_SETTINGS; }
+  });
+  const setSetting = <K extends keyof RoomSettings>(k: K, v: RoomSettings[K]) => setSettingsState((cur) => {
+    const next = { ...cur, [k]: v };
+    try { localStorage.setItem("ygo.roomSettings", JSON.stringify(next)); } catch { /* private mode */ }
+    return next;
+  });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [renaming, setRenaming] = useState(false);
+  // quick duel vs a bot: the bot's deck ("" = same as yours)
+  const [botDeckId, setBotDeckId] = useState(() => { try { return localStorage.getItem("ygo.botDeck") ?? ""; } catch { return ""; } });
+  const botDeck = decks?.find((d) => d.id === botDeckId) ?? deck;
+  const pickBotDeck = (id: string) => { setBotDeckId(id); try { localStorage.setItem("ygo.botDeck", id); } catch { /* private mode */ } };
+  const [quickBusy, setQuickBusy] = useState(false);
+  const [quickErr, setQuickErr] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -52,11 +68,27 @@ export function LobbyPage() {
     setBusy(true);
     setErr(null);
     try {
-      const r = await api<{ roomId: string }>("/api/rooms", { method: "POST", json: { mode, name: roomName.trim() || undefined } });
+      const r = await api<{ roomId: string }>("/api/rooms", { method: "POST", json: { mode, name: roomName.trim() || undefined, settings } });
       navigate(`/duel/${r.roomId}?join=1`);
     } catch (x) {
       setErr((x as Error).message);
       setBusy(false);
+    }
+  };
+
+  const quickDuel = async () => {
+    if (!botDeck || !identity) return;
+    setQuickBusy(true);
+    setQuickErr(null);
+    try {
+      const r = await api<{ roomId: string }>("/api/rooms", {
+        method: "POST",
+        json: { mode: "engine", name: `${identity.name} vs Bot`, bot: { deckId: botDeck.id, main: botDeck.main, extra: botDeck.extra, side: botDeck.side } },
+      });
+      navigate(`/duel/${r.roomId}?join=1`);
+    } catch (x) {
+      setQuickErr((x as Error).message);
+      setQuickBusy(false);
     }
   };
 
@@ -86,6 +118,23 @@ export function LobbyPage() {
           </div>
         </div>
 
+        <div className="lobby-card lobby-quick">
+          <h2>Quick duel vs bot</h2>
+          <p className="muted">Jump straight into a rules-enforced duel against a bot that plays random legal moves. Good for testing a deck.</p>
+          <div className="lobby-field">
+            <span>Bot's deck</span>
+            <select value={botDeckId} onChange={(e) => pickBotDeck(e.target.value)} aria-label="Bot's deck" disabled={!decks?.length}>
+              <option value="">Same as mine</option>
+              {decks?.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+          </div>
+          <button className="primary" disabled={quickBusy || !identity || !deck || !botDeck} onClick={quickDuel}>
+            {quickBusy ? "Starting…" : "Play vs bot"}
+          </button>
+          {!deck && identity && <small className="muted">Choose your deck first.</small>}
+          {quickErr && <small className="lobby-error">{quickErr}</small>}
+        </div>
+
         <form className="lobby-card" onSubmit={create}>
           <h2>Create a room</h2>
           <label className="lobby-field">
@@ -106,6 +155,35 @@ export function LobbyPage() {
               {mode === "manual" ? "A virtual table: you move your own cards, the server only keeps the board in sync." : "The official rules are enforced (EDOPro engine): you pick from legal moves only. Both players can agree to switch to manual mid-duel."}
             </small>
           </div>
+          <details className="lobby-settings">
+            <summary>Room settings <span className="muted">· {formatTimer(settings.turnTimerSec)} · {settings.startingLP} LP · {settings.visibility === "public" ? "public" : "unlisted"}{settings.spectators ? "" : " · no spectators"}</span></summary>
+            <div className="lobby-settings-grid">
+              <label className="lobby-field">
+                <span>Turn timer</span>
+                <select value={settings.turnTimerSec} onChange={(e) => setSetting("turnTimerSec", Number(e.target.value))}>
+                  {TIMER_CHOICES.map((t) => <option key={t} value={t}>{t ? `${formatTimer(t)} per turn` : "No timer"}</option>)}
+                </select>
+                <small className="muted">Your clock only runs while the duel waits on you. Running out loses the duel.</small>
+              </label>
+              <label className="lobby-field">
+                <span>Starting LP</span>
+                <select value={settings.startingLP} onChange={(e) => setSetting("startingLP", Number(e.target.value))}>
+                  {LP_CHOICES.map((lp) => <option key={lp} value={lp}>{lp.toLocaleString()}</option>)}
+                </select>
+              </label>
+              <label className="lobby-field">
+                <span>Who can find it</span>
+                <select value={settings.visibility} onChange={(e) => setSetting("visibility", e.target.value === "unlisted" ? "unlisted" : "public")}>
+                  <option value="public">Public: listed in the lobby</option>
+                  <option value="unlisted">Unlisted: only people with the link</option>
+                </select>
+              </label>
+              <label className="lobby-check">
+                <input type="checkbox" checked={settings.spectators} onChange={(e) => setSetting("spectators", e.target.checked)} />
+                Allow spectators
+              </label>
+            </div>
+          </details>
           {mode === "engine" && deck && <EngineSupportNote ids={[...deck.main, ...deck.extra, ...deck.side]} />}
           <button className="primary" disabled={busy || !identity || !deck}>{busy ? "Creating…" : "Create and sit down"}</button>
           {!deck && identity && <small className="muted">Choose a deck first.</small>}
@@ -130,6 +208,8 @@ export function LobbyPage() {
                   <div className="lobby-room-main">
                     <b>{r.name}</b>
                     <span className={`lobby-chip ${r.mode === "engine" ? "is-beta" : ""}`}>{r.mode === "engine" ? "Rules" : "Manual"}</span>
+                    {r.settings?.turnTimerSec ? <span className="lobby-chip" title="Turn timer">⏱ {formatTimer(r.settings.turnTimerSec)}</span> : null}
+                    {r.settings && r.settings.startingLP !== 8000 ? <span className="lobby-chip">{r.settings.startingLP} LP</span> : null}
                     <span className={`lobby-chip is-${r.status}`}>{open ? "Open" : r.status === "dueling" ? "Dueling" : r.status}</span>
                   </div>
                   <div className="muted lobby-room-meta">

@@ -1,4 +1,6 @@
-import { NavLink, Navigate, Route, Routes } from "react-router-dom";
+import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { HomePage } from "./pages/HomePage.tsx";
+import { usePageTitle } from "./usePageTitle.ts";
 import { LibraryPage } from "./pages/LibraryPage.tsx";
 import { DecksPage } from "./pages/DecksPage.tsx";
 import { DeckBuilderPage } from "./pages/DeckBuilderPage.tsx";
@@ -10,7 +12,30 @@ import { LICENSE_NAME, SOURCE_URL } from "../shared/project.ts";
 
 // Route ownership: library/decks = phase 1, login/account = phase 2,
 // lobby/duel = phase 3 (manual) + phase 4 (engine).
+/** Browser-tab title per route. */
+function titleFor(path: string): string | null {
+  if (path === "/") return null;
+  if (path.startsWith("/library")) return "Library";
+  if (path.startsWith("/decks/")) return "Deck builder";
+  if (path.startsWith("/decks")) return "Decks";
+  if (path.startsWith("/login")) return "Sign in";
+  if (path.startsWith("/lobby")) return "Duel lobby";
+  if (path.startsWith("/duel/")) return "Duel";
+  return "Not found";
+}
+
+function NotFound() {
+  return (
+    <section className="notfound">
+      <h1>Nothing here</h1>
+      <p className="muted">That page doesn't exist. It may have been a duel room that has closed.</p>
+      <p><Link to="/">Go home</Link> · <Link to="/lobby">Find a duel</Link></p>
+    </section>
+  );
+}
+
 export function App() {
+  usePageTitle(titleFor(useLocation().pathname));
   return (
     <div className="app">
       <header className="topbar">
@@ -24,14 +49,14 @@ export function App() {
       </header>
       <main className="content">
         <Routes>
-          <Route path="/" element={<Navigate to="/library" replace />} />
+          <Route path="/" element={<HomePage />} />
           <Route path="/library" element={<LibraryPage />} />
           <Route path="/decks" element={<DecksPage />} />
           <Route path="/decks/:deckId" element={<DeckBuilderPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/lobby" element={<LobbyPage />} />
           <Route path="/duel/:roomId" element={<DuelPage />} />
-          <Route path="*" element={<p className="muted">Page not found.</p>} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
       <footer className="site-footer">

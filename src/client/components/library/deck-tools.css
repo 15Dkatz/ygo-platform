@@ -1,0 +1,27 @@
+/* Test hand dialog + deck stats (deck builder) */
+.th-backdrop { position: fixed; inset: 0; z-index: 50; background: var(--backdrop); display: grid; place-items: center; padding: 16px; }
+.th-dialog {
+  width: min(880px, 100%); background: var(--surface); border: 1px solid var(--border); border-radius: calc(var(--radius) * 1.5);
+  box-shadow: var(--shadow); padding: 16px; display: flex; flex-direction: column; gap: 14px;
+}
+.th-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.th-head h2 { margin: 0; }
+.th-x { border: none; background: transparent; font-size: 22px; line-height: 1; padding: 2px 8px; }
+.th-hand { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; min-height: 160px; }
+.th-card { width: 118px; animation: th-deal 0.35s cubic-bezier(.2,.8,.2,1) backwards; transition: transform 0.15s ease; }
+.th-card:hover { transform: translateY(-6px) scale(1.04); }
+.th-card img { width: 100%; border-radius: 5px; display: block; box-shadow: 0 4px 12px rgb(0 0 0 / 0.3); }
+@keyframes th-deal { from { transform: translateY(40px) rotate(-6deg); opacity: 0; } }
+.th-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+@media (max-width: 600px) { .th-card { width: 30%; } }
+@media (prefers-reduced-motion: reduce) { .th-card { animation: none; transition: none; } }
+
+.ds { margin: 4px 0 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.ds summary { cursor: pointer; padding: 8px 12px; font-weight: 600; }
+.ds-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; padding: 4px 12px 12px; }
+.ds-block { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.ds-row { display: grid; grid-template-columns: 9.5em 1fr 2em; gap: 6px; align-items: center; }
+.ds-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ds-bar { height: 8px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
+.ds-bar span { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.ds-n { text-align: right; color: var(--muted); }

@@ -142,10 +142,15 @@ describe("actions", () => {
   it("phases and turns belong to the turn player", () => {
     const { b, rng } = setup();
     expect(() => act(b, 1, { type: "endTurn" }, rng)).toThrow(/not your turn/);
-    let s = act(b, 0, { type: "phase", phase: "battle" }, rng).board;
-    expect(s.phase).toBe("battle");
+    expect(() => act(b, 0, { type: "phase", phase: "battle" }, rng)).toThrow(/first turn/);
+    let s = act(b, 0, { type: "phase", phase: "main1" }, rng).board;
+    expect(() => act(s, 0, { type: "phase", phase: "draw" }, rng)).toThrow(/forward/);
     s = act(s, 0, { type: "endTurn" }, rng).board;
     expect(s).toMatchObject({ turn: 2, turnPlayer: 1, phase: "draw" });
+    s = act(s, 1, { type: "phase", phase: "battle" }, rng).board;   // turn 2: battle is fine
+    expect(() => act(s, 1, { type: "phase", phase: "main1" }, rng)).toThrow(/forward/);
+    s = act(s, 1, { type: "phase", phase: "main2" }, rng).board;
+    expect(s.phase).toBe("main2");
   });
 
   it("attacks, takes control, tokens, counters", () => {

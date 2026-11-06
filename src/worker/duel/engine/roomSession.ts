@@ -37,6 +37,7 @@ export interface RoomEngineOptions {
   decks: [DeckCodes, DeckCodes];
   first: Seat;
   seed: Uint32Array;
+  startingLP?: number;
 }
 
 const toJson = (r: OcgResponse) => JSON.parse(JSON.stringify(r, (_k, v) => (typeof v === "bigint" ? { $big: v.toString() } : v)));
@@ -51,7 +52,7 @@ function seedFrom(words: Uint32Array): DuelSetup["seed"] {
 export interface RoomEngineDeps { core: () => Promise<OcgCoreSync>; data: () => EngineData }
 
 export function startRoomSession(deps: RoomEngineDeps, opts: RoomEngineOptions): RoomEngineSession {
-  const setup: DuelSetup = { seed: seedFrom(opts.seed), decks: opts.decks, names: opts.names, first: opts.first };
+  const setup: DuelSetup = { seed: seedFrom(opts.seed), decks: opts.decks, names: opts.names, first: opts.first, ...(opts.startingLP ? { startingLP: opts.startingLP } : {}) };
   return roomSession(deps, { setup, responses: [] });
 }
 

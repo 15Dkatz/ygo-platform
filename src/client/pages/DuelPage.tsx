@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import type { CardInstance } from "../../shared/duel.ts";
-import { PHASES, PHASE_LABEL, type DuelAction, type Phase, type Seat } from "../../shared/duelActions.ts";
+import { PHASE_LABEL, type DuelAction, type Phase, type Seat } from "../../shared/duelActions.ts";
 import { Board, PendulumStrip, type BoardUI, type ZoneRef } from "../components/duel/Board.tsx";
 import { CardView } from "../components/duel/CardView.tsx";
 import { useDecks } from "../components/duel/DeckPicker.tsx";
@@ -12,6 +12,9 @@ import { PreDuel } from "../components/duel/PreDuel.tsx";
 import { CardPreview, LogChat } from "../components/duel/SidePanel.tsx";
 import { boardCodes, getCard, useCardData, useDuelIdentity, useDuelSocket } from "../components/duel/useDuel.ts";
 import { EnginePromptPanel } from "../components/engine/EnginePrompt.tsx";
+import { TurnTimer } from "../components/duel/TurnTimer.tsx";
+import { enginePhaseControls, enginePhaseResponse, manualPhaseControls, type PhaseControls } from "../../shared/phases.ts";
+import type { EngineResponse } from "../../shared/enginePrompts.ts";
 import "../components/duel/duel.css";
 import "./DuelPage.css";
 
@@ -159,6 +162,19 @@ export function DuelPage() {
     onLp: (player) => setLpFor(player),
   };
 
+  // Phase track: one rule set (src/shared/phases.ts) for buttons, End Turn and keyboard shortcuts.
+  const waitingName = session && board ? (session.seats[board.turnPlayer === me ? other(me) : board.turnPlayer]?.name ?? "your opponent") : "your opponent";
+  const phaseCtl: PhaseControls | null = !board ? null
+    : engineMode ? enginePhaseControls(board, you, conn.prompt && conn.prompt.player === you ? conn.prompt : null, waitingName)
+    : manualPhaseControls(board, you);
+  const goPhase = useCallback((target: Phase | "endTurn") => {
+    if (engineMode) {
+      const body = enginePhaseResponse(conn.prompt, target);
+      if (body && conn.prompt) send({ t: "respond", response: { ...body, promptId: conn.prompt.id } as EngineResponse });
+    } else if (target === "endTurn") act({ type: "endTurn" });
+    else act({ type: "phase", phase: target });
+  }, [engineMode, conn.prompt, send, act]);
+
   // keyboard shortcuts
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -168,18 +184,16 @@ export function DuelPage() {
       if (e.key === "?") { setHelp((h) => !h); return; }
       if (!playing || !board || menu) return;
       const k = e.key.toLowerCase();
-      if (k === "d") act({ type: "draw" });
-      else if (k === "h") act({ type: "shuffle" });
-      else if (k === "n" && board.turnPlayer === you) {
-        const i = PHASES.indexOf(board.phase);
-        if (i < PHASES.length - 1) act({ type: "phase", phase: PHASES[i + 1] });
-      } else if (k === "e" && board.turnPlayer === you) act({ type: "endTurn" });
+      if (k === "d" && !engineMode) act({ type: "draw" });
+      else if (k === "h" && !engineMode) act({ type: "shuffle" });
+      else if (k === "n" && phaseCtl?.next) goPhase(phaseCtl.next);
+      else if (k === "e" && phaseCtl?.endTurn.enabled) goPhase("endTurn");
       else return;
       e.preventDefault();
     };
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
-  }, [playing, board, you, menu, act]);
+  }, [playing, board, you, menu, act, engineMode, phaseCtl, goPhase]);
 
   const describe = (uid: string) => {
     const f = board && locate(board, uid);
@@ -269,7 +283,14 @@ export function DuelPage() {
             <Board board={board!} ui={ui} />
             <PendulumStrip board={board!} player={me} ui={ui} />
             <PlayerBar board={board!} player={me} you={you} onLp={setLpFor} connected={session.seats[me]?.connected} />
-            <PhaseBar board={board!} you={you} act={act} />
+            {phaseCtl && <PhaseBar board={board!} you={you} controls={phaseCtl} go={goPhase} />}
+            {session.timer && (
+              <div className="duel-timers">
+                <TurnTimer timer={session.timer} seat={me} label="Your time" />
+                <span className="muted">vs</span>
+                <TurnTimer timer={session.timer} seat={other(me)} label={`${session.seats[other(me)]?.name ?? "Opponent"}'s time`} />
+              </div>
+            )}
             {playing && engineMode && (
               <div className="duel-engine">
                 {conn.hostStatus && <p className="duel-engine-wait" role="status">{conn.hostStatus}</p>}
@@ -282,10 +303,10 @@ export function DuelPage() {
                   <p className="muted duel-engine-wait">Waiting for {session.seats[other(me)]?.name ?? "your opponent"}…</p>
                 )}
                 <div className="duel-tools">
-                  <button disabled={session.switchVotes?.[me]} onClick={() => send({ t: "switchMode", mode: "manual" })}
+                  {!session.seats.some((x) => x?.bot) && <button disabled={session.switchVotes?.[me]} onClick={() => send({ t: "switchMode", mode: "manual" })}
                     title="If both players agree, the duel continues in manual mode from the current board.">
                     {session.switchVotes?.[me] ? "Waiting for opponent to agree…" : session.switchVotes?.[other(me)] ? "Opponent wants manual: agree" : "Switch to manual"}
-                  </button>
+                  </button>}
                   <button className="is-danger" onClick={() => { if (confirm("Concede this duel?")) send({ t: "concede" }); }}>Concede</button>
                 </div>
               </div>
@@ -383,18 +404,21 @@ function PlayerBar({ board, player, you, onLp, connected }: { board: NonNullable
   );
 }
 
-function PhaseBar({ board, you, act }: { board: NonNullable<ReturnType<typeof useDuelSocket>["conn"]["board"]>; you: Seat | null; act(a: DuelAction): void }) {
+function PhaseBar({ board, you, controls, go }: {
+  board: NonNullable<ReturnType<typeof useDuelSocket>["conn"]["board"]>; you: Seat | null; controls: PhaseControls; go(p: Phase | "endTurn"): void;
+}) {
   const mine = board.turnPlayer === you;
   return (
     <div className="duel-phasebar" aria-label="Phases">
       <span className="duel-turninfo">Turn {board.turn} · {mine ? "Your turn" : `${board.players[board.turnPlayer].name}'s turn`}</span>
       <div className="duel-phases">
-        {PHASES.map((p) => (
-          <button key={p} className={board.phase === p ? "is-active" : ""} disabled={!mine || board.phase === p} title={PHASE_LABEL[p]} onClick={() => act({ type: "phase", phase: p })}>
-            {PHASE_SHORT[p]}
+        {controls.phases.map((p) => (
+          <button key={p.phase} className={`${p.current ? "is-active" : ""}${p.past ? " is-past" : ""}`} disabled={!p.enabled}
+            title={`${PHASE_LABEL[p.phase]}: ${p.hint}`} aria-current={p.current ? "step" : undefined} onClick={() => go(p.phase)}>
+            {PHASE_SHORT[p.phase]}
           </button>
         ))}
-        <button className="primary" disabled={!mine} onClick={() => act({ type: "endTurn" })} title="End turn (E)">End turn</button>
+        <button className="primary" disabled={!controls.endTurn.enabled} onClick={() => go("endTurn")} title={`${controls.endTurn.hint} (E)`}>End turn</button>
       </div>
     </div>
   );

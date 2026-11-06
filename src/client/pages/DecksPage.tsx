@@ -3,7 +3,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { Deck } from "../../shared/types.ts";
 import { toYdk } from "../../shared/ydk.ts";
+import { parseYdke } from "../../shared/ydke.ts";
 import { newDeck, useDeckStore } from "../store/deckStore.ts";
+import { useOptionalAuth } from "../auth.tsx";
 import { downloadText, safeFileName } from "../components/cards/cardInfo.ts";
 import { ImportDecks } from "../components/library/ImportDecks.tsx";
 import "./DecksPage.css";
@@ -13,6 +15,8 @@ type SortBy = "name" | "date" | "updated" | "size";
 export function DecksPage() {
   const store = useDeckStore();
   const navigate = useNavigate();
+  const auth = useOptionalAuth();
+  const guest = !!auth && !auth.loading && !auth.user;
   const [decks, setDecks] = useState<Deck[] | null>(null);
   const [q, setQ] = useState("");
   const [sortBy, setSortBy] = useState<SortBy>("name");
@@ -70,6 +74,17 @@ export function DecksPage() {
       while (taken.has(name)) name = `${d.name} (copy ${i++})`;
       await store.save(newDeck(name, { main: [...d.main], extra: [...d.extra], side: [...d.side] }));
     });
+  const importYdke = () =>
+    run(async () => {
+      const link = window.prompt("Paste a ydke:// deck link (from EDOPro, YGOPRODeck, Discord…):");
+      if (!link) return;
+      const lists = parseYdke(link);
+      const taken = new Set((decks || []).map((x) => x.name));
+      let name = "Imported deck", i = 2;
+      while (taken.has(name)) name = `Imported deck ${i++}`;
+      const d = await store.save(newDeck(name, lists));
+      navigate(`/decks/${d.id}`);
+    });
   const remove = (d: Deck) => {
     if (window.confirm(`Delete the deck “${d.name}”? This cannot be undone.`)) void run(() => store.remove(d.id));
   };
@@ -78,8 +93,17 @@ export function DecksPage() {
     <section className="decks-page">
       <div className="decks-head">
         <h1>Decks {decks && <span className="muted decks-sub">· {decks.length}</span>}</h1>
-        <button type="button" className="primary" onClick={() => void create()}>New deck</button>
+        <span className="decks-head-actions">
+          <button type="button" onClick={() => void importYdke()} title="Create a deck from a ydke:// link">Import YDKe</button>
+          <button type="button" className="primary" onClick={() => void create()}>New deck</button>
+        </span>
       </div>
+      {guest && (
+        <p className="decks-guest" role="note">
+          You're playing as a guest: your decks are saved <b>in this browser</b> and work in the lobby and duels.
+          {" "}<Link to="/login?next=/decks">Create a free account</Link> to keep them on every device. We'll offer to upload these then.
+        </p>
+      )}
       <ImportDecks onImported={() => void load()} />
       {error && <p className="decks-error" role="alert">{error}</p>}
       {decks && decks.length > 0 && (

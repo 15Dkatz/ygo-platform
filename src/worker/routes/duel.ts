@@ -4,6 +4,8 @@ import type { RoomInfo } from "../../shared/duel.ts";
 import type { DuelMode } from "../../shared/types.ts";
 import { authMiddleware } from "./auth.ts";
 import { REQUIRE_ACCOUNT, cleanName, getIdentity, setGuestName, withIdentity } from "../duel/identity.ts";
+import { validateDeck } from "../../shared/duelActions.ts";
+import { DEFAULT_SETTINGS, cleanSettings } from "../../shared/roomSettings.ts";
 import type { DuelRoom } from "../duel/DuelRoom.ts";
 
 // PHASE 3 (manual duels) owns this file; PHASE 4 adds engine-mode options.
@@ -45,23 +47,36 @@ duel.post("/api/duel/guest", async (c) => {
 duel.post("/api/rooms", async (c) => {
   const ident = getIdentity(c);
   if (!ident) return c.json({ error: REQUIRE_ACCOUNT ? "sign in required" : "Pick a display name first." }, 401);
-  const body = await c.req.json<{ mode?: unknown; name?: unknown }>().catch(() => ({}) as { mode?: unknown; name?: unknown });
-  const mode = (MODES as unknown[]).includes(body.mode) ? (body.mode as DuelMode) : "manual";
+  type Body = { mode?: unknown; name?: unknown; settings?: unknown; bot?: { deckId?: unknown; main?: unknown; extra?: unknown; side?: unknown } };
+  const body = await c.req.json<Body>().catch(() => ({}) as Body);
+  let mode = (MODES as unknown[]).includes(body.mode) ? (body.mode as DuelMode) : "manual";
+  // quick duel: a private rules-enforced room with a bot already seated
+  let bot: { deckId: string; main: number[]; extra: number[]; side: number[] } | undefined;
+  if (body.bot) {
+    const d = { deckId: String(body.bot.deckId ?? "bot").slice(0, 64), main: body.bot.main, extra: body.bot.extra, side: body.bot.side ?? [] };
+    const err = validateDeck(d as Parameters<typeof validateDeck>[0]);
+    if (err) return c.json({ error: `Bot deck: ${err}` }, 400);
+    bot = d as typeof bot;
+    mode = "engine";
+  }
   const name = (typeof body.name === "string" ? body.name.replace(/[\u0000-\u001f]/g, "").trim().slice(0, 40) : "") || `${ident.name}'s room`;
   const roomId = newRoomId();
-  await roomStub(c.env, roomId).init({ roomId, name, mode, host: ident.name });
+  // quick duels vs a bot: private and untimed unless asked otherwise
+  const settings = body.settings ? cleanSettings(body.settings) : bot ? { ...DEFAULT_SETTINGS, visibility: "unlisted" as const } : DEFAULT_SETTINGS;
+  await roomStub(c.env, roomId).init({ roomId, name, mode, host: ident.name, ownerId: ident.id, bot, settings });
   return c.json({ roomId }, 201);
 });
 
 duel.get("/api/rooms", async (c) => {
   const since = new Date(Date.now() - 6 * 3600_000).toISOString();
   const r = await c.env.DB.prepare(
-    `SELECT room_id, name, mode, host, players, status, spectators, created_at FROM rooms
+    `SELECT room_id, name, mode, host, players, status, spectators, created_at, settings FROM rooms
      WHERE status IN ('waiting', 'dueling') AND updated_at > ? ORDER BY created_at DESC LIMIT 100`,
-  ).bind(since).all<{ room_id: string; name: string; mode: DuelMode; host: string; players: string; status: RoomInfo["status"]; spectators: number; created_at: string }>();
+  ).bind(since).all<{ room_id: string; name: string; mode: DuelMode; host: string; players: string; status: RoomInfo["status"]; spectators: number; created_at: string; settings: string | null }>();
   const rooms: RoomInfo[] = r.results.map((row) => ({
     roomId: row.room_id, name: row.name, mode: row.mode, host: row.host,
     players: JSON.parse(row.players || "[]"), status: row.status, created_at: row.created_at, spectators: row.spectators,
+    settings: row.settings ? cleanSettings(JSON.parse(row.settings)) : undefined,
   }));
   c.header("Cache-Control", "no-store");
   return c.json({ rooms });

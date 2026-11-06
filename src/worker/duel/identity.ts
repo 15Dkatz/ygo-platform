@@ -6,7 +6,7 @@ import type { Context } from "hono";
 import { getCookie, setCookie } from "hono/cookie";
 import type { AppEnv } from "../env.ts";
 
-export const REQUIRE_ACCOUNT = true;
+export const REQUIRE_ACCOUNT = false;
 export const GUEST_COOKIE = "ygo_guest";
 
 export interface Identity {

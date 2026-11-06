@@ -6,6 +6,7 @@
 
 import wasmUrl from "ocgcore-wasm/lib/ocgcore.sync.wasm?url";
 import { api } from "../../api.ts";
+import { botResponse } from "../../../worker/duel/engine/bot.ts";
 import type { ClientMsg, EngineHostStart } from "../../../shared/duel.ts";
 import { loadCore } from "../../../worker/duel/engine/core.ts";
 import { EngineData, type EngineCardRow, type EngineDataSource } from "../../../worker/duel/engine/data.ts";
@@ -46,17 +47,22 @@ const deps: RoomEngineDeps = {
   data: () => new EngineData(source),
 };
 
-export interface HostJob { start?: EngineHostStart; snapshot?: unknown }
+export interface HostJob { start?: EngineHostStart; snapshot?: unknown; bot?: 0 | 1 }
+
+/** Pause before the bot answers, so the human can follow what it does. */
+const BOT_DELAY_MS = 450;
 
 export class EngineHost {
   private session: RoomEngineSession | null = null;
   private key = "";
+  private bot: 0 | 1 | undefined;
   private queue: Promise<unknown> = Promise.resolve();
   constructor(private send: (m: ClientMsg) => void, private onStatus: (s: string | null) => void) {}
 
   /** Start (or resume) the room's duel. Repeated jobs for the duel we already run are ignored. */
   run(job: HostJob) {
     const key = JSON.stringify(job.start?.seed ?? null);
+    this.bot = job.bot;
     if (this.session && key === this.key) return;
     this.enqueue(async () => {
       this.key = key;
@@ -88,6 +94,10 @@ export class EngineHost {
     // per-seat `events` are for animations; the room doesn't need them
     const update = { board: u.board, prompts: u.prompts, log: u.log, finished: u.finished };
     this.send({ t: "hostUpdate", update, snapshot: this.session!.snapshot() });
+    // a bot opponent: this engine answers its prompts (after a short pause)
+    const bot = this.bot;
+    const prompt = bot === undefined || u.finished ? undefined : u.prompts?.find((x) => x.seat === bot)?.prompt;
+    if (prompt) setTimeout(() => this.respond(bot!, botResponse(prompt, Math.random)), BOT_DELAY_MS);
   }
 
   private enqueue(fn: () => Promise<void>) {

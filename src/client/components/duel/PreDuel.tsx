@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { ClientMsg, RpsChoice, SessionInfo } from "../../../shared/duel.ts";
 import type { Seat } from "../../../shared/duelActions.ts";
 import type { Deck } from "../../../shared/types.ts";
@@ -29,6 +30,11 @@ export function PreDuel({ session, you, hasIdentity, decks, deckId, setDeckId, d
   const freeSeat = seats.some((s) => s === null);
   const sendDeck = () => deck && send({ t: "join", deckId: deck.id, main: deck.main, extra: deck.extra, side: deck.side });
   const opp = you === null ? null : seats[you === 0 ? 1 : 0];
+  // bot opponent (rules-enforced rooms): only the host (seat 0) can seat or remove it
+  const [botDeckId, setBotDeckId] = useState("");
+  const botDeck = decks?.find((d) => d.id === (botDeckId || deckId)) ?? null;
+  const canBot = session.mode === "engine" && you === 0 && (stage === "lobby" || stage === "finished");
+  const hasBot = !!seats[1]?.bot;
 
   return (
     <div className="duel-preduel">
@@ -89,6 +95,20 @@ export function PreDuel({ session, you, hasIdentity, decks, deckId, setDeckId, d
             </div>
           )}
           {stage === "lobby" && seated && !opp && <p className="muted">Share this page's link with your opponent, or wait for someone to join from the lobby.</p>}
+          {canBot && !seats[1] && seats[0]?.ready && (
+            <div className="duel-bot">
+              <b>No opponent yet?</b> <span className="muted">Play against a bot (it plays random legal moves). Its deck:</span>
+              <div className="duel-deckrow">
+                <DeckSelect decks={decks} deckId={botDeckId || deckId} onChange={setBotDeckId} />
+                <button disabled={!botDeck} onClick={() => botDeck && send({ t: "addBot", deckId: botDeck.id, main: botDeck.main, extra: botDeck.extra, side: botDeck.side })}>
+                  Play against a bot
+                </button>
+              </div>
+            </div>
+          )}
+          {canBot && hasBot && stage === "lobby" && (
+            <div className="duel-deckrow"><button onClick={() => send({ t: "removeBot" })}>Remove bot</button></div>
+          )}
         </div>
       )}
 

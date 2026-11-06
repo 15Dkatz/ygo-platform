@@ -1,6 +1,7 @@
 // Manual-mode action reducer: (board, actor, action) -> new board + log + side effects.
 // The server only checks ownership and zone occupancy; the players apply the game rules.
 
+import { manualPhaseBlock } from "../../../shared/phases.ts";
 import type { BoardState, CardInstance, DuelEvent, Position, Zone } from "../../../shared/duel.ts";
 import { cardToken } from "../../../shared/duel.ts";
 import {
@@ -409,9 +410,9 @@ export function applyAction(board: BoardState, actor: Seat, action: DuelAction, 
       break;
     }
     case "phase": {
-      if (b.turnPlayer !== actor) throw new ActionError("Only the turn player changes phases.");
       if (!PHASE_LABEL[action.phase]) throw new ActionError("Unknown phase.");
-      if (b.phase === action.phase) throw new ActionError("Already in that phase.");
+      const block = manualPhaseBlock(b, actor, action.phase);   // same rules as the phase track
+      if (block) throw new ActionError(block);
       b.phase = action.phase;
       c.log(`${c.name()} enters the ${PHASE_LABEL[action.phase]}.`);
       break;

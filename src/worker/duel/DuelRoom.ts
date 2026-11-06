@@ -4,12 +4,14 @@ import type {
   BoardState, ClientMsg, DuelStage, EngineHostStart, RoomInfo, RpsChoice, ServerMsg, SessionInfo,
 } from "../../shared/duel.ts";
 import type { DuelMode } from "../../shared/types.ts";
+import { DEFAULT_SETTINGS, type RoomSettings } from "../../shared/roomSettings.ts";
 import { validateDeck, type DuelAction, type Seat } from "../../shared/duelActions.ts";
 import { cryptoRng, createBoard } from "./manual/board.ts";
 import { ActionError, applyAction } from "./manual/reducer.ts";
 import { maskBoard } from "./manual/mask.ts";
 import { identityFromHeaders } from "./identity.ts";
 import { ENGINE_NOTICE, engineAvailable } from "./engineHook.ts";
+import { botResponse } from "./engine/bot.ts";
 import { BadResponse, restoreRoomEngine, startRoomEngine, type RoomEngineSession, type RoomEngineUpdate } from "./engine/roomHook.ts";
 
 /** DO storage key of the engine snapshot (seed + decks + responses; replayed on wake). */
@@ -17,6 +19,11 @@ const ENGINE_KEY = "engine";
 const MAX_LOG = 500;
 /** Host-runs-rules mode: whose browser runs the engine (the room creator sits in seat 0). */
 const HOST_SEAT: Seat = 0;
+/** A bot opponent always takes the other seat; its prompts are answered by whoever runs the engine. */
+const BOT_SEAT: Seat = 1;
+const BOT_ID = "bot";
+/** Pause before the bot answers, so the human can follow what it does. */
+const BOT_DELAY_MS = 450;
 /** DO storage values are capped at 128 KiB; a snapshot is ~40 bytes per engine response. */
 const MAX_SNAPSHOT_CHARS = 120_000;
 
@@ -47,6 +54,7 @@ interface SeatState {
   deck: { deckId: string; main: number[]; extra: number[]; side: number[] } | null;
   connected: boolean;
   leftAt: number | null;
+  bot?: boolean;
 }
 
 interface ChatLine { from: string; text: string; at: number; system?: boolean }
@@ -74,6 +82,11 @@ interface RoomData {
   engineRunner?: "host" | "server";
   /** Host-runs-rules mode: the duel setup the host's browser starts from. */
   hostStart?: EngineHostStart;
+  /** Identity of whoever created the room (quick duels vs a bot are theirs alone). */
+  ownerId?: string;
+  settings?: RoomSettings;
+  /** Turn timer state (ms). `turn` = the board turn the clock last saw, to refill at a new turn. */
+  clock?: { remaining: [number, number]; running: Seat | null; since: number; turn: number };
 }
 
 interface Attachment { id: string | null; name: string; seat: Seat | null; since?: number }
@@ -98,10 +111,16 @@ export class DuelRoom extends DurableObject<Env> {
 
   // ---------- RPC from the Worker ----------
 
-  async init(info: { roomId: string; name: string; mode: DuelMode; host: string }): Promise<void> {
+  async init(input: {
+    roomId: string; name: string; mode: DuelMode; host: string; ownerId?: string; settings?: RoomSettings;
+    /** Quick duel: seat a bot with this deck straight away (rules-enforced only). */
+    bot?: { deckId: string; main: number[]; extra: number[]; side: number[] };
+  }): Promise<void> {
     if (this.room) throw new Error("room already exists");
+    const { bot, ...info } = input;
     this.room = {
-      ...info, created_at: new Date().toISOString(), stage: "lobby", seats: [null, null], rps: [null, null],
+      ...info, created_at: new Date().toISOString(), stage: "lobby", rps: [null, null],
+      seats: [null, bot ? { id: BOT_ID, name: "Bot", connected: true, leftAt: null, bot: true, deck: bot } : null],
       chooser: null, winner: null, rematch: [false, false], switchVotes: [false, false], board: null, chat: [],
       engineRunner: this.env.ENGINE_RUNNER === "server" ? "server" : "host",
     };
@@ -134,6 +153,12 @@ export class DuelRoom extends DurableObject<Env> {
     const ident = identityFromHeaders(request);
     const seatIdx = ident ? room.seats.findIndex((s) => s?.id === ident.id) : -1;
     const seat = seatIdx >= 0 ? (seatIdx as Seat) : null;
+    if (seat === null && !this.settings().spectators && room.seats[0] && room.seats[1]) {
+      server.accept();
+      server.send(JSON.stringify({ t: "error", message: "This room doesn't allow spectators." } satisfies ServerMsg));
+      server.close(4403, "no spectators");
+      return new Response(null, { status: 101, webSocket: client });
+    }
     if (seat !== null) {
       // same player in another tab: the newest connection takes over the seat
       for (const ws of this.ctx.getWebSockets()) {
@@ -217,6 +242,7 @@ export class DuelRoom extends DurableObject<Env> {
   async alarm(): Promise<void> {
     const room = this.room;
     if (!room) return;
+    this.tickClock();   // a turn timer may have run out
     const now = Date.now();
     for (const p of [0, 1] as Seat[]) {
       const s = room.seats[p];
@@ -227,7 +253,7 @@ export class DuelRoom extends DurableObject<Env> {
     }
     await this.pruneStale();
     const sockets = this.live().length;
-    if (!room.seats[0] && !room.seats[1] && sockets === 0) {
+    if (!room.seats.some((s) => s && !s.bot) && sockets === 0) {
       await this.closeRoom();
       return;
     }
@@ -318,6 +344,7 @@ export class DuelRoom extends DurableObject<Env> {
         const p = this.seated(a);
         if (msg.mode !== "manual") throw new RoomError("Only switching to manual mode is supported.");
         if (room.mode === "manual") throw new RoomError("This room is already in manual mode.");
+        if (this.hasBot()) throw new RoomError("The bot can only play with the rules engine. Remove the bot to play manually.");
         room.switchVotes[p] = true;
         this.systemLine(`${a.name} wants to play this room manually.`);
         if (room.switchVotes[0] && room.switchVotes[1]) {
@@ -366,6 +393,32 @@ export class DuelRoom extends DurableObject<Env> {
         });
         return;
       }
+      case "addBot": {
+        const p = this.seated(a);
+        if (p !== HOST_SEAT) throw new RoomError("Only the room's host can add a bot.");
+        if (room.mode !== "engine") throw new RoomError("Bots play rules-enforced rooms only.");
+        if (room.stage !== "lobby" && room.stage !== "finished") throw new RoomError("You can add a bot before the duel starts.");
+        if (room.seats[BOT_SEAT] && !room.seats[BOT_SEAT]!.bot) throw new RoomError("Someone is already sitting there.");
+        const err = validateDeck(msg);
+        if (err) throw new RoomError(`Bot deck: ${err}`);
+        if (room.stage === "finished") this.resetToLobby();
+        room.seats[BOT_SEAT] = {
+          id: BOT_ID, name: "Bot", connected: true, leftAt: null, bot: true,
+          deck: { deckId: String(msg.deckId ?? "").slice(0, 64), main: msg.main, extra: msg.extra, side: msg.side ?? [] },
+        };
+        this.systemLine("A bot took the empty seat. (It plays random legal moves.)");
+        this.advanceLobby();
+        await this.botActs();
+        break;
+      }
+      case "removeBot": {
+        const p = this.seated(a);
+        if (p !== HOST_SEAT || !this.hasBot()) throw new RoomError("There's no bot to remove.");
+        if (room.stage === "duel") throw new RoomError("Concede the duel first.");
+        this.freeSeat(BOT_SEAT);
+        this.systemLine("The bot left the room.");
+        break;
+      }
       case "hostUpdate": {
         if (a.seat !== HOST_SEAT || !this.hostMode() || room.mode !== "engine" || room.stage !== "duel") {
           throw new RoomError("Only the host's rules engine can update this duel.");
@@ -403,6 +456,7 @@ export class DuelRoom extends DurableObject<Env> {
       if (room.stage !== "lobby" && room.stage !== "finished") throw new RoomError("This duel has already started — you can spectate.");
       const free = room.seats.findIndex((s) => s === null);
       if (free < 0) throw new RoomError("Both seats are taken — you can spectate.");
+      if (this.hasBot() && room.ownerId && a.id !== room.ownerId) throw new RoomError("This is a private duel against a bot. You can watch it.");
       seat = free as Seat;
       room.seats[seat] = { id: a.id, name: a.name, deck, connected: true, leftAt: null };
       a.seat = seat;
@@ -416,6 +470,8 @@ export class DuelRoom extends DurableObject<Env> {
     }
     this.advanceLobby();
     this.send(ws, { t: "room", room: this.roomInfo(), you: seat });
+    await this.botActs();
+    if ((room.stage as DuelStage) === "duel") return;   // the bot started the duel (startDuel saved and broadcast)
     await this.save();
     this.broadcastAll();
     await this.updateIndex();
@@ -430,7 +486,7 @@ export class DuelRoom extends DurableObject<Env> {
     room.stage = "rps";
     room.rps = [null, null];
     room.rpsLast = undefined;
-    this.systemLine("Both players are ready. Rock-paper-scissors (or toss a coin) to decide who chooses turn order.");
+    if (!room.seats.some((x) => x?.bot)) this.systemLine("Both players are ready. Rock-paper-scissors (or toss a coin) to decide who chooses turn order.");
   }
 
   private async startDuel(first: Seat) {
@@ -444,7 +500,9 @@ export class DuelRoom extends DurableObject<Env> {
         decks: [{ main: s0.deck.main, extra: s0.deck.extra }, { main: s1.deck.main, extra: s1.deck.extra }],
         first,
         seed: [...crypto.getRandomValues(new Uint32Array(8))],
+        startingLP: this.settings().startingLP,
       };
+      this.startClock();
       room.board = null;
       room.stage = "duel";
       room.chooser = null;
@@ -467,7 +525,9 @@ export class DuelRoom extends DurableObject<Env> {
           decks: [{ main: s0.deck!.main, extra: s0.deck!.extra }, { main: s1.deck!.main, extra: s1.deck!.extra }],
           first,
           seed: crypto.getRandomValues(new Uint32Array(8)),
+          startingLP: this.settings().startingLP,
         });
+        this.startClock();
         let update: RoomEngineUpdate;
         try {
           update = await session.start();
@@ -489,7 +549,8 @@ export class DuelRoom extends DurableObject<Env> {
       });
       return;
     }
-    room.board = createBoard([s0.name, s1.name], [s0.deck, s1.deck], first, cryptoRng);
+    room.board = createBoard([s0.name, s1.name], [s0.deck, s1.deck], first, cryptoRng, this.settings().startingLP);
+    this.startClock();
     room.stage = "duel";
     room.chooser = null;
     room.winner = null;
@@ -522,6 +583,7 @@ export class DuelRoom extends DurableObject<Env> {
     if (room.stage !== "finished") throw new RoomError("Rematch is offered when a duel ends.");
     if (!room.seats[0] || !room.seats[1]) throw new RoomError("Waiting for an opponent to sit down.");
     room.rematch[p] = true;
+    if (this.hasBot()) room.rematch[BOT_SEAT] = true;
     this.systemLine(`${a.name} wants a rematch.`);
     if (room.rematch[0] && room.rematch[1]) {
       room.rematch = [false, false];
@@ -535,6 +597,8 @@ export class DuelRoom extends DurableObject<Env> {
         room.chooser = other(room.winner); // the loser of the last duel picks
         this.systemLine(`Rematch! ${room.seats[room.chooser]!.name} lost the last duel and chooses who goes first.`);
       }
+      await this.botActs();
+      if ((room.stage as DuelStage) === "duel") return;   // the bot started it (startDuel saved and broadcast)
     }
     await this.save();
     this.broadcastAll();
@@ -573,7 +637,7 @@ export class DuelRoom extends DurableObject<Env> {
   private async sendHostJob(ws: WebSocket) {
     const room = this.room!;
     const snapshot = await this.ctx.storage.get(ENGINE_KEY);
-    this.send(ws, { t: "engineHost", start: room.hostStart, snapshot: snapshot ?? undefined });
+    this.send(ws, { t: "engineHost", start: room.hostStart, snapshot: snapshot ?? undefined, bot: this.hasBot() ? BOT_SEAT : undefined });
   }
 
   private async dropEngine() {
@@ -604,10 +668,91 @@ export class DuelRoom extends DurableObject<Env> {
     await this.save();
     this.broadcastAll();
     if (u.finished) await this.updateIndex();
+    // server-run engine: the room plays the bot's turns (in host mode the host's engine does)
+    const botPrompt = !this.hostMode() && this.hasBot() ? room.prompts?.find((x) => x.seat === BOT_SEAT) : undefined;
+    if (botPrompt) setTimeout(() => void this.botRespond(botPrompt.prompt), BOT_DELAY_MS);
+  }
+
+  private settings(): RoomSettings {
+    return this.room?.settings ?? DEFAULT_SETTINGS;
+  }
+
+  /** Who the duel is waiting on right now (whose clock runs): manual = the turn player,
+   *  rules-enforced = whoever has a prompt. Bots and host-engine thinking time don't count. */
+  private waitingOn(): Seat | null {
+    const room = this.room!;
+    if (room.stage !== "duel" || !room.board) return null;
+    const seat = room.mode === "engine" ? room.prompts?.[0]?.seat ?? null : room.board.turnPlayer;
+    return seat !== null && room.seats[seat]?.bot ? null : seat;
+  }
+
+  private startClock() {
+    const room = this.room!;
+    const ms = this.settings().turnTimerSec * 1000;
+    room.clock = ms ? { remaining: [ms, ms], running: null, since: Date.now(), turn: 0 } : undefined;
+  }
+
+  /** Charge elapsed time to whoever was on the clock, refill at a new turn, switch the clock,
+   *  and end the duel if someone ran out. Called on every broadcast and on alarms. */
+  private tickClock() {
+    const room = this.room!;
+    const c = room.clock;
+    if (!c || room.stage !== "duel" || !room.board) return;
+    const now = Date.now();
+    if (c.running !== null) c.remaining[c.running] = Math.max(0, c.remaining[c.running] - (now - c.since));
+    c.since = now;
+    if (c.running !== null && c.remaining[c.running] <= 0) {
+      const loser = c.running;
+      c.running = null;
+      this.finish(other(loser), `${room.seats[loser]?.name ?? "A player"} ran out of time.`);
+      void this.save();
+      void this.updateIndex();
+      return;
+    }
+    if (room.board.turn !== c.turn) {                 // new turn: the turn player gets a full clock
+      c.turn = room.board.turn;
+      c.remaining[room.board.turnPlayer] = this.settings().turnTimerSec * 1000;
+    }
+    c.running = this.waitingOn();
+    // persist right away: the room hibernates between messages and must not wake with a stale clock
+    void this.ctx.storage.put("room", room);
+  }
+
+  private hasBot(): boolean {
+    return !!this.room?.seats[BOT_SEAT]?.bot;
+  }
+
+  private async botRespond(prompt: unknown) {
+    await this.withEngine(async () => {
+      const room = this.room;
+      if (!room || room.stage !== "duel" || room.mode !== "engine") return;
+      if (!room.prompts?.some((x) => x.seat === BOT_SEAT && x.prompt === prompt)) return;   // already answered / superseded
+      const session = await this.engineSession();
+      await this.applyEngineUpdate(await session.respond(BOT_SEAT, botResponse(prompt as Parameters<typeof botResponse>[0], Math.random)));
+    }).catch((e) => console.error("bot move failed", e));
+  }
+
+  /** The bot's part of the pre-duel flow: a coin decides who picks turn order, and it picks at random. */
+  private async botActs() {
+    const room = this.room!;
+    if (!this.hasBot() || !room.seats[HOST_SEAT]) return;
+    if (room.stage === "rps") {
+      const winner = cryptoRng.int(2) as Seat;
+      room.rps = [null, null];
+      room.stage = "choose";
+      room.chooser = winner;
+      this.systemLine(`Coin toss: ${room.seats[winner]!.name} chooses who goes first.`);
+    }
+    if (room.stage === "choose" && room.chooser === BOT_SEAT) {
+      const first = cryptoRng.int(2) as Seat;
+      this.systemLine(`The bot chooses to go ${first === BOT_SEAT ? "first" : "second"}.`);
+      await this.startDuel(first);
+    }
   }
 
   private finish(winner: Seat | null, reason: string) {
     const room = this.room!;
+    if (room.clock) room.clock.running = null;
     if (room.mode === "engine") {
       room.prompts = [];
       room.hostStart = undefined;
@@ -691,6 +836,8 @@ export class DuelRoom extends DurableObject<Env> {
     if (!room) return;
     const times = room.seats.filter((s) => s && !s.connected && s.leftAt !== null).map((s) => s!.leftAt! + SEAT_GRACE_MS);
     if (this.live().filter((w) => w !== except).length === 0) times.push(Date.now() + (room.seats.some(Boolean) ? SEAT_GRACE_MS : 60_000));
+    const c = room.clock;
+    if (c && c.running !== null && room.stage === "duel") times.push(c.since + c.remaining[c.running] - 1000);   // fire just as the clock runs out
     if (times.length) await this.ctx.storage.setAlarm(Math.min(...times) + 1000);
   }
 
@@ -724,14 +871,14 @@ export class DuelRoom extends DurableObject<Env> {
       roomId: room.roomId, name: room.name, mode: room.mode, host: room.host,
       players: room.seats.filter(Boolean).map((s) => s!.name),
       status: !both ? "waiting" : room.stage === "finished" ? "finished" : "dueling",
-      created_at: room.created_at, spectators: this.spectatorCount(except),
+      created_at: room.created_at, spectators: this.spectatorCount(except), settings: this.settings(),
     };
   }
 
   private session(viewer: Seat | null, except?: WebSocket): SessionInfo {
     const room = this.room!;
     const seats = room.seats.map((s) => s && {
-      name: s.name, connected: s.connected, ready: !!s.deck,
+      name: s.name, connected: s.connected, ready: !!s.deck, bot: s.bot || undefined,
       deck: s.deck ? { main: s.deck.main.length, extra: s.deck.extra.length, side: s.deck.side.length } : undefined,
     }) as SessionInfo["seats"];
     const showNotice = room.mode === "engine" && !engineAvailable();
@@ -743,6 +890,10 @@ export class DuelRoom extends DurableObject<Env> {
         last: room.rpsLast,
       },
       chooser: room.chooser, winner: room.winner, endReason: room.endReason, rematch: room.rematch,
+      settings: this.settings(),
+      timer: room.clock && this.settings().turnTimerSec && (room.stage === "duel" || room.stage === "finished")
+        ? { limitSec: this.settings().turnTimerSec, remaining: room.clock.remaining, running: room.clock.running, since: room.clock.since, serverNow: Date.now() }
+        : undefined,
       engineNotice: showNotice ? ENGINE_NOTICE : undefined,
       switchVotes: room.mode === "engine" ? room.switchVotes : undefined,
       engineHost: room.mode === "engine" && this.hostMode() ? HOST_SEAT : undefined,
@@ -770,6 +921,8 @@ export class DuelRoom extends DurableObject<Env> {
   private broadcastAll() {
     const room = this.room;
     if (!room) return;
+    this.tickClock();
+    void this.scheduleAlarm();
     for (const ws of this.ctx.getWebSockets()) {
       const seat = this.att(ws).seat;
       this.send(ws, { t: "session", session: this.session(seat) });
@@ -784,11 +937,11 @@ export class DuelRoom extends DurableObject<Env> {
     const info = this.roomInfo(except);
     try {
       await this.env.DB.prepare(
-        `INSERT INTO rooms (room_id, name, mode, host, players, status, spectators, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO rooms (room_id, name, mode, host, players, status, spectators, created_at, updated_at, settings)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(room_id) DO UPDATE SET name = excluded.name, mode = excluded.mode, players = excluded.players,
-           status = excluded.status, spectators = excluded.spectators, updated_at = excluded.updated_at`,
-      ).bind(info.roomId, info.name, info.mode, info.host, JSON.stringify(info.players), info.status, info.spectators ?? 0, info.created_at, new Date().toISOString()).run();
+           status = excluded.status, spectators = excluded.spectators, updated_at = excluded.updated_at, settings = excluded.settings`,
+      ).bind(info.roomId, info.name, info.mode, info.host, JSON.stringify(info.players), this.hasBot() || this.settings().visibility === "unlisted" ? "unlisted" : info.status, info.spectators ?? 0, info.created_at, new Date().toISOString(), JSON.stringify(this.settings())).run();
     } catch (e) {
       console.error("rooms index update failed", e);
     }

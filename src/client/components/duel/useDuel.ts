@@ -98,7 +98,7 @@ export function useDuelSocket(roomId: string) {
               (hostStatus) => setConn((c) => ({ ...c, hostStatus })),
             ));
             const m = msg;
-            host.current.then((h) => (m.t === "engineHost" ? h.run({ start: m.start, snapshot: m.snapshot }) : h.respond(m.seat, m.response)))
+            host.current.then((h) => (m.t === "engineHost" ? h.run({ start: m.start, snapshot: m.snapshot, bot: m.bot }) : h.respond(m.seat, m.response)))
               .catch((err) => setConn((c) => ({ ...c, hostStatus: `Could not load the rules engine: ${(err as Error)?.message ?? err}` })));
             break;
           }

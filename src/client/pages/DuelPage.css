@@ -22,3 +22,7 @@
 
 .duel-engine { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
 .duel-engine-wait { margin: 0; padding: 10px 12px; border: 1px dashed var(--border); border-radius: var(--radius); }
+
+/* phase track: passed phases look done, the current one stands out */
+.duel-phases button.is-past { opacity: 0.45; text-decoration: line-through; text-decoration-thickness: 1px; }
+.duel-phases button:disabled:not(.is-active) { cursor: not-allowed; }

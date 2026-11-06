@@ -3,6 +3,10 @@ import { useCallback, useEffect, useMemo, useState, type DragEvent, type MouseEv
 import { Link, useParams } from "react-router-dom";
 import type { Card, Deck, Section } from "../../shared/types.ts";
 import { toYdk } from "../../shared/ydk.ts";
+import { toYdke } from "../../shared/ydke.ts";
+import { TestHand } from "../components/library/TestHand.tsx";
+import { DeckStats } from "../components/library/DeckStats.tsx";
+import "../components/library/deck-tools.css";
 import { isExtraDeckType, unknownCard } from "../../shared/library.ts";
 import { useDeckStore } from "../store/deckStore.ts";
 import { catalog, ensureCards } from "../components/cards/catalog.ts";
@@ -83,6 +87,7 @@ export function DeckBuilderPage() {
   const [menu, setMenu] = useState<Menu | null>(null);
   const [over, setOver] = useState<Section | null>(null);
   const [tab, setTab] = useState<"search" | "deck">("deck");
+  const [testHand, setTestHand] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -189,13 +194,21 @@ export function DeckBuilderPage() {
 
   return (
     <section className="deck-builder">
+      {testHand && <TestHand main={deck.main} cardOf={cardOf} onClose={() => setTestHand(false)} />}
       <div className="db-head">
         <Link to="/decks" className="muted db-back">← Decks</Link>
         <input className="db-name" value={deck.name} maxLength={100} onChange={(e) => update((d) => ({ ...d, name: e.target.value }))} aria-label="Deck name" />
         <div className="db-actions">
           <button type="button" className="primary" onClick={() => void save()} disabled={saving || !dirty}>{saving ? "Saving…" : dirty ? "Save" : "Saved"}</button>
           <button type="button" onClick={() => update((d) => ({ ...d, main: sortSection(d.main), extra: sortSection(d.extra), side: sortSection(d.side) }))}>Sort</button>
+          <button type="button" disabled={deck.main.length < 5} onClick={() => setTestHand(true)} title="Draw a random opening hand">Test hand</button>
           <button type="button" onClick={() => downloadText(`${safeFileName(deck.name)}.ydk`, toYdk(deck))}>Export .ydk</button>
+          <button type="button" disabled={!total} title="Copy a ydke:// link (EDOPro, YGOPRODeck, Discord)" onClick={() => {
+            navigator.clipboard.writeText(toYdke(deck)).then(
+              () => setMessage("YDKe link copied: paste it into EDOPro, YGOPRODeck or a chat."),
+              () => setMessage("Couldn't copy to the clipboard in this browser."),
+            );
+          }}>Copy YDKe</button>
           <button type="button" disabled={!total} onClick={() => { if (window.confirm("Remove every card from this deck?")) update((d) => ({ ...d, main: [], extra: [], side: [] })); }}>Clear</button>
         </div>
       </div>
@@ -223,6 +236,7 @@ export function DeckBuilderPage() {
               </details>
             )}
           </div>
+          {deck.main.length > 0 && <DeckStats main={deck.main} cardOf={cardOf} />}
           {SECTIONS.map((s) => {
             const ids = deck[s.key];
             const n = ids.length;

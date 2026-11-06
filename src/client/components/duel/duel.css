@@ -259,3 +259,13 @@ kbd { font: 11px/1 var(--font); border: 1px solid var(--border); border-bottom-w
   .duel-toasts { top: auto; bottom: 72px; right: 8px; left: 8px; align-items: stretch; }
   .duel-viewer-grid { --cw: 60px; grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); }
 }
+
+.duel-bot { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; padding: 10px 12px; border: 1px dashed var(--border); border-radius: var(--radius); }
+
+/* turn timer */
+.duel-timers { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 6px; font-size: 13px; }
+.turn-timer { font-variant-numeric: tabular-nums; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+.turn-timer.is-running { color: var(--fg); border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.turn-timer.is-low.is-running { color: var(--danger); border-color: var(--danger); animation: turn-timer-pulse 1s ease-in-out infinite; }
+@keyframes turn-timer-pulse { 50% { box-shadow: 0 0 0 4px var(--danger-soft); } }
+@media (prefers-reduced-motion: reduce) { .turn-timer.is-low.is-running { animation: none; } }
