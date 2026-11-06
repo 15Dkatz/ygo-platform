@@ -42,7 +42,7 @@ describe("actions on cards", () => {
   });
   it("labels chain windows and attacks", () => {
     const chain = actionsByUid({ ...base, kind: "selectChain", forced: false, cards: [{ ...ref("spelltrap", 1), desc: "Negate the attack" }] });
-    expect(chain.get("e0-8-1")![0]).toEqual({ label: "Activate: Negate the attack", response: { kind: "selectChain", index: 0 } });
+    expect(chain.get("e0-8-1")![0]).toEqual({ label: "Activate", response: { kind: "selectChain", index: 0 } });
     const battle = actionsByUid({ ...base, kind: "battle", activates: [], attacks: [{ ...ref("monster", 2), direct: true }], canMain2: true, canEnd: true });
     expect(battle.get("e0-4-2")![0].label).toMatch(/^Attack/);
   });

@@ -95,7 +95,9 @@ export function engineIntents(events: EngineEvent[], prev: BoardState, next: Boa
         if (a.zone === b.zone && a.uid === b.uid) return;
         const up = !hiddenLoc(to) && to.location !== "extra" && ev.code > 0 || (to.location === "hand" && ev.code > 0);
         const flip = !!b.uid && to.location !== "overlay" && finalAt(i, b.uid);
-        out.push({ t: "move", from: a, to: b, code: ev.code, faceUp: up, flip, reveal: up && hiddenLoc(from) && to.location !== "hand", style: moveStyle(from.location, to.location, resolving !== null) });
+        // a resolved Spell / Trap going to the GY isn't "destroyed": no shatter for chain cards leaving their zone
+        const chainCard = [...chain.uid.values()].includes(refUid(from)) && (from.location === "spelltrap" || from.location === "field");
+        out.push({ t: "move", from: a, to: b, code: ev.code, faceUp: up, flip, reveal: up && hiddenLoc(from) && to.location !== "hand", style: chainCard ? undefined : moveStyle(from.location, to.location, resolving !== null) });
         return;
       }
       case "summon": {

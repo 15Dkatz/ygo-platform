@@ -48,7 +48,7 @@ export function actionsByUid(p: EnginePrompt): Map<string, CardAction[]> {
     const labels = activateLabels(p.activates, p.activates.map(refUid), false);
     p.activates.forEach((r, index) => add(r, { label: labels[index], response: { kind: "battle", action: "activate", index } }));
   } else if (p.kind === "selectChain") {
-    const labels = activateLabels(p.cards, p.cards.map(refUid), true);
+    const labels = activateLabels(p.cards, p.cards.map(refUid), false);
     p.cards.forEach((r, index) => add(r, { label: labels[index], response: { kind: "selectChain", index } }));
   }
   return out;

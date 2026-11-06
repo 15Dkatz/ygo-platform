@@ -60,10 +60,11 @@ function DropZone({ at, ui, className, label, children, onClick }: { at: ZoneRef
   const canDrop = ui.you !== null;
   const key = zoneKeyOf(at);
   const place = ui.marks?.places.has(key);
+  const oppSide = at.zone !== "extraMonster" && at.player !== ui.me;
   const pick = ui.marks?.piles.get(key);
   return (
     <div
-      className={`duel-zone ${className} ${over ? "is-over" : ""} ${ui.pending || place ? "is-targetable" : ""} ${place ? "is-place" : ""} ${pick ? "is-pick" : ""}`}
+      className={`duel-zone ${className} ${over ? "is-over" : ""} ${ui.pending || place ? "is-targetable" : ""} ${place ? "is-place" : ""} ${pick ? "is-pick" : ""} ${oppSide ? "is-opp-side" : ""}`}
       data-zone={at.zone}
       data-player={at.player}
       data-slot={at.slot}
@@ -87,7 +88,7 @@ function DropZone({ at, ui, className, label, children, onClick }: { at: ZoneRef
 function Slot({ card, at, ui, label, className = "" }: { card: CardInstance | null; at: ZoneRef; ui: BoardUI; label: string; className?: string }) {
   const controller = at.zone === "extraMonster" ? (card?.controller ?? card?.owner) : at.player;
   return (
-    <DropZone at={at} ui={ui} className={`duel-slot ${className}`} label={card ? undefined : label}>
+    <DropZone at={at} ui={ui} className={`duel-slot ${className} ${at.zone === "extraMonster" && card && controller !== ui.me ? "is-opp-side" : ""}`} label={card ? undefined : label}>
       {card && (
         <CardView
           card={card}
@@ -149,10 +150,11 @@ function Hand({ cards, player, ui, own }: { cards: CardInstance[]; player: Seat;
 }
 
 /** Both fields: opponent mirrored at the top, the 2 shared Extra Monster Zones in the middle. */
-export function Board({ board, ui, top, bottom, rail }: {
+export function Board({ board, ui, top, bottom, centre, side }: {
   board: BoardState; ui: BoardUI;
-  /** Drawn on the board itself: the opponent's plate (top edge), yours (bottom edge), and the turn / phase rail. */
-  top?: ReactNode; bottom?: ReactNode; rail?: ReactNode;
+  /** Drawn on the board itself: the opponent's plate (beside their Spell & Trap row), yours (beside yours),
+   *  the phase track (between the Extra Monster Zones) and your turn controls (right of your field). */
+  top?: ReactNode; bottom?: ReactNode; centre?: ReactNode; side?: ReactNode;
 }) {
   const me = ui.me;
   const opp: Seat = me === 0 ? 1 : 0;
@@ -166,9 +168,9 @@ export function Board({ board, ui, top, bottom, rail }: {
   return (
     <div className="duel-board-wrap">
       <Ambience />
-      {top && <div className="duel-plate duel-plate-top">{top}</div>}
       <Hand cards={P[opp].hand} player={opp} ui={ui} own={ui.you === opp} />
       <div className="duel-field">
+        {top && <div className="duel-plate duel-plate-top">{top}</div>}
         {/* opponent: S/T row then monster row, mirrored */}
         <Pile cards={P[opp].deck} at={{ zone: "deck", player: opp }} ui={ui} />
         {[...idx].reverse().map((i) => slot(opp, "spelltrap", i, "S/T"))}
@@ -181,7 +183,7 @@ export function Board({ board, ui, top, bottom, rail }: {
         <Pile cards={P[opp].banished} at={{ zone: "banished", player: opp }} ui={ui} />
         <div className="duel-gap" />
         <Slot card={board.extraMonster[emzLeft]} at={{ zone: "extraMonster", player: me, slot: emzLeft }} ui={ui} label="Extra Monster" className="duel-emz" />
-        <div className="duel-gap" />
+        <div className="duel-gap duel-gap-centre">{centre}</div>
         <Slot card={board.extraMonster[emzRight]} at={{ zone: "extraMonster", player: me, slot: emzRight }} ui={ui} label="Extra Monster" className="duel-emz" />
         <div className="duel-gap" />
         <Pile cards={P[me].banished} at={{ zone: "banished", player: me }} ui={ui} />
@@ -193,10 +195,10 @@ export function Board({ board, ui, top, bottom, rail }: {
         <Pile cards={P[me].extra} at={{ zone: "extra", player: me }} ui={ui} />
         {idx.map((i) => slot(me, "spelltrap", i, "S/T"))}
         <Pile cards={P[me].deck} at={{ zone: "deck", player: me }} ui={ui} />
+        {bottom && <div className="duel-plate duel-plate-bottom">{bottom}</div>}
+        {side && <div className="duel-side-controls">{side}</div>}
       </div>
       <Hand cards={P[me].hand} player={me} ui={ui} own={ui.you === me} />
-      {bottom && <div className="duel-plate duel-plate-bottom">{bottom}</div>}
-      {rail && <div className="duel-rail">{rail}</div>}
     </div>
   );
 }

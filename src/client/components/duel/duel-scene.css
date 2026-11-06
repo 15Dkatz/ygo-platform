@@ -106,8 +106,39 @@
 .duel-lpbar { display: block; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--danger) 25%, transparent); overflow: hidden; margin: 3px 0 2px; width: 100%; }
 .duel-lpbar i { display: block; height: 100%; background: linear-gradient(90deg, var(--danger), var(--warn) 50%, var(--ok)); transition: width .45s ease; }
 .duel-pinfo { flex: 1; }
-.duel-rail { display: flex; flex-direction: column; gap: 6px; }
-.duel-rail .duel-engine { margin-top: 0; }
+/* phones / narrow: plates and controls are rows of the field grid */
+.duel-field > .duel-plate, .duel-field > .duel-side-controls { grid-column: 1 / -1; }
+.duel-side-controls { display: flex; flex-direction: column; gap: 6px; }
+.duel-side-controls .duel-engine { margin-top: 0; }
+.duel-plate .duel-playerbar .duel-lp { font-size: 20px; }
+.duel-timer-slot:empty { display: none; }
+
+/* opponent's half faces them, like across a real table (badges / counters stay upright) */
+.duel-zone.is-opp-side .duel-card-inner { rotate: 180deg; }
+
+/* phase track between the Extra Monster Zones */
+.duel-gap-centre { display: flex; align-items: center; justify-content: center; position: relative; }
+.duel-phasetrack {
+  display: flex; flex-direction: column; align-items: stretch; gap: 2px; padding: 4px; width: 100%;
+  border-radius: 10px; background: var(--plate-bg); border: 1px solid var(--mat-edge); backdrop-filter: blur(4px);
+}
+.duel-phasetrack-turn { text-align: center; font-size: clamp(9px, calc(var(--cw) * .13), 13px); font-weight: 800; color: var(--muted); letter-spacing: .05em; }
+.duel-phasetrack button {
+  padding: 0; height: calc(var(--cw) * .17); min-height: 15px; font-size: clamp(8px, calc(var(--cw) * .12), 12px); font-weight: 800; letter-spacing: .04em;
+  border-radius: 999px; border: 1px solid transparent; background: transparent; color: var(--muted);
+}
+.duel-phasetrack button:disabled { opacity: 1; cursor: default; }
+.duel-phasetrack button.is-past { color: color-mix(in srgb, var(--muted) 50%, transparent); text-decoration: line-through; }
+.duel-phasetrack button.is-next:not(:disabled) { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 60%, transparent); cursor: pointer; }
+.duel-phasetrack button.is-next:not(:disabled):hover { background: var(--accent-soft); }
+.duel-phasetrack button.is-active { background: var(--accent); color: var(--accent-fg); }
+
+/* Next phase / End turn */
+.duel-turnctl { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+.duel-turnctl .duel-move { text-align: center; }
+.duel-next-phase { display: flex; flex-direction: column; align-items: center; padding: 8px 10px; font-weight: 800; border-color: var(--accent); color: var(--accent); }
+.duel-next-phase small { font-weight: 600; font-size: 11px; color: var(--muted); }
+.duel-end-turn { padding: 8px 10px; font-weight: 800; }
 
 /* ---------- log drawer + floating preview (PC) ---------- */
 .duel-drawer-btn { position: relative; font-size: 12px; padding: 4px 10px; display: none; }
@@ -133,7 +164,7 @@
     flex: 1; min-height: 0; container-type: size; padding: 0; border-radius: 14px;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     /* card size: fit 5 field rows + the two hands' visible parts in the height, plates + rail beside it */
-    --cw: max(44px, min(122px, calc((100cqw - 500px) / 8.3), calc((100cqh - 18px) / 10)));
+    --cw: max(44px, min(122px, calc((100cqw - 470px) / 8.4), calc((100cqh - 18px) / 10)));
   }
   .duel-page.is-live .duel-field {
     --cw: inherit; --gap: calc(var(--cw) * .09);
@@ -146,26 +177,22 @@
   .duel-page.is-live .duel-hand.is-own .duel-card:hover { translate: 0 -34%; }
   .duel-page.is-live .duel-hand.is-own .duel-card.is-actionable { translate: 0 -12%; }
   .duel-page.is-live .duel-hand .duel-zone-label { display: none; }
-  /* plates in the left corners, the turn / phase rail on the right */
-  .duel-page.is-live .duel-plate { position: absolute; left: 12px; width: min(290px, calc((100cqw - var(--cw) * 8.1) / 2 - 24px)); z-index: 4; }
-  .duel-page.is-live .duel-plate-top { top: 12px; }
-  .duel-page.is-live .duel-plate-bottom { bottom: 12px; }
-  .duel-page.is-live .duel-playerbar { flex-wrap: wrap; padding: 10px 12px; border-radius: 12px; }
-  .duel-page.is-live .duel-playerbar .duel-lp { margin-left: 0; width: 100%; text-align: left; font-size: 30px; padding: 2px 10px; }
-  .duel-page.is-live .duel-rail {
-    position: absolute; right: 12px; top: 50%; transform: translateY(-50%); z-index: 4;
-    width: min(190px, calc((100cqw - var(--cw) * 8.1) / 2 - 24px)); max-height: calc(100% - 24px); overflow: auto;
-    padding: 10px; border-radius: 12px; background: var(--plate-bg); border: 1px solid var(--mat-edge); backdrop-filter: blur(6px);
+  /* compact plates beside each player's Spell & Trap row, controls right of your field */
+  .duel-page.is-live .duel-field { position: relative; }
+  .duel-page.is-live .duel-field > .duel-plate { position: absolute; right: calc(100% + 14px); width: 210px; z-index: 4; }
+  .duel-page.is-live .duel-plate-top { top: 0; }
+  .duel-page.is-live .duel-plate-bottom { bottom: 0; }
+  .duel-page.is-live .duel-playerbar { flex-wrap: wrap; gap: 6px 8px; padding: 8px 10px; border-radius: 12px; }
+  .duel-page.is-live .duel-playerbar .duel-avatar { width: 28px; height: 28px; font-size: 13px; }
+  .duel-page.is-live .duel-playerbar .duel-lp { margin-left: 0; width: 100%; min-width: 0; text-align: left; font-size: 24px; padding: 1px 8px; }
+  .duel-page.is-live .duel-field > .duel-side-controls {
+    position: absolute; left: calc(100% + 14px); bottom: 0; width: 180px; z-index: 4; max-height: calc(var(--cw) * 4.6); overflow: auto;
   }
-  .duel-page.is-live .duel-rail .duel-phasebar { flex-direction: column; align-items: stretch; gap: 6px; }
-  .duel-page.is-live .duel-rail .duel-turninfo { text-align: center; }
-  .duel-page.is-live .duel-rail .duel-move { text-align: center; }
-  .duel-page.is-live .duel-rail .duel-phases { flex-direction: column; margin-left: 0; gap: 3px; }
-  .duel-page.is-live .duel-rail .duel-phases button { width: 100%; padding: 5px 8px; }
-  .duel-page.is-live .duel-rail .duel-phases button.primary { margin-top: 6px; padding: 8px; font-size: 13px; }
-  .duel-page.is-live .duel-rail .duel-engine-status, .duel-page.is-live .duel-rail .duel-engine-wait { font-size: 12px; padding: 6px 8px; }
-  .duel-page.is-live .duel-rail .duel-tools { gap: 4px; }
-  .duel-page.is-live .duel-rail .duel-tools button { font-size: 11px; padding: 3px 7px; flex: 1 1 auto; }
+  .duel-page.is-live .duel-side-controls .duel-engine-status, .duel-page.is-live .duel-side-controls .duel-engine-wait { font-size: 12px; padding: 6px 8px; background: var(--plate-bg); }
+  .duel-page.is-live .duel-side-controls .duel-tools { gap: 4px; }
+  .duel-page.is-live .duel-side-controls .duel-tools button { font-size: 11px; padding: 3px 7px; flex: 1 1 auto; background: var(--plate-bg); }
+  .duel-page.is-live .duel-gap-centre { overflow: visible; }
+  .duel-page.is-live .duel-phasetrack { position: absolute; width: calc(var(--cw) * .95); }
 
   /* log + chat: a drawer on the right, closed by default */
   .duel-page.is-live .duel-side {

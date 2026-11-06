@@ -16,6 +16,7 @@ export function useBoardAnimations() {
   const engineMode = useRef(false);
   const animator = useRef<BoardAnimator>(null);
   animator.current ??= new BoardAnimator();
+  if (typeof window !== "undefined") (window as unknown as { __duelAnimator?: BoardAnimator }).__duelAnimator = animator.current;   // debugging aid
   /** Open chain: link -> uid of the card that started it. */
   const chain = useRef<EngineChain>({ uid: new Map(), code: new Map() });
   /** uid -> chain link numbers on that card ("1", or "1·3" when a card activates twice). */
