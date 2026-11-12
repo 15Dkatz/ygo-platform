@@ -6,6 +6,7 @@
 //     the current board + open prompt (call it once after waking, before anything else);
 //   - `exportBoard()` / `snapshot()` are sync and valid once `start()` has resolved.
 
+import { maskPrompt } from "./promptMask.ts";
 import type { OcgCoreSync, OcgResponse } from "ocgcore-wasm";
 import type { BoardState } from "../../../shared/duel.ts";
 import type { EngineEvent, EnginePrompt, EngineResponse, Seat } from "../../../shared/enginePrompts.ts";
@@ -38,6 +39,8 @@ export interface RoomEngineOptions {
   first: Seat;
   seed: Uint32Array;
   startingLP?: number;
+  /** Demo rooms only: decks keep their order (see DuelSetup.stackedForTesting). */
+  stacked?: boolean;
 }
 
 const toJson = (r: OcgResponse) => JSON.parse(JSON.stringify(r, (_k, v) => (typeof v === "bigint" ? { $big: v.toString() } : v)));
@@ -52,7 +55,10 @@ function seedFrom(words: Uint32Array): DuelSetup["seed"] {
 export interface RoomEngineDeps { core: () => Promise<OcgCoreSync>; data: () => EngineData }
 
 export function startRoomSession(deps: RoomEngineDeps, opts: RoomEngineOptions): RoomEngineSession {
-  const setup: DuelSetup = { seed: seedFrom(opts.seed), decks: opts.decks, names: opts.names, first: opts.first, ...(opts.startingLP ? { startingLP: opts.startingLP } : {}) };
+  const setup: DuelSetup = {
+    seed: seedFrom(opts.seed), decks: opts.decks, names: opts.names, first: opts.first,
+    ...(opts.startingLP ? { startingLP: opts.startingLP } : {}), ...(opts.stacked ? { stackedForTesting: true } : {}),
+  };
   return roomSession(deps, { setup, responses: [] });
 }
 
@@ -70,7 +76,8 @@ function roomSession(deps: RoomEngineDeps, saved: SavedDuel): RoomEngineSession 
     const pub = eventsFor(eventsFor(events, 0), 1);   // what both players may see
     const u: RoomEngineUpdate = {
       board: d.toBoardState(null),
-      prompts: d.prompt ? [{ seat: d.prompt.player, prompt: d.prompt }] : [],
+      // the opponent's hidden cards are blanked in the prompt (the core names them all)
+      prompts: d.prompt ? [{ seat: d.prompt.player, prompt: maskPrompt(d.prompt) }] : [],
       log: pub.map((e) => describeEvent(e, names, (c) => d.cardName(c))).filter((x): x is string => !!x),
       events: [eventsFor(events, 0), eventsFor(events, 1)],
     };
@@ -123,7 +130,7 @@ export function describeEvent(e: EngineEvent, names: [string, string], cardName:
     case "chain": return `Chain ${e.link}: ${card(e.card.code)}${e.desc ? ` — ${e.desc}` : ""}`;
     case "chainNegated": return `Chain ${e.link} negated`;
     case "lp": return e.delta ? `${names[e.player]} ${e.delta < 0 ? "lost" : "gained"} ${Math.abs(e.delta)} LP (${e.lp})` : null;
-    case "attack": return `${card(e.attacker.code)} attacks ${e.target ? card(e.target.code) : "directly"}`;
+    case "attack": return `${names[e.attacker.controller]}'s ${card(e.attacker.code)} attacks ${e.target ? (e.target.code ? card(e.target.code) : "a face-down monster") : "directly"}`;
     case "coin": return `${names[e.player]} tossed a coin: ${e.results.map((h) => (h ? "heads" : "tails")).join(", ")}`;
     case "dice": return `${names[e.player]} rolled ${e.results.join(", ")}`;
     case "move":

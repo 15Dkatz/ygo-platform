@@ -62,6 +62,9 @@ export function useDuelSocket(roomId: string, hooks?: DuelSocketHooks) {
   hooksRef.current = hooks;
   const boardRef = useRef<BoardState | null>(null);
   const eventsRef = useRef<EngineEvent[] | null>(null);
+  // engine events since the previous prompt, and the ones that led to the current prompt (auto-pass)
+  const sincePrompt = useRef<EngineEvent[]>([]);
+  const promptEvents = useRef<EngineEvent[]>([]);
   const [conn, setConn] = useState<DuelConn>({ status: "connecting", room: null, you: null, session: null, board: null, chat: [], peek: null, toasts: [], prompt: null, hostStatus: null });
   const wsRef = useRef<WebSocket | null>(null);
   const queue = useRef<ClientMsg[]>([]);
@@ -110,6 +113,7 @@ export function useDuelSocket(roomId: string, hooks?: DuelSocketHooks) {
           case "engineEvents": {
             const events = (Array.isArray(msg.events) ? msg.events : []) as EngineEvent[];
             eventsRef.current = [...(eventsRef.current ?? []), ...events];
+            sincePrompt.current.push(...events);
             // coins and dice get the same toasts as manual mode
             for (const ev of events) {
               if (ev.e === "coin") ev.results.forEach((heads) => toast({ event: { kind: "coin", player: ev.player, heads } }));
@@ -120,7 +124,10 @@ export function useDuelSocket(roomId: string, hooks?: DuelSocketHooks) {
           case "chat": setConn((c) => ({ ...c, chat: [...c.chat.slice(-199), msg] })); break;
           case "peek": setConn((c) => ({ ...c, peek: { title: msg.title, cards: msg.cards } })); break;
           case "event": toast({ event: msg.event }, msg.event.kind === "reveal" ? 7000 : 4000); break;
-          case "prompt": setConn((c) => ({ ...c, prompt: (msg.prompt as EnginePrompt | null) ?? null })); break;
+          case "prompt":
+            if (msg.prompt) { promptEvents.current = sincePrompt.current; sincePrompt.current = []; }
+            setConn((c) => ({ ...c, prompt: (msg.prompt as EnginePrompt | null) ?? null }));
+            break;
           case "engineHost":
           case "engineRespond": {
             host.current ??= import("../engine/hostRuntime.ts").then((m) => new m.EngineHost(
@@ -165,7 +172,7 @@ export function useDuelSocket(roomId: string, hooks?: DuelSocketHooks) {
   sendRef.current = send;
 
   const clearPeek = useCallback(() => setConn((c) => ({ ...c, peek: null })), []);
-  return { conn, send, toast, clearPeek };
+  return { conn, send, toast, clearPeek, promptEvents };
 }
 
 // ---------- card data ----------

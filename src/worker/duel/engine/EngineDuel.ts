@@ -32,6 +32,9 @@ export interface DuelSetup {
   startingLP?: number;
   startingHand?: number;
   drawPerTurn?: number;
+  /** Keep the Main Decks in the given order (first card = top of the Deck) instead of shuffling: for tests,
+   *  and demo rooms vs a bot (whose decks put combo pieces in the opening hands). Never in PvP rooms. */
+  stackedForTesting?: boolean;
 }
 
 /** Everything needed to rebuild the duel; store this (it is plain JSON). */
@@ -47,6 +50,8 @@ export function randomSeed(): DuelSetup["seed"] {
 }
 
 const MAX_REBUILDS = 8;
+
+const zoneKeyOf = (c: { controller: number; location: number; sequence: number }) => `${c.controller}-${c.location}-${c.sequence}`;
 
 /** Deterministic Fisher-Yates shuffle of a deck list from the duel seed (mulberry32 per seat). */
 export function shuffled(cards: number[], seed: DuelSetup["seed"], seat: number): number[] {
@@ -182,7 +187,9 @@ export class EngineDuel {
       });
       // The core does not shuffle the Main Decks at the start (every duel opened with the same
       // hands). Shuffle them here from the duel's seed, so a replay rebuilds the same order.
-      for (const c of shuffled(s.decks[seat].main, s.seed, seat)) add(c, OcgLocation.DECK);
+      // (each new card goes on top, so a stacked deck is added bottom card first)
+      const order = s.stackedForTesting ? [...s.decks[seat].main].reverse() : shuffled(s.decks[seat].main, s.seed, seat);
+      for (const c of order) add(c, OcgLocation.DECK);
       for (const c of s.decks[seat].extra) add(c, OcgLocation.EXTRA);
     }
     this.core.startDuel(h);
@@ -272,10 +279,36 @@ export class EngineDuel {
     }
     const body = decodePrompt(ctx, m);
     if (body) { this.lastSelect = m; this.setPrompt(m); return; }
-    this.events.push(...decodeEvents(ctx, m));
+    const evs = decodeEvents(ctx, m);
+    // the core's ATTACK / BATTLE messages give zones only: name the cards from the last snapshot
+    // (the attacker is always face-up; a face-down target stays unnamed)
+    for (const ev of evs) {
+      if (ev.e !== "attack" && ev.e !== "battle") continue;
+      const msg = m as { card: { controller: number; location: number; sequence: number }; target: { controller: number; location: number; sequence: number } | null };
+      const a = this.zoneCodes.get(zoneKeyOf(msg.card));
+      if (a && !ev.attacker.code) ev.attacker.code = a.code;
+      const t = msg.target ? this.zoneCodes.get(zoneKeyOf(msg.target)) : undefined;
+      if (ev.target && t && t.faceUp && !ev.target.code) ev.target.code = t.code;
+    }
+    this.events.push(...evs);
+  }
+
+  /** Which card is in each Monster Zone (codes + face-up), refreshed whenever the duel waits on a player. */
+  private zoneCodes = new Map<string, { code: number; faceUp: boolean }>();
+  private snapshotZones(): void {
+    const h = this.handle;
+    if (!h) return;
+    this.zoneCodes.clear();
+    for (const team of [0, 1] as const) {
+      const cards = this.core.duelQueryLocation(h, { flags: (OcgQueryFlags.CODE | OcgQueryFlags.POSITION) as never, controller: team, location: OcgLocation.MZONE as never });
+      cards.forEach((info, seq) => {
+        if (info?.code) this.zoneCodes.set(zoneKeyOf({ controller: team, location: OcgLocation.MZONE, sequence: seq }), { code: info.code, faceUp: isFaceUp(info.position ?? 0) });
+      });
+    }
   }
 
   private setPrompt(m: OcgMessage): void {
+    try { this.snapshotZones(); } catch (e) { console.warn("zone snapshot", e); }
     const body = decodePrompt(this.ctx, m)!;
     const player = this.ctx.seatOf(promptTeam(m));
     this.prompt = { ...body, id: this.saved.responses.length, player, ...(this.pendingHint ? { hint: this.pendingHint } : {}) } as EnginePrompt;
@@ -302,7 +335,8 @@ export class EngineDuel {
    */
   toBoardState(viewer: Seat | null): BoardState {
     const h = this.handle!;
-    const flags = (OcgQueryFlags.CODE | OcgQueryFlags.POSITION | OcgQueryFlags.OVERLAY_CARD | OcgQueryFlags.COUNTERS | OcgQueryFlags.OWNER) as never;
+    const flags = (OcgQueryFlags.CODE | OcgQueryFlags.POSITION | OcgQueryFlags.OVERLAY_CARD | OcgQueryFlags.COUNTERS | OcgQueryFlags.OWNER
+      | OcgQueryFlags.ATTACK | OcgQueryFlags.DEFENSE) as never;
     const names = this.saved.setup.names ?? ["Player 1", "Player 2"];
     const extraMonster: (CardInstance | null)[] = [null, null];
     const players = ([0, 1] as const).map((seat): PlayerBoard => {
@@ -320,6 +354,12 @@ export class EngineDuel {
         const card: CardInstance = { uid: `e${seat}-${location}-${seq}`, code: visible ? info.code : HIDDEN_CODE, owner, faceUp };
         const p = posName(pos, location);
         if (p) card.position = p;
+        // current stats of face-up monsters (public); face-down ones get none
+        if (location === OcgLocation.MZONE && faceUp) {
+          const st = info as { attack?: number; defense?: number };
+          if (typeof st.attack === "number") card.atk = st.attack;
+          if (typeof st.defense === "number") card.def = st.defense;
+        }
         if (info.counters && Object.keys(info.counters).length) {
           card.counters = Object.fromEntries(Object.entries(info.counters).map(([k, v]) => [`0x${Number(k).toString(16)}`, v]));
         }

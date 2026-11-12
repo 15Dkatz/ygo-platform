@@ -23,6 +23,9 @@ export interface CardInstance {
   token?: boolean;      // created by a "token" action; vanishes when it leaves the field
   controller?: 0 | 1;   // only set in the shared Extra Monster Zones (other zones imply the side)
   extraDeck?: boolean;  // started in the Extra Deck, so "return to deck" goes back there (never sent to a viewer for hidden cards)
+  /** Current ATK / DEF of a face-up monster (rules-enforced duels: includes boosts). Never set for face-down cards. */
+  atk?: number;
+  def?: number;
 }
 
 export interface PlayerBoard {
@@ -110,6 +113,8 @@ export interface EngineHostStart {
   first: 0 | 1;
   seed: number[];   // 32-bit words
   startingLP?: number;
+  /** Demo rooms (vs a bot) only: decks keep their order, so the demo's combo pieces are in the opening hands. */
+  stacked?: boolean;
 }
 
 /** Log lines may contain card tokens `[[12345]]` that the client renders as the card's name. */

@@ -1,4 +1,5 @@
 // PHASE 3 owns this page (room list, create room with Manual / Rules-enforced toggle).
+import { demoDeck } from "../../shared/starterDecks.ts";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api.ts";
@@ -7,7 +8,7 @@ import type { DuelMode } from "../../shared/types.ts";
 import { DEFAULT_SETTINGS, LP_CHOICES, TIMER_CHOICES, cleanSettings, formatTimer, type RoomSettings } from "../../shared/roomSettings.ts";
 import { DeckSelect, NameForm, useDecks } from "../components/duel/DeckPicker.tsx";
 import { useDuelIdentity } from "../components/duel/useDuel.ts";
-import { EngineSupportNote } from "../components/engine/EngineSupportNote.tsx";
+import { EngineSupportNote, skillCards, useEngineSupport } from "../components/engine/EngineSupportNote.tsx";
 import "../components/engine/EngineSupportNote.css";
 import "./LobbyPage.css";
 
@@ -44,6 +45,9 @@ export function LobbyPage() {
   const [botDeckId, setBotDeckId] = useState(() => { try { return localStorage.getItem("ygo.botDeck") ?? ""; } catch { return ""; } });
   const botDeck = decks?.find((d) => d.id === botDeckId) ?? deck;
   const pickBotDeck = (id: string) => { setBotDeckId(id); try { localStorage.setItem("ygo.botDeck", id); } catch { /* private mode */ } };
+  // Skill cards block rules-enforced duels (yours and the bot's deck)
+  const mySkills = skillCards(useEngineSupport(deck ? [...deck.main, ...deck.extra, ...deck.side] : null));
+  const botSkills = skillCards(useEngineSupport(botDeck ? [...botDeck.main, ...botDeck.extra, ...botDeck.side] : null));
   const [quickBusy, setQuickBusy] = useState(false);
   const [quickErr, setQuickErr] = useState<string | null>(null);
 
@@ -73,6 +77,24 @@ export function LobbyPage() {
     } catch (x) {
       setErr((x as Error).message);
       setBusy(false);
+    }
+  };
+
+  /** Demo: Synchro Warriors (you, on autopilot) vs a bot on Rank 4 Xyz, to watch a whole duel. */
+  const demoDuel = async () => {
+    if (!identity) return;
+    const bot = demoDeck("xyz");
+    setQuickBusy(true);
+    setQuickErr(null);
+    try {
+      const r = await api<{ roomId: string }>("/api/rooms", {
+        method: "POST",
+        json: { mode: "engine", name: "Demo duel", demo: true, bot: { deckId: bot.id, main: bot.main, extra: bot.extra, side: bot.side } },
+      });
+      navigate(`/duel/${r.roomId}?join=1&autopilot=1&demo=1`);   // joins with the Synchro demo deck
+    } catch (x) {
+      setQuickErr((x as Error).message);
+      setQuickBusy(false);
     }
   };
 
@@ -128,8 +150,14 @@ export function LobbyPage() {
               {decks?.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
             </select>
           </div>
-          <button className="primary" disabled={quickBusy || !identity || !deck || !botDeck} onClick={quickDuel}>
+          {deck && mySkills.length > 0 && <EngineSupportNote ids={[...deck.main, ...deck.extra, ...deck.side]} label="your deck" />}
+          {botDeck && botDeck !== deck && botSkills.length > 0 && <EngineSupportNote ids={[...botDeck.main, ...botDeck.extra, ...botDeck.side]} label="the bot's deck" />}
+          <button className="primary" disabled={quickBusy || !identity || !deck || !botDeck || mySkills.length > 0 || botSkills.length > 0} onClick={quickDuel}>
             {quickBusy ? "Starting…" : "Play vs bot"}
+          </button>
+          <button disabled={quickBusy || !identity} onClick={demoDuel}
+            title="Both sides play themselves (Synchro Warriors vs Rank 4 Xyz) so you can watch the animations. Speed and Autopilot can be changed in the duel.">
+            ▶ Watch a demo duel
           </button>
           {!deck && identity && <small className="muted">Choose your deck first.</small>}
           {quickErr && <small className="lobby-error">{quickErr}</small>}
@@ -185,7 +213,7 @@ export function LobbyPage() {
             </div>
           </details>
           {mode === "engine" && deck && <EngineSupportNote ids={[...deck.main, ...deck.extra, ...deck.side]} />}
-          <button className="primary" disabled={busy || !identity || !deck}>{busy ? "Creating…" : "Create and sit down"}</button>
+          <button className="primary" disabled={busy || !identity || !deck || (mode === "engine" && mySkills.length > 0)}>{busy ? "Creating…" : "Create and sit down"}</button>
           {!deck && identity && <small className="muted">Choose a deck first.</small>}
           {err && <small className="lobby-error">{err}</small>}
         </form>

@@ -5,6 +5,7 @@ import type {
 } from "../../shared/duel.ts";
 import type { DuelMode } from "../../shared/types.ts";
 import { DEFAULT_SETTINGS, type RoomSettings } from "../../shared/roomSettings.ts";
+import { skillCardProblem } from "./engine/deckCheck.ts";
 import { validateDeck, type DuelAction, type Seat } from "../../shared/duelActions.ts";
 import { cryptoRng, createBoard } from "./manual/board.ts";
 import { ActionError, applyAction } from "./manual/reducer.ts";
@@ -87,6 +88,8 @@ interface RoomData {
   /** Identity of whoever created the room (quick duels vs a bot are theirs alone). */
   ownerId?: string;
   settings?: RoomSettings;
+  /** Demo duel vs the bot (decks aren't shuffled); only ever set together with a bot. */
+  demo?: boolean;
   /** Turn timer state (ms). `turn` = the board turn the clock last saw, to refill at a new turn. */
   clock?: { remaining: [number, number]; running: Seat | null; since: number; turn: number };
 }
@@ -115,6 +118,8 @@ export class DuelRoom extends DurableObject<Env> {
 
   async init(input: {
     roomId: string; name: string; mode: DuelMode; host: string; ownerId?: string; settings?: RoomSettings;
+    /** Demo duel vs the bot: decks keep their order (combo pieces in the opening hands). */
+    demo?: boolean;
     /** Quick duel: seat a bot with this deck straight away (rules-enforced only). */
     bot?: { deckId: string; main: number[]; extra: number[]; side: number[] };
   }): Promise<void> {
@@ -401,7 +406,7 @@ export class DuelRoom extends DurableObject<Env> {
         if (room.mode !== "engine") throw new RoomError("Bots play rules-enforced rooms only.");
         if (room.stage !== "lobby" && room.stage !== "finished") throw new RoomError("You can add a bot before the duel starts.");
         if (room.seats[BOT_SEAT] && !room.seats[BOT_SEAT]!.bot) throw new RoomError("Someone is already sitting there.");
-        const err = validateDeck(msg);
+        const err = validateDeck(msg) ?? await skillCardProblem(this.env.DB, msg);
         if (err) throw new RoomError(`Bot deck: ${err}`);
         if (room.stage === "finished") this.resetToLobby();
         room.seats[BOT_SEAT] = {
@@ -450,7 +455,7 @@ export class DuelRoom extends DurableObject<Env> {
   private async join(ws: WebSocket, a: Attachment, msg: Extract<ClientMsg, { t: "join" }>) {
     const room = this.room!;
     if (!a.id) throw new RoomError("Pick a display name in the lobby before joining.");
-    const err = validateDeck(msg);
+    const err = validateDeck(msg) ?? (room.mode === "engine" ? await skillCardProblem(this.env.DB, msg) : null);
     if (err) throw new RoomError(err);
     const deck = { deckId: String(msg.deckId ?? "").slice(0, 64), main: msg.main, extra: msg.extra, side: msg.side ?? [] };
     let seat = a.seat;
@@ -503,6 +508,7 @@ export class DuelRoom extends DurableObject<Env> {
         first,
         seed: [...crypto.getRandomValues(new Uint32Array(8))],
         startingLP: this.settings().startingLP,
+        ...(room.demo && this.hasBot() ? { stacked: true } : {}),
       };
       this.startClock();
       room.board = null;
@@ -528,6 +534,7 @@ export class DuelRoom extends DurableObject<Env> {
           first,
           seed: crypto.getRandomValues(new Uint32Array(8)),
           startingLP: this.settings().startingLP,
+          stacked: !!room.demo && this.hasBot(),
         });
         this.startClock();
         let update: RoomEngineUpdate;

@@ -1,3 +1,4 @@
+import { skillCardsIn } from "../duel/engine/deckCheck.ts";
 import { Hono } from "hono";
 import type { AppEnv } from "../env.ts";
 import ocgWasm from "ocgcore-wasm/lib/ocgcore.sync.wasm";
@@ -30,7 +31,19 @@ engine.get("/source", (c) => c.json({
  * Cards the rules engine can't play properly: unknown to its card database, or effect cards
  * without a script (they would have no effects). Alternate artworks count as their original.
  */
-const TYPE_NORMAL = 0x10, TYPE_PENDULUM = 0x1000000, TYPE_TOKEN = 0x4000;
+const TYPE_NORMAL = 0x10, TYPE_PENDULUM = 0x1000000, TYPE_TOKEN = 0x4000, TYPE_SKILL = 0x8000000;
+/** How many card scripts the database holds (cached per isolate). A full import has ~13.7k; a
+ *  database with far fewer plays most cards as blanks, so the client warns about it. */
+let scriptCount: number | null = null;
+const SCRIPTS_EXPECTED = 5000;
+async function countScripts(db: D1Database): Promise<number> {
+  if (scriptCount !== null) return scriptCount;
+  const r = await db.prepare("SELECT COUNT(*) AS n FROM engine_scripts").first<{ n: number }>().catch(() => null);
+  scriptCount = r?.n ?? 0;
+  if (scriptCount < SCRIPTS_EXPECTED) console.error(`engine_scripts holds only ${scriptCount} card scripts: most cards will have no effects. Run npm run engine:import:local (or :remote).`);
+  return scriptCount;
+}
+
 engine.post("/support", async (c) => {
   const body = await c.req.json<{ ids?: unknown }>().catch(() => ({ ids: [] }));
   const ids = [...new Set((Array.isArray(body.ids) ? body.ids : []).map(Number).filter((x) => Number.isInteger(x) && x > 0))].slice(0, 300);
@@ -47,14 +60,17 @@ engine.post("/support", async (c) => {
   const canonical = (id: number) => { const a = rows.get(id)?.alias ?? 0; return a && Math.abs(a - id) < 20 ? a : id; };
   await fetchRows(ids.map(canonical).filter((id) => !rows.has(id)));
   const unsupported: { id: number; reason: string }[] = [];
+  const skills = new Set((await skillCardsIn(c.env.DB, ids)).map((s) => s.id));
   for (const id of ids) {
     const row = rows.get(canonical(id));
-    if (!row) unsupported.push({ id, reason: "not in the rules engine yet" });
+    if (skills.has(id) || (row && row.type & TYPE_SKILL)) unsupported.push({ id, reason: "Skill card: not allowed in rules-enforced duels (regular Yu-Gi-Oh! only)" });
+    else if (!row) unsupported.push({ id, reason: "not in the rules engine yet" });
     else if (!row.has_script && !(row.type & TYPE_TOKEN) && (!(row.type & TYPE_NORMAL) || row.type & TYPE_PENDULUM)) {
       unsupported.push({ id, reason: "its effects aren't scripted yet" });
     }
   }
-  return c.json({ unsupported });
+  const scripts = await countScripts(c.env.DB);
+  return c.json({ unsupported, ...(scripts < SCRIPTS_EXPECTED ? { scriptsMissing: { have: scripts } } : {}) });
 });
 
 // ---- data for engines running in the host's browser (host-runs-rules rooms) ----

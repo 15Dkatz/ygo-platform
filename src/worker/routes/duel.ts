@@ -1,3 +1,4 @@
+import { skillCardProblem } from "../duel/engine/deckCheck.ts";
 import { Hono } from "hono";
 import type { AppEnv } from "../env.ts";
 import type { RoomInfo } from "../../shared/duel.ts";
@@ -47,14 +48,14 @@ duel.post("/api/duel/guest", async (c) => {
 duel.post("/api/rooms", async (c) => {
   const ident = getIdentity(c);
   if (!ident) return c.json({ error: REQUIRE_ACCOUNT ? "sign in required" : "Pick a display name first." }, 401);
-  type Body = { mode?: unknown; name?: unknown; settings?: unknown; bot?: { deckId?: unknown; main?: unknown; extra?: unknown; side?: unknown } };
+  type Body = { mode?: unknown; name?: unknown; settings?: unknown; demo?: unknown; bot?: { deckId?: unknown; main?: unknown; extra?: unknown; side?: unknown } };
   const body = await c.req.json<Body>().catch(() => ({}) as Body);
   let mode = (MODES as unknown[]).includes(body.mode) ? (body.mode as DuelMode) : "manual";
   // quick duel: a private rules-enforced room with a bot already seated
   let bot: { deckId: string; main: number[]; extra: number[]; side: number[] } | undefined;
   if (body.bot) {
     const d = { deckId: String(body.bot.deckId ?? "bot").slice(0, 64), main: body.bot.main, extra: body.bot.extra, side: body.bot.side ?? [] };
-    const err = validateDeck(d as Parameters<typeof validateDeck>[0]);
+    const err = validateDeck(d as Parameters<typeof validateDeck>[0]) ?? await skillCardProblem(c.env.DB, d as { main: number[]; extra: number[] });
     if (err) return c.json({ error: `Bot deck: ${err}` }, 400);
     bot = d as typeof bot;
     mode = "engine";
@@ -63,7 +64,9 @@ duel.post("/api/rooms", async (c) => {
   const roomId = newRoomId();
   // quick duels vs a bot: private and untimed unless asked otherwise
   const settings = body.settings ? cleanSettings(body.settings) : bot ? { ...DEFAULT_SETTINGS, visibility: "unlisted" as const } : DEFAULT_SETTINGS;
-  await roomStub(c.env, roomId).init({ roomId, name, mode, host: ident.name, ownerId: ident.id, bot, settings });
+  // demo duels (unshuffled decks) are only ever against the bot
+  const demo = body.demo === true && !!bot;
+  await roomStub(c.env, roomId).init({ roomId, name, mode, host: ident.name, ownerId: ident.id, bot, settings, ...(demo ? { demo } : {}) });
   return c.json({ roomId }, 201);
 });
 

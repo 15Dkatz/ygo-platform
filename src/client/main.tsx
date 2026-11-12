@@ -4,6 +4,10 @@ import { BrowserRouter } from "react-router-dom";
 import { App } from "./App.tsx";
 import { AuthProvider } from "./auth.tsx";
 import "./styles.css";
+import "./skins.css";
+import { applySkin } from "./skins.ts";
+
+applySkin();   // the saved theme, before the first paint
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

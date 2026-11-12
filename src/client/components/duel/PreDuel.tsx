@@ -3,7 +3,7 @@ import type { ClientMsg, RpsChoice, SessionInfo } from "../../../shared/duel.ts"
 import type { Seat } from "../../../shared/duelActions.ts";
 import type { Deck } from "../../../shared/types.ts";
 import { DeckSelect } from "./DeckPicker.tsx";
-import { EngineSupportNote } from "../engine/EngineSupportNote.tsx";
+import { EngineSupportNote, skillCards, useEngineSupport } from "../engine/EngineSupportNote.tsx";
 import "../engine/EngineSupportNote.css";
 
 const RPS: { choice: RpsChoice; label: string; glyph: string }[] = [
@@ -35,6 +35,9 @@ export function PreDuel({ session, you, hasIdentity, decks, deckId, setDeckId, d
   const botDeck = decks?.find((d) => d.id === (botDeckId || deckId)) ?? null;
   const canBot = session.mode === "engine" && you === 0 && (stage === "lobby" || stage === "finished");
   const hasBot = !!seats[1]?.bot;
+  const engine = session.mode === "engine";
+  const mySkills = skillCards(useEngineSupport(engine ? (deck ? [...deck.main, ...deck.extra, ...deck.side] : null) : null));
+  const botSkills = skillCards(useEngineSupport(engine ? (botDeck ? [...botDeck.main, ...botDeck.extra, ...botDeck.side] : null) : null));
 
   return (
     <div className="duel-preduel">
@@ -78,7 +81,7 @@ export function PreDuel({ session, you, hasIdentity, decks, deckId, setDeckId, d
           ) : seated || freeSeat ? (
             <div className="duel-deckrow">
               <DeckSelect decks={decks} deckId={deckId} onChange={setDeckId} />
-              <button className="primary" disabled={!deck} onClick={sendDeck}>
+              <button className="primary" disabled={!deck || mySkills.length > 0} onClick={sendDeck}>
                 {!seated ? "Take a seat with this deck" : stage === "finished" ? "Use this deck (side deck)" : seats[you!]?.ready ? "Change deck" : "Ready with this deck"}
               </button>
               {session.mode === "engine" && deck && <EngineSupportNote ids={[...deck.main, ...deck.extra, ...deck.side]} />}
@@ -100,9 +103,10 @@ export function PreDuel({ session, you, hasIdentity, decks, deckId, setDeckId, d
               <b>No opponent yet?</b> <span className="muted">Play against a bot (it plays random legal moves). Its deck:</span>
               <div className="duel-deckrow">
                 <DeckSelect decks={decks} deckId={botDeckId || deckId} onChange={setBotDeckId} />
-                <button disabled={!botDeck} onClick={() => botDeck && send({ t: "addBot", deckId: botDeck.id, main: botDeck.main, extra: botDeck.extra, side: botDeck.side })}>
+                <button disabled={!botDeck || botSkills.length > 0} onClick={() => botDeck && send({ t: "addBot", deckId: botDeck.id, main: botDeck.main, extra: botDeck.extra, side: botDeck.side })}>
                   Play against a bot
                 </button>
+                {botDeck && botSkills.length > 0 && <EngineSupportNote ids={[...botDeck.main, ...botDeck.extra, ...botDeck.side]} label="the bot's deck" />}
               </div>
             </div>
           )}

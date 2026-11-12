@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useDeckStore } from "../../store/deckStore.ts";
 import { validateDeck } from "../../../shared/duelActions.ts";
 import type { Deck } from "../../../shared/types.ts";
+import { STARTER_DECKS, isStarterDeck } from "../../../shared/starterDecks.ts";
 
 const LAST_DECK = "ygo.duel.lastDeck";
 
@@ -13,17 +14,21 @@ export function lastDeckId(): string | null {
   try { return localStorage.getItem(LAST_DECK); } catch { return null; }
 }
 
-/** Load the user's decks (through the deck store) and keep the chosen one. */
+/** Load the user's decks (through the deck store) plus the built-in starter decks, and keep the chosen one.
+ *  Someone with no legal deck of their own (a guest, a new player) gets a starter deck picked for them. */
 export function useDecks() {
   const store = useDeckStore();
   const [decks, setDecks] = useState<Deck[] | null>(null);
   const [deckId, setDeckIdState] = useState<string>(lastDeckId() ?? "");
   useEffect(() => {
     store.list().then((list) => {
-      const sorted = [...list].sort((a, b) => a.name.localeCompare(b.name));
+      const sorted = [...[...list].sort((a, b) => a.name.localeCompare(b.name)), ...STARTER_DECKS];
       setDecks(sorted);
       setDeckIdState((cur) => (sorted.some((d) => d.id === cur) ? cur : sorted.find((d) => !validateDeck(d))?.id ?? ""));
-    }).catch(() => setDecks([]));
+    }).catch(() => {
+      setDecks(STARTER_DECKS);
+      setDeckIdState((cur) => (STARTER_DECKS.some((d) => d.id === cur) ? cur : STARTER_DECKS[0].id));
+    });
     // load once per mount (the store object may be recreated on every render)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -35,18 +40,22 @@ export function useDecks() {
 export function DeckSelect({ decks, deckId, onChange }: { decks: Deck[] | null; deckId: string; onChange(id: string): void }) {
   if (decks === null) return <span className="muted">Loading decks…</span>;
   if (!decks.length) return <span className="muted">You have no decks yet — <Link to="/decks">import or build one</Link>.</span>;
+  const own = decks.filter((d) => !isStarterDeck(d.id)), starters = decks.filter((d) => isStarterDeck(d.id));
+  const opt = (d: Deck) => {
+    const bad = validateDeck(d);
+    return <option key={d.id} value={d.id}>{d.name} ({d.main.length}/{d.extra.length}/{d.side.length}){bad ? " — not legal" : ""}</option>;
+  };
   const chosen = decks.find((d) => d.id === deckId);
   const err = chosen ? validateDeck(chosen) : null;
   return (
     <span className="duel-deckselect">
       <select value={deckId} onChange={(e) => onChange(e.target.value)} aria-label="Deck">
         <option value="" disabled>Choose a deck…</option>
-        {decks.map((d) => {
-          const bad = validateDeck(d);
-          return <option key={d.id} value={d.id}>{d.name} ({d.main.length}/{d.extra.length}/{d.side.length}){bad ? " — not legal" : ""}</option>;
-        })}
+        {own.length > 0 && <optgroup label="Your decks">{own.map(opt)}</optgroup>}
+        <optgroup label="Starter decks">{starters.map(opt)}</optgroup>
       </select>
       {err && <span className="duel-error-text">{err}</span>}
+      {!own.length && <small className="muted">No decks of your own yet: a starter deck is ready, or <Link to="/decks">import or build one</Link>.</small>}
     </span>
   );
 }

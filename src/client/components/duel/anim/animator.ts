@@ -234,6 +234,12 @@ export class BoardAnimator {
     this.run(inner, frames, { duration: ROTATE_MS, delay, easing: "ease-in-out" });
   }
 
+  /** Shuffle wiggle + sound for one zone, outside a captured board update (e.g. a local hand shuffle). */
+  shuffleZone(zone: string) {
+    sfx("shuffle");
+    if (!reducedMotion()) this.shuffle(zone, 0);
+  }
+
   private shuffle(zone: string, delay: number) {
     const z = this.zoneEl(zone);
     if (!z) return;

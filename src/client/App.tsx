@@ -1,4 +1,5 @@
 import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { SkinPicker } from "./components/SkinPicker.tsx";
 import { HomePage } from "./pages/HomePage.tsx";
 import { usePageTitle } from "./usePageTitle.ts";
 import { LibraryPage } from "./pages/LibraryPage.tsx";
@@ -45,6 +46,7 @@ export function App() {
           <NavLink to="/decks">Decks</NavLink>
           <NavLink to="/lobby">Duel</NavLink>
         </nav>
+        <SkinPicker />
         <AccountBadge />
       </header>
       <main className="content">

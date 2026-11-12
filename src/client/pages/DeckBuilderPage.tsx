@@ -7,6 +7,8 @@ import { toYdke } from "../../shared/ydke.ts";
 import { TestHand } from "../components/library/TestHand.tsx";
 import { DeckStats } from "../components/library/DeckStats.tsx";
 import "../components/library/deck-tools.css";
+import { EngineSupportNote } from "../components/engine/EngineSupportNote.tsx";
+import "../components/engine/EngineSupportNote.css";
 import { isExtraDeckType, unknownCard } from "../../shared/library.ts";
 import { useDeckStore } from "../store/deckStore.ts";
 import { catalog, ensureCards } from "../components/cards/catalog.ts";
@@ -31,8 +33,13 @@ type DragData = { id: number; from?: Section; index?: number };
 
 const cardOf = (id: number): Card => catalog.get(id) ?? unknownCard(id);
 
-/** Validation: section sizes, copies per card across sections, TCG banlist, unknown ids. */
-function validateDeck(deck: Pick<Deck, "main" | "extra" | "side">, get: (id: number) => Card = cardOf): Problem[] {
+/** Which ban list to check against. */
+export type BanFormat = "tcg" | "ocg" | "none";
+const FORMAT_LABEL: Record<BanFormat, string> = { tcg: "TCG", ocg: "OCG", none: "No ban list" };
+const banOf = (c: Card, f: BanFormat) => (f === "tcg" ? c.ban_tcg : f === "ocg" ? c.ban_ocg : null);
+
+/** Validation: section sizes, copies per card across sections, the chosen ban list, unknown ids. */
+function validateDeck(deck: Pick<Deck, "main" | "extra" | "side">, get: (id: number) => Card = cardOf, format: BanFormat = "tcg"): Problem[] {
   const out: Problem[] = [];
   for (const s of SECTIONS) {
     const n = deck[s.key].length;
@@ -44,10 +51,11 @@ function validateDeck(deck: Pick<Deck, "main" | "extra" | "side">, get: (id: num
   for (const id of [...deck.main, ...deck.extra, ...deck.side]) counts.set(id, (counts.get(id) ?? 0) + 1);
   for (const [id, n] of counts) {
     const c = get(id);
-    const lim = Math.min(MAX_COPIES, banLimit(c.ban_tcg));
+    const lim = Math.min(MAX_COPIES, banLimit(banOf(c, format)));
     if (c.category === "Unknown") out.push({ level: "warn", text: `Unknown card id ${id} (×${n}) is not in the catalogue.` });
+    if (/Skill/.test(c.type ?? "")) out.push({ level: "warn", text: `${c.name} is a Skill card: not allowed in rules-enforced duels.` });
     if (n > lim) {
-      const why = lim === MAX_COPIES ? `max ${MAX_COPIES} copies` : `${c.ban_tcg} in the TCG: max ${lim}`;
+      const why = lim === MAX_COPIES ? `max ${MAX_COPIES} copies` : `${banOf(c, format)} in the ${FORMAT_LABEL[format]}: max ${lim}`;
       out.push({ level: "error", text: `${c.name}: ${n} ${n === 1 ? "copy" : "copies"} (${why}).` });
     }
   }
@@ -132,7 +140,12 @@ export function DeckBuilderPage() {
     if (deck) for (const id of [...deck.main, ...deck.extra, ...deck.side]) m.set(id, (m.get(id) ?? 0) + 1);
     return m;
   }, [deck]);
-  const problems = useMemo(() => (deck ? validateDeck(deck) : []), [deck]);
+  // ban list format, remembered across decks
+  const [format, setFormatState] = useState<BanFormat>(() => {
+    try { const v = localStorage.getItem("ygo.banFormat"); return v === "ocg" || v === "none" ? v : "tcg"; } catch { return "tcg"; }
+  });
+  const setFormat = (f: BanFormat) => { setFormatState(f); try { localStorage.setItem("ygo.banFormat", f); } catch { /* storage blocked */ } };
+  const problems = useMemo(() => (deck ? validateDeck(deck, cardOf, format) : []), [deck, format]);
 
   /** Add a card; Extra Deck monsters go to the Extra Deck unless sent to the Side Deck. */
   const add = useCallback((card: Card, target?: Section) => {
@@ -226,9 +239,18 @@ export function DeckBuilderPage() {
           <CardSearchPanel onPick={(c) => add(c)} onPickAlt={(c) => add(c, "side")} countOf={(id) => counts.get(id) ?? 0} />
         </aside>
         <div className={`db-deck${tab === "deck" ? " active" : ""}`}>
+          <div className="db-format">
+            <span className={`db-legal ${errors ? "is-bad" : "is-ok"}`}>{errors ? "✕ Not legal" : "✓ Legal"}{format === "none" ? "" : ` · ${FORMAT_LABEL[format]}`}</span>
+            <label className="muted">Ban list
+              <select value={format} onChange={(e) => setFormat(e.target.value as BanFormat)} aria-label="Ban list format">
+                {(Object.keys(FORMAT_LABEL) as BanFormat[]).map((f) => <option key={f} value={f}>{FORMAT_LABEL[f]}</option>)}
+              </select>
+            </label>
+          </div>
+          {total > 0 && <EngineSupportNote ids={[...deck.main, ...deck.extra, ...deck.side]} />}
           <div className={`db-problems${problems.length ? "" : " ok"}`} aria-live="polite">
             {problems.length === 0 ? (
-              <span>Deck is legal for the TCG (Main {deck.main.length}, Extra {deck.extra.length}, Side {deck.side.length}).</span>
+              <span>Deck is legal{format === "none" ? "" : ` for the ${FORMAT_LABEL[format]}`} (Main {deck.main.length}, Extra {deck.extra.length}, Side {deck.side.length}).</span>
             ) : (
               <details open={problems.length <= 4}>
                 <summary>{errors} problem{errors === 1 ? "" : "s"}{problems.length > errors ? `, ${problems.length - errors} warning${problems.length - errors === 1 ? "" : "s"}` : ""} (you can still save)</summary>
@@ -260,7 +282,7 @@ export function DeckBuilderPage() {
                   <div className={`db-grid${s.key === "main" && n > 40 ? " dense" : ""}`}>
                     {ids.map((id, i) => {
                       const c = cardOf(id);
-                      const lim = banLimit(c.ban_tcg);
+                      const lim = banLimit(banOf(c, format));
                       const over3 = (counts.get(id) ?? 0) > Math.min(MAX_COPIES, lim);
                       return (
                         <button key={`${i}-${id}`} type="button" className={`db-card${over3 ? " illegal" : ""}`} title={`${c.name} — click to remove, right-click for more`}

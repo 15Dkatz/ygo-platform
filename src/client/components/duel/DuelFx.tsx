@@ -7,30 +7,40 @@ import type { BoardState, SessionInfo } from "../../../shared/duel.ts";
 import { PHASE_LABEL, type Seat } from "../../../shared/duelActions.ts";
 import { isMuted, onMuteChange, play, setMuted } from "./anim/sfx.ts";
 
-/** "Your turn" / "Opponent's turn" at each new turn, and a small ribbon at each phase change. */
+const PHASE_GLYPH: Record<string, string> = { main1: "✦", battle: "⚔", main2: "✧", end: "☾", draw: "⇣", standby: "◇" };
+
+/** A full-width sweep across the board at each new turn ("YOUR TURN") and each phase change
+ *  ("BATTLE PHASE"): a slanted band in the phase's colour, a light streak, huge letters, a flash. */
 export function TurnBanner({ board, you }: { board: BoardState; you: Seat | null }) {
-  const [shown, setShown] = useState<{ key: string; big: string; small?: string; mine: boolean } | null>(null);
+  const [shown, setShown] = useState<{ key: string; big: string; small: string; mine: boolean; phase: string; turn: boolean } | null>(null);
   const last = useRef<{ turn: number; phase: string } | null>(null);
   useEffect(() => {
     const prev = last.current;
     last.current = { turn: board.turn, phase: board.phase };
     if (!prev) return;   // first board after (re)connecting: no fanfare
     const mine = board.turnPlayer === you;
-    const who = you === null ? `${board.players[board.turnPlayer].name}'s turn` : mine ? "Your turn" : `${board.players[board.turnPlayer].name}'s turn`;
+    const name = board.players[board.turnPlayer].name;
+    const who = you === null ? `${name}'s turn` : mine ? "Your turn" : `${name}'s turn`;
     if (board.turn !== prev.turn) {
-      setShown({ key: `t${board.turn}`, big: who, small: `Turn ${board.turn}`, mine });
+      setShown({ key: `t${board.turn}`, big: who, small: `Turn ${board.turn}`, mine, phase: "turn", turn: true });
       play("turn");
     } else if (board.phase !== prev.phase && board.phase !== "draw" && board.phase !== "standby") {
-      setShown({ key: `p${board.turn}${board.phase}`, big: "", small: PHASE_LABEL[board.phase], mine });
+      setShown({ key: `p${board.turn}${board.phase}`, big: PHASE_LABEL[board.phase], small: `Turn ${board.turn} · ${who}`, mine, phase: board.phase, turn: false });
+      if (board.phase === "battle") play("attack"); else play("pick");
     } else return;
-    const t = setTimeout(() => setShown(null), board.turn !== prev.turn ? 1500 : 900);
+    const t = setTimeout(() => setShown(null), board.turn !== prev.turn ? 1700 : 1350);
     return () => clearTimeout(t);
   }, [board.turn, board.phase, board.turnPlayer, board.players, you]);
   if (!shown) return null;
   return (
-    <div key={shown.key} className={`duel-turnbanner ${shown.big ? "is-turn" : "is-phase"} ${shown.mine ? "is-mine" : "is-theirs"}`} aria-live="polite">
-      {shown.big && <b>{shown.big}</b>}
-      {shown.small && <span>{shown.small}</span>}
+    <div key={shown.key} className={`duel-phasefx ph-${shown.phase} ${shown.turn ? "is-turn" : "is-phase"} ${shown.mine ? "is-mine" : "is-theirs"}`} aria-live="polite">
+      <div className="duel-phasefx-band">
+        <div className="duel-phasefx-inner">
+          {!shown.turn && <span className="duel-phasefx-glyph" aria-hidden="true">{PHASE_GLYPH[shown.phase] ?? "✦"}</span>}
+          <b className="duel-phasefx-text">{shown.big}</b>
+          <span className="duel-phasefx-sub">{shown.small}</span>
+        </div>
+      </div>
     </div>
   );
 }

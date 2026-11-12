@@ -52,11 +52,11 @@
   --gap: clamp(3px, 1cqi, 8px);
   /* fit the width of the board column and (on desktop) the viewport height: 5 rows + 2 hands + bars */
   --cw: min(72px, calc((100cqi - 6 * var(--gap)) / 7 / 1.12), max(40px, calc((100vh - 300px) / 10)));
-  display: grid; grid-template-columns: repeat(7, calc(var(--cw) * 1.12)); gap: var(--gap); justify-content: center;
+  display: grid; grid-template-columns: repeat(7, calc(var(--cw) * 1.22)); gap: var(--gap); justify-content: center;
 }
 .duel-zone {
   position: relative; display: flex; align-items: center; justify-content: center;
-  height: calc(var(--cw) * 1.46 + 4px); border-radius: 6px;
+  height: calc(var(--cw) * 1.62); border-radius: 6px;   /* a little larger than the card it holds */
 }
 .duel-slot { border: 1px dashed var(--zone-border); background: color-mix(in srgb, var(--surface) 35%, transparent); }
 .duel-fieldzone { border-color: var(--spell); }
@@ -68,7 +68,7 @@
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center;
   font-size: calc(var(--cw) * .14); color: var(--muted); pointer-events: none; line-height: 1.1; padding: 2px;
 }
-.duel-gap { height: calc(var(--cw) * 1.46 + 4px); }
+.duel-gap { height: calc(var(--cw) * 1.62); }
 
 .duel-pile { cursor: pointer; border: 1px solid transparent; }
 .duel-pile .duel-card { pointer-events: auto; }

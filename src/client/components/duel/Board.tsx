@@ -1,3 +1,4 @@
+import { getCard } from "./useDuel.ts";
 import { useState, type DragEvent, type MouseEvent, type ReactNode } from "react";
 import type { BoardState, CardInstance, Zone } from "../../../shared/duel.ts";
 import type { Seat } from "../../../shared/duelActions.ts";
@@ -24,7 +25,14 @@ function markOf(ui: BoardUI, uid: string): CardMark | undefined {
   return m.picked.has(uid) ? "picked" : m.selectable.has(uid) ? "selectable" : m.actionable.has(uid) ? "actionable" : undefined;
 }
 
+/** What happens if the chosen attacker attacks this card (shown on targets while picking one). */
+export interface Matchup { text: string; tone: "good" | "bad" | "even" | "unknown" }
+
 export interface BoardUI {
+  /** Attack outcome previews, by target uid, while you pick an attack target. */
+  matchup?: Map<string, Matchup>;
+  /** Your own display order of your hand (uids), after a local Shuffle hand. Cards not listed keep their order at the end. */
+  handOrder?: string[] | null;
   /** Bottom side of the board (your seat; seat 0 for spectators). */
   me: Seat;
   /** Your real seat, null when spectating. */
@@ -91,6 +99,8 @@ function Slot({ card, at, ui, label, className = "" }: { card: CardInstance | nu
     <DropZone at={at} ui={ui} className={`duel-slot ${className} ${at.zone === "extraMonster" && card && controller !== ui.me ? "is-opp-side" : ""}`} label={card ? undefined : label}>
       {card && (
         <CardView
+          // engine cards are named by zone: a different card landing here gets a fresh element (and animates as new)
+          key={`${card.uid}:${card.code}`}
           card={card}
           draggable={canDrag(ui, card, controller, at.zone)}
           onDragStart={dragStart(card)}
@@ -102,7 +112,25 @@ function Slot({ card, at, ui, label, className = "" }: { card: CardInstance | nu
           onClick={(e) => { e.stopPropagation(); ui.onCard(card, at, e); }}
         />
       )}
+      {card && (at.zone === "monster" || at.zone === "extraMonster") && <StatStrip card={card} />}
+      {card && ui.matchup?.get(card.uid) && <span className={`duel-matchup is-${ui.matchup.get(card.uid)!.tone}`}>{ui.matchup.get(card.uid)!.text}</span>}
     </DropZone>
+  );
+}
+
+/** ATK / DEF under a face-up monster: the stat it battles with is bold; boosted green, lowered red. */
+function StatStrip({ card }: { card: CardInstance }) {
+  const data = card.code > 0 && card.faceUp ? getCard(card.code) : null;
+  if (!data || !/Monster/.test(data.type ?? "")) return null;
+  const link = /Link/.test(data.type ?? "");
+  const atk = card.atk ?? data.atk ?? 0, def = card.def ?? data.defense ?? 0;
+  const tone = (now: number, base: number | null | undefined) => (base == null || now === base ? "" : now > base ? "is-up" : "is-down");
+  const defPos = card.position === "def";
+  return (
+    <span className="duel-stats" aria-label={`ATK ${atk}${link ? "" : `, DEF ${def}`}`}>
+      <b className={`${tone(atk, data.atk)} ${defPos ? "is-dim" : ""}`}>{atk}</b>
+      {!link && <><i>/</i><b className={`${tone(def, data.defense)} ${defPos ? "" : "is-dim"}`}>{def}</b></>}
+    </span>
   );
 }
 
@@ -122,7 +150,12 @@ function Pile({ cards, at, ui }: { cards: CardInstance[]; at: ZoneRef; ui: Board
   );
 }
 
-function Hand({ cards, player, ui, own }: { cards: CardInstance[]; player: Seat; ui: BoardUI; own: boolean }) {
+function Hand({ cards: inOrder, player, ui, own }: { cards: CardInstance[]; player: Seat; ui: BoardUI; own: boolean }) {
+  // a local shuffle only changes how your hand is laid out; clicks still report the card's real slot
+  const order = own && ui.handOrder ? ui.handOrder : null;
+  const real = new Map(inOrder.map((c, i) => [c.uid, i]));
+  const rank = (uid: string) => { const k = order ? order.indexOf(uid) : -1; return k < 0 ? 1e6 + (real.get(uid) ?? 0) : k; };
+  const cards = order ? [...inOrder].sort((a, b) => rank(a.uid) - rank(b.uid)) : inOrder;
   return (
     <DropZone at={{ zone: "hand", player }} ui={ui} className={`duel-hand ${own ? "is-own" : "is-opp"}`} onClick={() => undefined}>
       <div className="duel-hand-fan" style={{ ["--n" as string]: Math.max(cards.length, 1) }}>
@@ -139,7 +172,7 @@ function Hand({ cards, player, ui, own }: { cards: CardInstance[]; player: Seat;
               badge={ui.marks?.badges.get(c.uid)}
               style={{ ["--i" as string]: i - (cards.length - 1) / 2 }}
               onHover={ui.onHover}
-              onClick={own || mark ? (e) => { e.stopPropagation(); ui.onCard(c, { zone: "hand", player, slot: i }, e); } : undefined}
+              onClick={own || mark ? (e) => { e.stopPropagation(); ui.onCard(c, { zone: "hand", player, slot: real.get(c.uid) ?? i }, e); } : undefined}
             />
           );
         })}
@@ -150,11 +183,14 @@ function Hand({ cards, player, ui, own }: { cards: CardInstance[]; player: Seat;
 }
 
 /** Both fields: opponent mirrored at the top, the 2 shared Extra Monster Zones in the middle. */
-export function Board({ board, ui, top, bottom, centre, side }: {
+export function Board({ board, ui, top, bottom, rail, status, corner }: {
   board: BoardState; ui: BoardUI;
-  /** Drawn on the board itself: the opponent's plate (beside their Spell & Trap row), yours (beside yours),
-   *  the phase track (between the Extra Monster Zones) and your turn controls (right of your field). */
-  top?: ReactNode; bottom?: ReactNode; centre?: ReactNode; side?: ReactNode;
+  /** Drawn on the board itself: player info in the opponent's (top) and your (bottom) hand strips, the phase
+   *  track between the Extra Monster Zones, whose-move status left of it, Next phase right of it, and the
+   *  tools + End turn in your corner (bottom right). Kept apart so nothing is a misclick away from End turn.
+   *  On PC: player info in the left corners, the phase rail (track + Next phase) between them, the whose-move
+   *  status right of the field, tools + End turn in your bottom-right corner. */
+  top?: ReactNode; bottom?: ReactNode; rail?: ReactNode; status?: ReactNode; corner?: ReactNode;
 }) {
   const me = ui.me;
   const opp: Seat = me === 0 ? 1 : 0;
@@ -183,7 +219,7 @@ export function Board({ board, ui, top, bottom, centre, side }: {
         <Pile cards={P[opp].banished} at={{ zone: "banished", player: opp }} ui={ui} />
         <div className="duel-gap" />
         <Slot card={board.extraMonster[emzLeft]} at={{ zone: "extraMonster", player: me, slot: emzLeft }} ui={ui} label="Extra Monster" className="duel-emz" />
-        <div className="duel-gap duel-gap-centre">{centre}</div>
+        <div className="duel-gap" />
         <Slot card={board.extraMonster[emzRight]} at={{ zone: "extraMonster", player: me, slot: emzRight }} ui={ui} label="Extra Monster" className="duel-emz" />
         <div className="duel-gap" />
         <Pile cards={P[me].banished} at={{ zone: "banished", player: me }} ui={ui} />
@@ -196,7 +232,9 @@ export function Board({ board, ui, top, bottom, centre, side }: {
         {idx.map((i) => slot(me, "spelltrap", i, "S/T"))}
         <Pile cards={P[me].deck} at={{ zone: "deck", player: me }} ui={ui} />
         {bottom && <div className="duel-plate duel-plate-bottom">{bottom}</div>}
-        {side && <div className="duel-side-controls">{side}</div>}
+        {rail && <div className="duel-rail">{rail}</div>}
+        {status && <div className="duel-status">{status}</div>}
+        {corner && <div className="duel-corner">{corner}</div>}
       </div>
       <Hand cards={P[me].hand} player={me} ui={ui} own={ui.you === me} />
     </div>

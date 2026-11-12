@@ -25,3 +25,12 @@
 .ds-bar { height: 8px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
 .ds-bar span { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
 .ds-n { text-align: right; color: var(--muted); }
+
+/* ban list format + legality badge */
+.db-format { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.db-format label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.db-format select { font-size: 12px; padding: 3px 6px; }
+.db-legal { font-weight: 800; font-size: 13px; padding: 3px 10px; border-radius: 999px; }
+.db-legal.is-ok { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
+.db-legal.is-bad { background: var(--danger-soft); color: var(--danger); }
+.deck-builder .engine-support { margin-bottom: 8px; }

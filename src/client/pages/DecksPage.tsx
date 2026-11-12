@@ -1,4 +1,5 @@
 // PHASE 1 owns this page (deck list, import .ydk, new deck).
+import { STARTER_DECKS } from "../../shared/starterDecks.ts";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { Deck } from "../../shared/types.ts";
@@ -85,6 +86,16 @@ export function DecksPage() {
       const d = await store.save(newDeck(name, lists));
       navigate(`/decks/${d.id}`);
     });
+  /** Copy a built-in starter deck into your decks, to edit it. */
+  const copyStarter = (d: Deck) =>
+    run(async () => {
+      const base = d.name.replace(/^Starter: /, "");
+      const taken = new Set((decks || []).map((x) => x.name));
+      let name = base, i = 2;
+      while (taken.has(name)) name = `${base} ${i++}`;
+      const saved = await store.save(newDeck(name, { main: [...d.main], extra: [...d.extra], side: [...d.side] }));
+      navigate(`/decks/${saved.id}`);
+    });
   const remove = (d: Deck) => {
     if (window.confirm(`Delete the deck “${d.name}”? This cannot be undone.`)) void run(() => store.remove(d.id));
   };
@@ -105,6 +116,18 @@ export function DecksPage() {
         </p>
       )}
       <ImportDecks onImported={() => void load()} />
+      <details className="decks-starters" open={!!decks && decks.length === 0}>
+        <summary>Starter decks <span className="muted">· ready to play, or copy one to edit it</span></summary>
+        <ul>
+          {STARTER_DECKS.map((d) => (
+            <li key={d.id}>
+              <b>{d.name.replace(/^Starter: /, "")}</b>
+              <span className="muted"> Main {d.main.length}{d.extra.length ? ` · Extra ${d.extra.length}` : ""}</span>
+              <button type="button" onClick={() => void copyStarter(d)}>Copy to my decks</button>
+            </li>
+          ))}
+        </ul>
+      </details>
       {error && <p className="decks-error" role="alert">{error}</p>}
       {decks && decks.length > 0 && (
         <div className="decks-tools">

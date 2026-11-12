@@ -7,6 +7,7 @@
 import wasmUrl from "ocgcore-wasm/lib/ocgcore.sync.wasm?url";
 import { api } from "../../api.ts";
 import { botResponse } from "../../../worker/duel/engine/bot.ts";
+import { autopilotOn, demoDelay } from "../duel/autopilot.ts";
 import type { ClientMsg, EngineHostStart } from "../../../shared/duel.ts";
 import { loadCore } from "../../../worker/duel/engine/core.ts";
 import { EngineData, type EngineCardRow, type EngineDataSource } from "../../../worker/duel/engine/data.ts";
@@ -98,7 +99,7 @@ export class EngineHost {
     // a bot opponent: this engine answers its prompts (after a short pause)
     const bot = this.bot;
     const prompt = bot === undefined || u.finished ? undefined : u.prompts?.find((x) => x.seat === bot)?.prompt;
-    if (prompt) setTimeout(() => this.respond(bot!, botResponse(prompt, Math.random)), BOT_DELAY_MS);
+    if (prompt) setTimeout(() => this.respond(bot!, botResponse(prompt, Math.random, autopilotOn() ? "showcase" : "default")), demoDelay() ?? BOT_DELAY_MS);
   }
 
   private enqueue(fn: () => Promise<void>) {

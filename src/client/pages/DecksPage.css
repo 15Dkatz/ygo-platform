@@ -33,3 +33,9 @@ button.danger:hover { border-color: var(--danger); }
 }
 .decks-head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .decks-guest { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius); background: var(--accent-soft); }
+
+.decks-starters { border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 12px; margin: 10px 0; background: var(--surface); }
+.decks-starters summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
+.decks-starters ul { list-style: none; margin: 6px 0 4px; padding: 0; display: grid; gap: 6px; }
+.decks-starters li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.decks-starters li button { margin-left: auto; font-size: 12px; padding: 3px 10px; }

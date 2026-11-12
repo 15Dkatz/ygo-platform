@@ -10,12 +10,13 @@
     "deploy": "npm run build && wrangler deploy",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:engine": "vitest run src/worker/duel/engine/combos.test.ts src/worker/duel/engine/mechanics.test.ts src/worker/duel/engine/extraDeck.test.ts",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
     "cards:import:local": "node --experimental-strip-types scripts/import-cards.ts --local",
     "cards:import:remote": "node --experimental-strip-types scripts/import-cards.ts --remote",
     "cf-typegen": "wrangler types",
-    "engine:import:local": "node --experimental-sqlite --experimental-strip-types scripts/import-engine-data.ts --local",
+    "engine:import:local": "node --experimental-sqlite --experimental-strip-types scripts/import-engine-data.ts --local --all-scripts",
     "engine:import:remote": "node --experimental-sqlite --experimental-strip-types scripts/import-engine-data.ts --remote --all-scripts"
   },
   "dependencies": {

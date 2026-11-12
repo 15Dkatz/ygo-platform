@@ -26,10 +26,29 @@ function sample(rng: Rng, n: number, k: number): number[] {
   return ix.slice(0, k);
 }
 
-export function botResponse(p: EnginePrompt, rng: Rng): EngineResponse {
+/** Cards that grant an extra Normal Summon (the showcase style plays them right after summoning). */
+const EXTRA_SUMMON_CARDS = new Set([43422537 /* Double Summon */]);
+
+/** `style: "showcase"` (demo duels): favours Extra Deck summons, effects, chains and attacks over passing,
+ *  so a watched duel shows off more. The default style is unchanged (tests and stress runs rely on it). */
+export function botResponse(p: EnginePrompt, rng: Rng, style: "default" | "showcase" = "default"): EngineResponse {
   const promptId = p.id;
+  const show = style === "showcase";
   switch (p.kind) {
     case "idle": {
+      if (show) {
+        // showcase: build towards the flashy plays in a fixed priority, instead of weighing everything
+        const ex = p.specialSummons.findIndex((c) => c.location === "extra");
+        if (ex >= 0) return { promptId, kind: "idle", action: "specialSummon", index: ex };                  // 1. Extra Deck summon
+        if (p.summons.length) return { promptId, kind: "idle", action: "summon", index: pickIndex(rng, p.summons.length) };   // 2. Normal Summon
+        const more = p.activates.findIndex((c) => EXTRA_SUMMON_CARDS.has(c.code));
+        if (more >= 0) return { promptId, kind: "idle", action: "activate", index: more };                  // 3. e.g. Double Summon
+        if (p.specialSummons.length && rng() < 0.7) return { promptId, kind: "idle", action: "specialSummon", index: pickIndex(rng, p.specialSummons.length) };
+        if (p.activates.length && rng() < 0.6) return { promptId, kind: "idle", action: "activate", index: pickIndex(rng, p.activates.length) };
+        if (p.spellSets.length && rng() < 0.6) return { promptId, kind: "idle", action: "spellSet", index: pickIndex(rng, p.spellSets.length) };
+        if (p.canBattle) return { promptId, kind: "idle", action: "battle" };
+        return { promptId, kind: "idle", action: "end" };
+      }
       const options: EngineResponse[] = [];
       const add = (action: "summon" | "specialSummon" | "reposition" | "monsterSet" | "spellSet" | "activate", n: number, weight: number) => {
         for (let i = 0; i < n; i++) for (let w = 0; w < weight; w++) options.push({ promptId, kind: "idle", action, index: i });
@@ -47,13 +66,13 @@ export function botResponse(p: EnginePrompt, rng: Rng): EngineResponse {
     case "battle": {
       // forced attacks (some effects): neither Main Phase 2 nor End is allowed, so attack or activate
       const mustAct = !p.canMain2 && !p.canEnd;
-      if (p.attacks.length && (mustAct || rng() < 0.85)) return { promptId, kind: "battle", action: "attack", index: pickIndex(rng, p.attacks.length) };
+      if (p.attacks.length && (mustAct || rng() < (show ? 0.97 : 0.85))) return { promptId, kind: "battle", action: "attack", index: pickIndex(rng, p.attacks.length) };
       if (mustAct && p.activates.length) return { promptId, kind: "battle", action: "activate", index: pickIndex(rng, p.activates.length) };
       if (p.activates.length && rng() < 0.3) return { promptId, kind: "battle", action: "activate", index: pickIndex(rng, p.activates.length) };
       if (p.canMain2 && rng() < 0.5) return { promptId, kind: "battle", action: "main2" };
       return p.canEnd ? { promptId, kind: "battle", action: "end" } : { promptId, kind: "battle", action: "main2" };
     }
-    case "effectYesNo": return { promptId, kind: "effectYesNo", yes: rng() < 0.8 };
+    case "effectYesNo": return { promptId, kind: "effectYesNo", yes: rng() < (show ? 0.95 : 0.8) };
     case "yesNo": return { promptId, kind: "yesNo", yes: rng() < 0.6 };
     case "option": return { promptId, kind: "option", index: pickIndex(rng, p.options.length) };
     case "selectCard": {
@@ -76,7 +95,7 @@ export function botResponse(p: EnginePrompt, rng: Rng): EngineResponse {
       return { promptId, kind: "selectUnselect", index: pickIndex(rng, p.cards.length) };
     }
     case "selectChain":
-      if (!p.cards.length || (!p.forced && rng() < 0.4)) return { promptId, kind: "selectChain", index: p.forced && p.cards.length ? 0 : null };
+      if (!p.cards.length || (!p.forced && rng() < (show ? 0.15 : 0.4))) return { promptId, kind: "selectChain", index: p.forced && p.cards.length ? 0 : null };
       return { promptId, kind: "selectChain", index: pickIndex(rng, p.cards.length) };
     case "selectPlace": {
       // prefer our own zones (the first ones listed are the prompted player's)
