@@ -214,3 +214,69 @@ export function strike(layer: HTMLElement, run: Run, a: DOMRect, b: DOMRect, ele
     }
   }
 }
+
+/** Released as a Tribute: a golden glow, the card rises and fades upward. */
+export function ascend(layer: HTMLElement, run: Run, rect: DOMRect, code: number, faceUp: boolean, delay: number) {
+  const g = cardEl(code, faceUp, rect, "fx-tribute");
+  layer.appendChild(g);
+  const a = run(g, [
+    { transform: "none", opacity: 1, filter: "brightness(1)" },
+    { offset: 0.3, transform: "scale(1.06)", opacity: 1, filter: "brightness(1.6) drop-shadow(0 0 12px #ffd76a)" },
+    { transform: `translateY(${-rect.height * 0.9}px) scale(.82)`, opacity: 0, filter: "brightness(2) drop-shadow(0 0 18px #ffd76a)" },
+  ], { duration: 760, delay, easing: "cubic-bezier(.3,.5,.3,1)", fill: "both" });
+  a.onfinish = () => g.remove();
+  setTimeout(() => g.remove(), delay + 1500);
+  ring(layer, run, rect, delay + 80, "tone-light");
+}
+
+/** Used as material: the card flies into the monster it becomes, shrinking into a spark. */
+export function converge(layer: HTMLElement, run: Run, from: DOMRect, into: DOMRect, code: number, faceUp: boolean, delay: number) {
+  const g = cardEl(code, faceUp, from, "fx-material");
+  layer.appendChild(g);
+  const dx = into.left + into.width / 2 - (from.left + from.width / 2), dy = into.top + into.height / 2 - (from.top + from.height / 2);
+  const a = run(g, [
+    { transform: "none", opacity: 1, filter: "brightness(1)" },
+    { offset: 0.35, transform: `translate(${dx * 0.15}px, ${dy * 0.15 - 14}px) scale(1.04)`, opacity: 1, filter: "brightness(1.5) drop-shadow(0 0 10px #c9b8ff)" },
+    { transform: `translate(${dx}px, ${dy}px) scale(.25) rotate(160deg)`, opacity: 0, filter: "brightness(2.2) drop-shadow(0 0 16px #c9b8ff)" },
+  ], { duration: 640, delay, easing: "cubic-bezier(.5,0,.6,1)", fill: "both" });
+  a.onfinish = () => g.remove();
+  setTimeout(() => g.remove(), delay + 1400);
+}
+
+/** Sent to the GY (or milled): the card lifts, arcs over to the pile and lands; a mill flips face-up on the way. */
+export function arcTo(layer: HTMLElement, run: Run, from: DOMRect, to: DOMRect, code: number, faceUp: boolean, delay: number, flipFirst: boolean) {
+  const g = cardEl(code, faceUp, from, flipFirst ? "fx-mill" : "fx-send");
+  layer.appendChild(g);
+  const dx = to.left + to.width / 2 - (from.left + from.width / 2), dy = to.top + to.height / 2 - (from.top + from.height / 2);
+  const s = Math.min(1.2, Math.max(0.6, (Math.min(to.width, to.height * (59 / 86)) || from.width) / from.width));
+  const lift = -Math.max(30, Math.abs(dx) * 0.25);
+  const a = run(g, [
+    { transform: flipFirst ? "scaleX(0.05)" : "none", opacity: 1 },
+    { offset: flipFirst ? 0.18 : 0.12, transform: `translate(0, ${lift * 0.4}px) scale(1.08)`, opacity: 1 },
+    { offset: 0.55, transform: `translate(${dx * 0.55}px, ${dy * 0.55 + lift}px) rotate(${dx > 0 ? 8 : -8}deg) scale(${(1 + s) / 2})`, opacity: 1 },
+    { offset: 0.9, transform: `translate(${dx}px, ${dy}px) scale(${s})`, opacity: 1 },
+    { transform: `translate(${dx}px, ${dy}px) scale(${s})`, opacity: 0 },
+  ], { duration: flipFirst ? 620 : 560, delay, easing: "cubic-bezier(.35,.6,.35,1)", fill: "both" });
+  a.onfinish = () => g.remove();
+  setTimeout(() => g.remove(), delay + 1500);
+}
+
+/** Excavate: the top cards lift off the Deck, fan out face-up above it, hold, then sink back. */
+export function fan(layer: HTMLElement, run: Run, deck: DOMRect, codes: number[], delay: number) {
+  const n = Math.min(codes.length, 6);
+  const spread = Math.min(deck.width * 0.85, 520 / Math.max(1, n));
+  codes.slice(0, n).forEach((code, i) => {
+    const g = cardEl(code, true, deck, "fx-excavate");
+    layer.appendChild(g);
+    const off = (i - (n - 1) / 2) * spread;
+    const up = -deck.height * 1.05;
+    const a = run(g, [
+      { transform: "scaleX(.05)", opacity: 0 },
+      { offset: 0.18, transform: `translate(${off}px, ${up}px) rotate(${(i - (n - 1) / 2) * 6}deg) scale(1.12)`, opacity: 1 },
+      { offset: 0.82, transform: `translate(${off}px, ${up}px) rotate(${(i - (n - 1) / 2) * 6}deg) scale(1.12)`, opacity: 1 },
+      { transform: "none", opacity: 0 },
+    ], { duration: 1500, delay: delay + i * 70, easing: "cubic-bezier(.3,.6,.3,1)", fill: "both" });
+    a.onfinish = () => g.remove();
+    setTimeout(() => g.remove(), delay + 2600);
+  });
+}

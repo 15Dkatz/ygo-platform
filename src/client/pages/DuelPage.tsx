@@ -13,7 +13,7 @@ import { useDecks } from "../components/duel/DeckPicker.tsx";
 import { buildMenu, dropAction, locate, occupantAt, pileMenu, type MenuItem, type Pending } from "../components/duel/menus.ts";
 import { ContextMenu, Modal, Toasts } from "../components/duel/Overlays.tsx";
 import { PreDuel } from "../components/duel/PreDuel.tsx";
-import { CardPreview, LogChat } from "../components/duel/SidePanel.tsx";
+import { CardPreview, LogChat, LogText } from "../components/duel/SidePanel.tsx";
 import { boardCodes, getCard, useCardData, useDuelIdentity, useDuelSocket } from "../components/duel/useDuel.ts";
 import { AnimatedLp } from "../components/duel/anim/AnimatedLp.tsx";
 import { useBoardAnimations } from "../components/duel/anim/useBoardAnimations.ts";
@@ -22,10 +22,14 @@ import { EndOverlay, MuteToggle, ReconnectOverlay, TurnBanner } from "../compone
 import { useEngineBoard } from "../components/engine/EngineBoard.tsx";
 import { TurnTimer } from "../components/duel/TurnTimer.tsx";
 import { SkinPicker } from "../components/SkinPicker.tsx";
+import { DuelSettingsButton } from "../components/duel/DuelSettingsPanel.tsx";
+import { ChainStack } from "../components/duel/ChainStack.tsx";
+import { duelSettings, useDuelSettings } from "../components/duel/duelSettings.ts";
 import { SPEEDS, setAutopilot, setSpeed, useAutopilot, type Speed } from "../components/duel/autopilot.ts";
 import { botResponse } from "../../worker/duel/engine/bot.ts";
 import { demoDeck } from "../../shared/starterDecks.ts";
-import { AUTO_PASS_LABEL, shouldAutoPass, type AutoPassMode } from "../../shared/autoPass.ts";
+import { autoAnswer, type AutoPassMode } from "../../shared/autoPass.ts";
+import { nothingLeftToDo } from "../../shared/turnFlow.ts";
 import "../components/duel/duel.css";
 import "./DuelPage.css";
 import "../components/duel/duel-scene.css";
@@ -44,7 +48,7 @@ export function DuelPage() {
   const { roomId = "" } = useParams();
   const [params] = useSearchParams();
   const anim = useBoardAnimations();
-  const { conn, send, toast, clearPeek, promptEvents } = useDuelSocket(roomId, { beforeState: anim.beforeState });
+  const { conn, send, toast, clearPeek, promptEvents, chain } = useDuelSocket(roomId, { beforeState: anim.beforeState });
   const { identity } = useDuelIdentity();
   const { decks, deck, deckId, setDeckId } = useDecks();
   const { board, session, room, you } = conn;
@@ -61,6 +65,9 @@ export function DuelPage() {
   // your own hand layout after Shuffle hand (any number of times; only you see the new order)
   const [handOrder, setHandOrder] = useState<string[] | null>(null);
   const attackerRef = useRef<EngineCardRef | null>(null);
+  // ⚙ duel settings: 3D tilt angle, board info, confirmations (remembered in this browser)
+  const ds = useDuelSettings();
+  const tilt = ds.tilt > 0;
   // PC scene: log + chat live in a drawer (closed by default), the card preview floats on hover
   const [drawer, setDrawer] = useState(false);
   const [hovering, setHovering] = useState(false);
@@ -73,6 +80,10 @@ export function DuelPage() {
     return () => window.removeEventListener("pointermove", move);
   }, []);
   const [previewRight, setPreviewRight] = useState(false);
+  // for the Z (zoom) key: what's hovered right now
+  const hoveringRef = useRef(false), previewRef = useRef<number | null>(null);
+  hoveringRef.current = hovering;
+  previewRef.current = preview;
   const onHoverCard = useCallback((code: number | null) => {
     clearTimeout(hoverTimer.current);
     if (code) { setPreview(code); setHovering(true); setPreviewRight(pointerX.current < window.innerWidth / 2); }
@@ -140,13 +151,25 @@ export function DuelPage() {
     try { const v = localStorage.getItem("ygo.autoPass"); return v === "ask" || v === "never" ? v : "smart"; } catch { return "smart"; }
   });
   const setAutoPass = (m: AutoPassMode) => { setAutoPassState(m); try { localStorage.setItem("ygo.autoPass", m); } catch { /* storage blocked */ } };
-  const passPrompt = !auto.on && session?.stage === "duel" && shouldAutoPass(conn.prompt, you, promptEvents.current, autoPass,
-    (code) => { const t = getCard(code)?.type; return t ? /Monster/.test(t) : true; }) ? conn.prompt : null;
+  // auto-chaining: pass when nothing calls for a response, activate a lone mandatory effect, default chain order
+  const isMonsterCode = (code: number) => { const t = getCard(code)?.type; return t ? /Monster/.test(t) : true; };
+  const auto2 = !auto.on && session?.stage === "duel" ? autoAnswer(conn.prompt, you, promptEvents.current, autoPass, isMonsterCode) : null;
+  const autoKey = auto2 && conn.prompt ? `${conn.prompt.id}:${JSON.stringify(auto2)}` : null;
   useEffect(() => {
-    if (!passPrompt) return;
-    const t = setTimeout(() => send({ t: "respond", response: { promptId: passPrompt.id, kind: "selectChain", index: null } }), 120);
+    if (!auto2 || !conn.prompt) return;
+    const p = conn.prompt;
+    const t = setTimeout(() => {
+      const { passed, ...body } = auto2 as typeof auto2 & { passed?: boolean };
+      send({ t: "respond", response: { promptId: p.id, ...body } as EngineResponse });
+      // say so when it passed up something you could have chained
+      if (passed && p.kind === "selectChain" && p.cards.length) {
+        const names = [...new Set(p.cards.map((c) => getCard(c.code)?.name).filter(Boolean))].slice(0, 2).join(", ");
+        toast({ text: `Auto-passed${names ? `: you could have chained ${names}` : ""}. (⚙ Chain prompts)` }, 2600);
+      }
+    }, 120);
     return () => clearTimeout(t);
-  }, [passPrompt, send]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoKey]);
 
   // ...and the pre-duel steps: toss the coin, go first
   useEffect(() => {
@@ -243,7 +266,7 @@ export function DuelPage() {
     openMenu: setMenu,
     cardName: (code) => getCard(code)?.name,
     preview: (code) => setZoomCard(code),
-    onHover: (code) => { if (code) setPreview(code); },
+    onHover: onHoverCard,
     showMaterials: (uid) => setViewer({ kind: "materials", uid }),
     toast: (text) => toast({ text, error: true }),
     chainBadges: anim.chainBadges,
@@ -254,7 +277,7 @@ export function DuelPage() {
   const matchup = useMemo(() => {
     const a = attackerRef.current;
     const p = conn.prompt;
-    if (!engineMode || !board || !a || !p || p.player !== you || p.kind !== "selectCard" || board.phase !== "battle") return undefined;
+    if (!ds.matchup || !engineMode || !board || !a || !p || p.player !== you || p.kind !== "selectCard" || board.phase !== "battle") return undefined;
     const idx = indexBoard(board);
     const attacker = idx.get(refUid(a))?.card;
     if (!attacker?.faceUp) return undefined;
@@ -269,7 +292,7 @@ export function DuelPage() {
       if (t) out.set(t.uid, attackOutcome(fighter(attacker), fighter(t)));
     }
     return out;
-  }, [engineMode, board, conn.prompt, you]);
+  }, [engineMode, board, conn.prompt, you, ds.matchup]);
 
   const resolvePending = (at: ZoneRef, target: CardInstance | null) => {
     if (!board || !pending || you === null) return;
@@ -291,7 +314,7 @@ export function DuelPage() {
   };
 
   const ui: BoardUI = {
-    me, you, pending: !!pending, flash, selectedUid: pending?.uid ?? null, handOrder, matchup,
+    me, you, pending: !!pending, flash, selectedUid: pending?.uid ?? null, handOrder, matchup, hideStats: !ds.stats,
     marks: engineUi ? engineBoard.marks : undefined,
     onHover: onHoverCard,
     onCard: (card, at, e) => {
@@ -330,13 +353,15 @@ export function DuelPage() {
 
   // Phase track: one rule set (src/shared/phases.ts) for the track, Next phase / End turn and the shortcuts.
   const myPrompt = conn.prompt && conn.prompt.player === you ? conn.prompt : null;
+  // "forward" signal: your Main / Battle Phase with nothing left to play
+  const nothingToDo = engineMode && nothingLeftToDo(myPrompt);
   const waitingName = session && board ? (session.seats[board.turnPlayer === me ? other(me) : board.turnPlayer]?.name ?? "your opponent") : "your opponent";
   const phaseCtl: PhaseControls | null = !board ? null
     : engineMode ? enginePhaseControls(board, you, myPrompt, waitingName)
     : manualPhaseControls(board, you);
   const goPhase = useCallback((target: Phase | "endTurn") => {
     // ending the turn with your Normal Summon unused is usually a misclick: ask first
-    if (engineMode && (target === "endTurn" || target === "end") && !autoOn.current && myPrompt?.kind === "idle" && myPrompt.summons.length > 0) {
+    if (engineMode && (target === "endTurn" || target === "end") && !autoOn.current && duelSettings().confirmEnd && myPrompt?.kind === "idle" && myPrompt.summons.length > 0) {
       const names = [...new Set(myPrompt.summons.map((c) => getCard(c.code)?.name).filter(Boolean))].slice(0, 3).join(", ");
       if (!confirm(`You haven't used your Normal Summon this turn${names ? ` (you could summon ${names})` : ""}. End your turn anyway?`)) return;
     }
@@ -354,6 +379,7 @@ export function DuelPage() {
       if (t.closest("input, textarea, select") || e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key === "Escape") { setPending(null); return; }
       if (e.key === "?") { setHelp((h) => !h); return; }
+      if (e.key.toLowerCase() === "z" && hoveringRef.current && previewRef.current) { setZoomCard(previewRef.current); e.preventDefault(); return; }
       if (!playing || !board || menu) return;
       const k = e.key.toLowerCase();
       if (k === "d" && !engineMode) act({ type: "draw" });
@@ -432,7 +458,8 @@ export function DuelPage() {
   };
 
   return (
-    <section className={`duel-page ${live ? "is-live" : ""} ${drawer ? "is-drawer-open" : ""}`} ref={anim.rootRef}
+    <section className={`duel-page ${live ? "is-live" : ""} ${drawer ? "is-drawer-open" : ""} ${tilt ? "is-tilt" : ""} ${nothingToDo ? "is-nothing-to-do" : ""}`} ref={anim.rootRef}
+      style={{ ["--tilt" as string]: `${ds.tilt}deg` }}
       data-phase={live && board ? board.phase : undefined}>
       <div className="duel-topline">
         <Link to="/lobby" className="duel-back">‹ Lobby</Link>
@@ -450,14 +477,6 @@ export function DuelPage() {
         {live && playing && (
           <button className="is-danger duel-concede" onClick={() => { if (confirm("Concede this duel?")) send({ t: "concede" }); }} title="Concede the duel">Concede</button>
         )}
-        {room?.mode === "engine" && you !== null && !auto.on && (
-          <label className="duel-autopass" title="Auto-pass chains: Smart answers 'don't chain' unless your opponent just did something (activated, summoned, attacked). Your monsters' effects always ask.">
-            <span>Chains</span>
-            <select value={autoPass} onChange={(e) => setAutoPass(e.target.value as AutoPassMode)} aria-label="Auto-pass chains">
-              {(Object.keys(AUTO_PASS_LABEL) as AutoPassMode[]).map((m) => <option key={m} value={m}>{AUTO_PASS_LABEL[m]}</option>)}
-            </select>
-          </label>
-        )}
         {room?.mode === "engine" && you !== null && (
           <span className={`duel-autopilot ${auto.on ? "is-on" : ""}`}>
             <button onClick={() => setAutopilot(!auto.on)} aria-pressed={auto.on}
@@ -473,6 +492,7 @@ export function DuelPage() {
         )}
         <SkinPicker />
         <MuteToggle />
+        <DuelSettingsButton autoPass={autoPass} setAutoPass={setAutoPass} engine={room?.mode === "engine"} />
         <button className="duel-help-btn" onClick={() => setHelp(true)} aria-label="Help and shortcuts">?</button>
       </div>
       {session && live && <ReconnectOverlay status={conn.status} />}
@@ -494,8 +514,13 @@ export function DuelPage() {
               rail={phaseCtl && <>
                 <PhaseTrack board={board!} controls={phaseCtl} go={goPhase} />
                 {you !== null && <NextPhaseButton controls={phaseCtl} go={goPhase} />}
+                <RecentFeed log={board!.log} onHover={onHoverCard} onOpen={() => setDrawer(true)} />
               </>}
               status={<>
+                {engineMode && <ChainStack chain={chain} you={you} names={[board!.players[0].name, board!.players[1].name]} />}
+                {nothingToDo && !auto.on && (
+                  <p className="duel-nothing" role="status">Nothing left to play. Move on: <b>Next phase</b> <kbd>N</kbd> or <b>End turn</b> <kbd>E</kbd></p>
+                )}
                 {phaseCtl && session.stage === "duel" && (
                   <MoveStatus board={board!} you={you}
                     move={engineMode
@@ -597,7 +622,7 @@ export function DuelPage() {
               <li>Move to the Battle Phase, Main Phase 2 or end your turn with the phase bar under the board.</li>
               <li>When the rules ask you to choose (targets, Tributes, zones, chains), the choices light up on the board and a bar at the bottom shows what to pick. Glowing piles (GY, Deck…) open to show their choices. "List" shows the same choice as a list.</li>
               <li>The rules engine enforces everything; both players can agree to switch the duel to manual mode.</li>
-              <li>Shortcuts: <kbd>Enter</kbd> confirm a selection, <kbd>Esc</kbd> cancel / don't chain / close, <kbd>Space</kbd> end your turn (or pass on a chain), <kbd>?</kbd> this help. Hover a card (long-press on touch) to read it; click the big preview to zoom.</li>
+              <li>Shortcuts: <kbd>Z</kbd> zoom the card you're hovering, <kbd>Enter</kbd> confirm a selection, <kbd>Esc</kbd> cancel / don't chain / close, <kbd>Space</kbd> end your turn (or pass on a chain), <kbd>?</kbd> this help. Hover a card (long-press on touch) to read it; click the big preview to zoom.</li>
             </ul>
           ) : (
           <ul className="duel-help">
@@ -605,7 +630,7 @@ export function DuelPage() {
             <li>Drag cards between zones: hand → Monster Zone summons, → S/T Zone sets a Trap / activates a Spell, onto a monster attaches it as Xyz material.</li>
             <li>Click a GY, banished pile or Extra Deck to look through it; click your Deck to draw, search, mill or shuffle.</li>
             <li>The server does not enforce the rules: agree with your opponent like on a real table. Everything is logged.</li>
-            <li>Shortcuts: <kbd>D</kbd> draw, <kbd>H</kbd> shuffle, <kbd>N</kbd> next phase, <kbd>E</kbd> end turn, <kbd>Esc</kbd> cancel, <kbd>?</kbd> this help.</li>
+            <li>Shortcuts: <kbd>Z</kbd> zoom the hovered card, <kbd>D</kbd> draw, <kbd>H</kbd> shuffle, <kbd>N</kbd> next phase, <kbd>E</kbd> end turn, <kbd>Esc</kbd> cancel, <kbd>?</kbd> this help.</li>
           </ul>
           )}
         </Modal>
@@ -672,6 +697,21 @@ function PhaseTrack({ board, controls, go }: { board: BoardState; controls: Phas
           {PHASE_SHORT_LABEL[p.phase]}
         </button>
       ))}
+    </div>
+  );
+}
+
+/** What just happened: the last few log lines, on the board (the full log is in the drawer). */
+function RecentFeed({ log, onHover, onOpen }: { log: string[]; onHover(code: number | null): void; onOpen(): void }) {
+  // skip phase-step noise so the feed shows actions
+  const lines = log.filter((l) => !/^(Draw|Standby|Main|Battle|End) Phase( \d)?$/.test(l)).slice(-4);
+  if (!lines.length) return null;
+  return (
+    <div className="duel-recent" role="log" aria-label="Recent actions">
+      <button className="duel-recent-title" onClick={onOpen} title="Open the full duel log">Recent ›</button>
+      <ol>
+        {lines.map((l, i) => <li key={`${log.length}-${i}`} className={i === lines.length - 1 ? "is-new" : ""} style={{ opacity: 0.45 + (0.55 * (i + 1)) / lines.length }}><LogText text={l} onHover={onHover} /></li>)}
+      </ol>
     </div>
   );
 }

@@ -49,6 +49,10 @@ export function ContextMenu({ x, y, title, items, onClose }: { x: number; y: num
             {it.sub ? <span className="muted">›</span> : it.key ? <kbd>{it.key}</kbd> : null}
           </button>
         ))}
+        {/* an obvious way out */}
+        <button className="duel-menu-item duel-menu-close" onClick={() => (stack.length > 1 ? setStack((s) => s.slice(0, -1)) : onClose())}>
+          <span>{stack.length > 1 ? "‹ Back" : "✕ Close"}</span><kbd>Esc</kbd>
+        </button>
       </div>
     </div>
   );

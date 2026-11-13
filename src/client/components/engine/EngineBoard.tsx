@@ -261,7 +261,7 @@ export function useEngineBoard(o: EngineBoardOpts): EngineBoard {
     } else if (mine.kind === "selectPosition") {
       overlay = <PositionChooser prompt={mine} at={point.current} name={o.cardName(mine.code)} onPick={(position) => send({ kind: "selectPosition", position })} />;
     } else if (mine.kind !== "idle" && mine.kind !== "battle") {
-      overlay = <PromptBar prompt={mine} picked={picked} counts={counts} places={places} send={send} onList={() => setShowList(true)} />;
+      overlay = <PromptBar prompt={mine} picked={picked} counts={counts} places={places} send={send} onList={() => setShowList(true)} cardName={o.cardName} onHover={o.onHover} />;
     }
     const pv = pile ? pileView(pile) : null;
     if (pv) {
@@ -320,9 +320,9 @@ export function useEngineBoard(o: EngineBoardOpts): EngineBoard {
 type BarPrompt = Exclude<EnginePrompt, { kind: "idle" | "battle" | "selectPosition" }>;
 
 /** The compact floating bar for selections: what to pick, progress, Confirm / Cancel / Don't chain. */
-function PromptBar({ prompt: p, picked, counts, places, send, onList }: {
+function PromptBar({ prompt: p, picked, counts, places, send, onList, cardName, onHover }: {
   prompt: BarPrompt; picked: number[]; counts: number[]; places: EnginePlace[];
-  send(r: EngineResponseBody): void; onList(): void;
+  send(r: EngineResponseBody): void; onList(): void; cardName(code: number): string | undefined; onHover(code: number | null): void;
 }) {
   const hint = p.hint ?? title(p);
   let progress: string | null = null;
@@ -332,25 +332,44 @@ function PromptBar({ prompt: p, picked, counts, places, send, onList }: {
     progress = st.label;
     if (!answersOnClick(p)) {
       const res = selectResponse(p, picked, counts);
-      buttons.push(<button key="ok" className="primary" disabled={!res} onClick={() => res && send(res)}>Confirm</button>);
+      buttons.push(<button key="ok" className="primary" disabled={!res} onClick={() => res && send(res)}>Confirm <kbd>Enter</kbd></button>);
     }
     if (p.kind === "selectUnselect" && (p.canFinish || p.canCancel)) {
-      buttons.push(<button key="done" className={p.canFinish ? "primary" : ""} onClick={() => send({ kind: "selectUnselect", index: null })}>{p.canFinish ? "Done" : "Cancel"}</button>);
+      buttons.push(<button key="done" className={p.canFinish ? "primary" : "is-back"} onClick={() => send({ kind: "selectUnselect", index: null })}>{p.canFinish ? <>Done <kbd>Enter</kbd></> : <>← Cancel <kbd>Esc</kbd></>}</button>);
     }
     if ((p.kind === "selectCard" || p.kind === "selectTribute") && p.canCancel) {
-      buttons.push(<button key="cancel" onClick={() => send({ kind: p.kind, indices: null })}>Cancel</button>);
+      buttons.push(<button key="cancel" className="is-back" onClick={() => send({ kind: p.kind, indices: null })}>← Cancel <kbd>Esc</kbd></button>);
     }
   } else if (p.kind === "selectChain") {
-    if (!p.forced) buttons.push(<button key="no" className="primary" onClick={() => send({ kind: "selectChain", index: null })}>Don't chain</button>);
+    if (!p.forced) buttons.push(<button key="no" className="primary" onClick={() => send({ kind: "selectChain", index: null })}>Don't chain <kbd>Esc</kbd></button>);
   } else if (p.kind === "selectPlace") {
     progress = p.count > 1 ? `${places.length}/${p.count}` : null;
   }
+  // the chain pop-up: every card you could chain, with the effect it would activate; one click chains it
+  const chainOptions = p.kind === "selectChain" ? p.cards : [];
   return (
-    <div className="duel-engine-bar" role="status" aria-live="polite">
-      <span className="duel-engine-bar-hint">{p.kind === "selectChain" ? `${hint} Click a highlighted card to chain it.` : p.kind === "selectPlace" ? (p.hint && !/^Select/.test(p.hint) ? `${p.hint}: choose a zone on the board.` : `${hint}. Click a highlighted zone.`) : hint}</span>
+    <div className={`duel-engine-bar ${p.kind === "selectChain" ? "is-chain" : ""}`} role="status" aria-live="polite">
+      <span className="duel-engine-bar-kicker">{p.kind === "selectChain" ? (p.forced ? "Activate an effect" : "Your chance to respond") : "Your decision"}</span>
+      <span className="duel-engine-bar-hint">{p.kind === "selectChain" ? `${hint}` : p.kind === "selectPlace" ? (p.hint && !/^Select/.test(p.hint) ? `${p.hint}: choose a zone on the board.` : `${hint}. Click a highlighted zone.`) : hint}</span>
       {progress && <span className="duel-engine-bar-count">{progress}</span>}
-      {buttons}
-      <button className="duel-engine-bar-list" onClick={onList} title="Show this choice as a list">List</button>
+      {chainOptions.length > 0 && (
+        <ul className="duel-chain-options">
+          {chainOptions.map((c, i) => (
+            <li key={i}>
+              <button onClick={() => send({ kind: "selectChain", index: i })} title={c.desc || cardName(c.code)}
+                onMouseEnter={() => onHover(c.code || null)} onMouseLeave={() => onHover(null)} onFocus={() => onHover(c.code || null)} onBlur={() => onHover(null)}>
+                <span className="duel-card duel-chain-thumb"><span className="duel-card-inner"><CardFace code={c.code} /></span></span>
+                <span className="duel-chain-text"><b>{cardName(c.code) ?? "Card"}</b><small>{c.desc || "Activate"}</small></span>
+                <span className="duel-chain-go">Chain ›</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <span className="duel-engine-bar-buttons">
+        {buttons}
+        <button className="duel-engine-bar-list" onClick={onList} title="Show this choice as a list">List</button>
+      </span>
     </div>
   );
 }

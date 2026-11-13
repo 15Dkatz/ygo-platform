@@ -10,6 +10,23 @@ const listeners = new Set<() => void>();
 const lastAt = new Map<Sfx, number>();
 
 export const isMuted = () => muted;
+
+// master volume (0..1), remembered; every sound goes through one gain node
+const VOL_KEY = "duel-sfx-volume";
+let volume = (() => { try { const v = Number(localStorage.getItem(VOL_KEY)); return Number.isFinite(v) && localStorage.getItem(VOL_KEY) !== null ? Math.min(1, Math.max(0, v)) : 0.7; } catch { return 0.7; } })();
+let masterGain: GainNode | null = null;
+function master(a: AudioContext): GainNode {
+  if (!masterGain || masterGain.context !== a) { masterGain = a.createGain(); masterGain.connect(a.destination); }
+  masterGain.gain.value = volume * 1.4;   // 0.7 (the default) ~ the original loudness
+  return masterGain;
+}
+export const getVolume = () => volume;
+export function setVolume(v: number) {
+  volume = Math.min(1, Math.max(0, v));
+  try { localStorage.setItem(VOL_KEY, String(volume)); } catch { /* private mode */ }
+  if (masterGain) masterGain.gain.value = volume * 1.4;
+  listeners.forEach((l) => l());
+}
 export function setMuted(m: boolean) {
   muted = m;
   try { localStorage.setItem(KEY, m ? "1" : "0"); } catch { /* private mode */ }
@@ -34,7 +51,7 @@ function tone(a: AudioContext, at: number, freq: number, ms: number, opts: { typ
   g.gain.setValueAtTime(0.0001, at);
   g.gain.exponentialRampToValueAtTime(peak, at + 0.012);
   g.gain.exponentialRampToValueAtTime(0.0001, at + ms / 1000);
-  o.connect(g).connect(a.destination);
+  o.connect(g).connect(master(a));
   o.start(at);
   o.stop(at + ms / 1000 + 0.02);
 }
@@ -49,7 +66,7 @@ function noise(a: AudioContext, at: number, ms: number, freq: number, gain = 0.0
   src.buffer = buf;
   f.type = "bandpass"; f.frequency.value = freq; f.Q.value = 0.9;
   g.gain.value = gain;
-  src.connect(f).connect(g).connect(a.destination);
+  src.connect(f).connect(g).connect(master(a));
   src.start(at);
 }
 

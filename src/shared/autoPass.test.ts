@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shouldAutoPass } from "./autoPass.ts";
+import { autoAnswer, shouldAutoPass } from "./autoPass.ts";
 import type { EngineEvent, EnginePrompt } from "./enginePrompts.ts";
 
 const chain = (cards: { location: string; code?: number; controller?: 0 | 1 }[], forced = false) =>
@@ -33,5 +33,22 @@ describe("auto-pass chains", () => {
   it("ask: never auto-passes; other players' prompts are left alone", () => {
     expect(shouldAutoPass(chain(setTrap), 0, [], "ask")).toBe(false);
     expect(shouldAutoPass(chain(setTrap), 1, [], "smart")).toBe(false);
+  });
+});
+
+describe("auto-chaining", () => {
+  it("activates a mandatory effect with a single option by itself", () => {
+    expect(autoAnswer(chain([{ location: "monster" }], true), 0, [], "smart")).toEqual({ kind: "selectChain", index: 0 });
+  });
+  it("still asks for a mandatory choice between several effects", () => {
+    expect(autoAnswer(chain([{ location: "monster" }, { location: "gy" }], true), 0, [], "smart")).toBeNull();
+  });
+  it("orders your simultaneous effects by default", () => {
+    const sort = { id: 2, player: 0, kind: "sort", chain: true, cards: [] } as unknown as EnginePrompt;
+    expect(autoAnswer(sort, 0, [], "smart")).toEqual({ kind: "sort", order: null });
+  });
+  it("marks an auto-pass, and never answers in 'ask' mode", () => {
+    expect(autoAnswer(chain(setTrap), 0, [], "smart")).toEqual({ kind: "selectChain", index: null, passed: true });
+    expect(autoAnswer(chain([{ location: "monster" }], true), 0, [], "ask")).toBeNull();
   });
 });

@@ -21,7 +21,7 @@ export const reducedMotion = () => typeof matchMedia === "function" && matchMedi
 
 const MOVE_MS = 330, ROTATE_MS = 280, SHUFFLE_MS = 420, ATTACK_MS = 440, PULSE_MS = 600;
 /** Gap between consecutive intents of one update, and the cap on the whole timeline's start offsets. */
-const STAGGER: Record<Intent["t"], number> = { effect: 160, banner: 120, move: 90, rotate: 60, shuffle: 80, attack: 380, pulse: 40 };
+const STAGGER: Record<Intent["t"], number> = { effect: 160, banner: 120, move: 90, rotate: 60, shuffle: 80, attack: 380, pulse: 40, excavate: 600 };
 const MAX_OFFSET = 800;
 
 type Rects = Map<string, DOMRect>;
@@ -97,6 +97,7 @@ export class BoardAnimator {
           case "move": this.move(p.rects, it, delay, flipped); break;
           case "rotate": this.rotate(it, delay); break;
           case "shuffle": this.shuffle(it.zone, delay); break;
+          case "excavate": this.excavate(it.zone, it.codes, delay); break;
           case "attack": this.attack(it.attacker, it.target, it.side, delay, false, it.code); break;
           case "effect": this.effect(p.rects, it, delay); break;
           case "pulse": this.pulse(it.uid, it.tone, delay); break;
@@ -120,9 +121,12 @@ export class BoardAnimator {
           : to === "spelltrap" || to === "field" ? (it.faceUp ? "chain" : "set")
           : null;
         if (it.style === "shatter") s = "damage";
+        if (it.style === "tribute" || it.style === "material") s = "resolve";
+        if (it.style === "send" || it.style === "mill") s = "set";
       } else if (it.t === "attack") s = "attack";
       else if (it.t === "effect") s = it.kind === "negate" ? "damage" : it.kind === "burn" ? "damage" : it.kind === "revive" || it.kind === "search" ? "gain" : "chain";
       else if (it.t === "shuffle") s = "shuffle";
+      else if (it.t === "excavate") s = "draw";
       else if (it.t === "pulse") s = it.tone === "activate" ? "chain" : it.tone === "resolve" ? "resolve" : null;
       else if (it.t === "rotate" && it.reveal) s = "summon";
       if (s && !seen.has(s)) {
@@ -163,6 +167,16 @@ export class BoardAnimator {
       (it.style === "shatter" ? fx.shatter : fx.dissolve)(layer, run, from, it.code, it.faceUp || it.code > 0, delay);
       if (it.to.uid) flipped.add(it.to.uid);
       return;
+    }
+    // tributes rise away where they stood; materials fly into the monster they become
+    if (layer && it.style === "tribute") { fx.ascend(layer, run, from, it.code, it.faceUp || it.code > 0, delay); if (it.to.uid) flipped.add(it.to.uid); return; }
+    if (layer && it.style === "material" && it.via) {
+      const into = this.nowRect(it.via);
+      if (into) { fx.converge(layer, run, from, into, it.code, it.faceUp || it.code > 0, delay); if (it.to.uid) flipped.add(it.to.uid); return; }
+    }
+    if (layer && (it.style === "send" || it.style === "mill")) {
+      const to = this.nowRect(it.to);
+      if (to) { fx.arcTo(layer, run, from, to, it.code, it.faceUp || it.code > 0, delay, it.style === "mill"); if (it.to.uid) flipped.add(it.to.uid); return; }
     }
     if (layer && it.style === "whoosh") fx.whoosh(layer, run, from, delay);
     if (layer && it.style === "pillar") { const to = this.nowRect(it.to); if (to) fx.pillar(layer, run, to, delay + 120); }
@@ -232,6 +246,14 @@ export class BoardAnimator {
       ? [{ transform: a }, { offset: 0.5, transform: `${mid} scaleX(0.05)`.trim() }, { transform: b }]
       : [{ transform: a }, { transform: b }];
     this.run(inner, frames, { duration: ROTATE_MS, delay, easing: "ease-in-out" });
+  }
+
+  /** Excavated cards lift off the Deck, fan out face-up above it, then settle back. */
+  private excavate(zone: string, codes: number[], delay: number) {
+    const deck = this.zoneEl(zone)?.getBoundingClientRect();
+    const layer = this.layer();
+    if (!deck || !layer || !codes.length) return;
+    fx.fan(layer, this.run.bind(this), deck, codes, delay);
   }
 
   /** Shuffle wiggle + sound for one zone, outside a captured board update (e.g. a local hand shuffle). */

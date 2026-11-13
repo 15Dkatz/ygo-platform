@@ -32,3 +32,16 @@ export function shouldAutoPass(prompt: EnginePrompt | null, me: Seat | null, eve
   if (mode === "never") return true;
   return !opponentActed(events, me);
 }
+
+/** What auto-chaining answers for the player, or null to ask them. Beyond passing (shouldAutoPass):
+ *  a mandatory effect with exactly one option activates by itself, and the order of several of your
+ *  own simultaneous effects uses the default order. "ask" mode never answers. */
+export type AutoAnswer = { kind: "selectChain"; index: number | null; passed?: boolean } | { kind: "sort"; order: null };
+export function autoAnswer(prompt: EnginePrompt | null, me: Seat | null, events: EngineEvent[], mode: AutoPassMode,
+  isMonster: (code: number) => boolean = () => true): AutoAnswer | null {
+  if (!prompt || me === null || prompt.player !== me || mode === "ask") return null;
+  if (prompt.kind === "selectChain" && prompt.forced && prompt.cards.length === 1) return { kind: "selectChain", index: 0 };
+  if (prompt.kind === "sort" && prompt.chain) return { kind: "sort", order: null };
+  if (shouldAutoPass(prompt, me, events, mode, isMonster)) return { kind: "selectChain", index: null, passed: true };
+  return null;
+}

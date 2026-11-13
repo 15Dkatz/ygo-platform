@@ -31,6 +31,8 @@ export interface Matchup { text: string; tone: "good" | "bad" | "even" | "unknow
 export interface BoardUI {
   /** Attack outcome previews, by target uid, while you pick an attack target. */
   matchup?: Map<string, Matchup>;
+  /** Hide the ATK / DEF strips (duel settings). */
+  hideStats?: boolean;
   /** Your own display order of your hand (uids), after a local Shuffle hand. Cards not listed keep their order at the end. */
   handOrder?: string[] | null;
   /** Bottom side of the board (your seat; seat 0 for spectators). */
@@ -112,7 +114,7 @@ function Slot({ card, at, ui, label, className = "" }: { card: CardInstance | nu
           onClick={(e) => { e.stopPropagation(); ui.onCard(card, at, e); }}
         />
       )}
-      {card && (at.zone === "monster" || at.zone === "extraMonster") && <StatStrip card={card} />}
+      {card && !ui.hideStats && (at.zone === "monster" || at.zone === "extraMonster") && <StatStrip card={card} />}
       {card && ui.matchup?.get(card.uid) && <span className={`duel-matchup is-${ui.matchup.get(card.uid)!.tone}`}>{ui.matchup.get(card.uid)!.text}</span>}
     </DropZone>
   );

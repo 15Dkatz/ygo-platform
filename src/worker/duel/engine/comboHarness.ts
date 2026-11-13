@@ -9,7 +9,7 @@
 import { OcgLocation, OcgQueryFlags } from "ocgcore-wasm";
 import { expect } from "vitest";
 import type { BoardState, CardInstance } from "../../../shared/duel.ts";
-import type { EngineCardRef, EngineEffectRef, EnginePrompt, EngineResponse } from "../../../shared/enginePrompts.ts";
+import type { EngineCardRef, EngineEffectRef, EngineEvent, EnginePrompt, EngineResponse } from "../../../shared/enginePrompts.ts";
 import { botResponse, seededRng } from "./bot.ts";
 import { EngineDuel } from "./EngineDuel.ts";
 import { nodeCore, nodeData } from "./testHarness.ts";
@@ -42,6 +42,8 @@ export class Player {
   /** chain these cards' effects when offered, nothing else */
   chainCodes: number[];
   readonly trace: string[] = [];
+  /** Engine events of the last act() / endTurn() (for animation tests). */
+  lastEvents: EngineEvent[] = [];
   private rng = seededRng(7);
 
   private constructor(readonly duel: EngineDuel, chain: number[]) { this.chainCodes = chain; }
@@ -91,6 +93,7 @@ export class Player {
     expect(index, `${action} ${code} should be offered; offered: ${JSON.stringify(list.map((c) => [c.code, c.location, (c as EngineEffectRef).desc]))}`).toBeGreaterThanOrEqual(0);
     this.pick = opts.pick ?? [];
     this.decline = opts.decline ?? [];
+    this.lastEvents = [];
     await this.answer({ promptId: p.id, kind: "idle", action, index });
     await this.settle();
   }
@@ -106,6 +109,7 @@ export class Player {
     const p = this.duel.prompt!;
     if (process.env.COMBO_DEBUG) this.trace.push(`PROMPT seat${p.player} ${JSON.stringify(p).slice(0, 600)} -> ${JSON.stringify(r)}`);
     const events = await this.duel.respond(p.player, r);
+    this.lastEvents.push(...events);
     for (const e of events) this.trace.push(JSON.stringify(e).slice(0, 200));
     expect(this.duel.retries, `engine rejected ${JSON.stringify(r)} for ${p.kind}`).toBe(0);
   }

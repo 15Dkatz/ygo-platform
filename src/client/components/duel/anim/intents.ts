@@ -16,11 +16,21 @@ import type { EffectKind } from "./categories.ts";
 export interface Spot { uid?: string; zone: string }
 
 /** How a moving card leaves / arrives: destroyed cards shatter, banished ones dissolve, revived ones rise in light… */
-export type MoveStyle = "shatter" | "dissolve" | "pillar" | "sparkle" | "whoosh";
+export type MoveStyle = "shatter" | "dissolve" | "pillar" | "sparkle" | "whoosh"
+  /** released as a Tribute: rises away in a golden glow */
+  | "tribute"
+  /** used as Synchro / Xyz / Fusion / Link material: flies into the new monster (`via`) */
+  | "material"
+  /** sent to the GY by an effect or cost: visibly flies to the GY */
+  | "send"
+  /** milled: flips off the top of the Deck and arcs into the GY */
+  | "mill";
 
 export type Intent =
   /** A card travels from -> to. `flip`: animate the real element at `to.uid` (FLIP); otherwise a ghost card flies. */
-  | { t: "move"; from: Spot; to: Spot; code: number; faceUp: boolean; flip: boolean; reveal?: boolean; style?: MoveStyle }
+  | { t: "move"; from: Spot; to: Spot; code: number; faceUp: boolean; flip: boolean; reveal?: boolean; style?: MoveStyle; via?: Spot }
+  /** Excavated / revealed from the top of the Deck: the cards lift and fan out above it, then settle. */
+  | { t: "excavate"; zone: string; codes: number[] }
   /** Battle position / face-up change in place. */
   | { t: "rotate"; uid: string; from?: Position; to?: Position; reveal?: boolean }
   | { t: "shuffle"; zone: string }
@@ -45,6 +55,9 @@ function refSpot(r: EngineCardRef, first: Seat): Spot {
 
 const faceDown = (p?: Position) => p === "faceDown" || p === "faceDownDef";
 const hiddenLoc = (r: EngineCardRef) => r.location === "deck" || r.location === "hand" || faceDown(r.position);
+
+/** Effect kinds that destroy (their field -> GY moves shatter; other effects "send"). */
+const DESTROYING = new Set<EffectKind>(["destroy", "wipe", "trapHole"]);
 
 function moveStyle(from: string, to: string, engineSearch: boolean): MoveStyle | undefined {
   if (FIELD.has(from) && to === "gy") return "shatter";
@@ -75,6 +88,17 @@ export function engineIntents(events: EngineEvent[], prev: BoardState, next: Boa
   });
   const finalAt = (i: number, uid: string) => !touches.slice(i + 1).some((t) => t.includes(uid));
   let resolving: number | null = null;
+  let battled = false;
+  // the next summon after event i (within a few events), for tributes and Extra Deck materials
+  const nextSummon = (i: number) => {
+    for (let j = i + 1; j < Math.min(events.length, i + 10); j++) {
+      const x = events[j];
+      if (x.e === "summon") return { ev: x, j };
+      if (x.e === "chain" || x.e === "chainSolving" || x.e === "attack") return null;
+    }
+    return null;
+  };
+  const fromExtra = (j: number) => events.slice(Math.max(0, j - 4), j).some((x) => x.e === "move" && x.from?.location === "extra");
 
   events.forEach((ev, i) => {
     switch (ev.e) {
@@ -97,7 +121,17 @@ export function engineIntents(events: EngineEvent[], prev: BoardState, next: Boa
         const flip = !!b.uid && to.location !== "overlay" && finalAt(i, b.uid);
         // a resolved Spell / Trap going to the GY isn't "destroyed": no shatter for chain cards leaving their zone
         const chainCard = [...chain.uid.values()].includes(refUid(from)) && (from.location === "spelltrap" || from.location === "field");
-        out.push({ t: "move", from: a, to: b, code: ev.code, faceUp: up, flip, reveal: up && hiddenLoc(from) && to.location !== "hand", style: chainCard ? undefined : moveStyle(from.location, to.location, resolving !== null) });
+        let style = chainCard ? undefined : moveStyle(from.location, to.location, resolving !== null);
+        let via: Spot | undefined;
+        if (FIELD.has(from.location) && (to.location === "gy" || to.location === "overlay" || to.location === "banished") && !chainCard) {
+          const sum = nextSummon(i);
+          if (sum && sum.ev.how === "normal" && resolving === null) style = "tribute";                       // Tribute Summon
+          else if (sum && sum.ev.how === "special" && fromExtra(sum.j)) { style = "material"; via = refSpot(sum.ev.card, first); }   // Synchro / Xyz / Fusion / Link
+          else if (to.location === "gy" && !battled && resolving !== null && !DESTROYING.has(kindOf(chain.code.get(resolving) ?? 0))) style = "send";
+          else if (to.location === "gy" && !battled && resolving === null) style = "send";                // costs, rules
+        }
+        if (from.location === "deck" && to.location === "gy") style = "mill";
+        out.push({ t: "move", from: a, to: b, code: ev.code, faceUp: up || style === "mill", flip, reveal: up && hiddenLoc(from) && to.location !== "hand", style, ...(via ? { via } : {}) });
         return;
       }
       case "summon": {
@@ -153,6 +187,13 @@ export function engineIntents(events: EngineEvent[], prev: BoardState, next: Boa
       }
       case "chainEnd": chain.uid.clear(); chain.code.clear(); resolving = null; return;
       case "target": ev.cards.forEach((c) => out.push({ t: "pulse", uid: refUid(c), tone: "target" })); return;
+      case "confirm": {
+        // excavating / revealing from the top of the Deck
+        const fromDeck = ev.cards.filter((c) => c.location === "deck" && c.code > 0);
+        if (fromDeck.length) out.push({ t: "excavate", zone: pileKey("deck", fromDeck[0].controller), codes: fromDeck.map((c) => c.code) });
+        return;
+      }
+      case "battle": battled = true; return;
       case "attack": {
         const attacker = refUid(ev.attacker);
         out.push({ t: "attack", attacker, target: ev.target ? refUid(ev.target) : null, side: (1 - ev.attacker.controller) as Seat, code: after.get(attacker)?.card.code || before.get(attacker)?.card.code || ev.attacker.code || undefined });

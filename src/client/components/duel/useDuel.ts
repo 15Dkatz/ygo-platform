@@ -1,5 +1,6 @@
 // Client-side duel plumbing: identity (guest name / account), the room websocket, card data cache.
 
+import { applyChainEvents, type ChainLink } from "./ChainStack.tsx";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, lookupCards } from "../../api.ts";
 import type { BoardState, CardInstance, ClientMsg, DuelEvent, RoomInfo, ServerMsg, SessionInfo } from "../../../shared/duel.ts";
@@ -65,6 +66,8 @@ export function useDuelSocket(roomId: string, hooks?: DuelSocketHooks) {
   // engine events since the previous prompt, and the ones that led to the current prompt (auto-pass)
   const sincePrompt = useRef<EngineEvent[]>([]);
   const promptEvents = useRef<EngineEvent[]>([]);
+  // the open chain (rules-enforced duels), for the chain display
+  const [chain, setChain] = useState<ChainLink[]>([]);
   const [conn, setConn] = useState<DuelConn>({ status: "connecting", room: null, you: null, session: null, board: null, chat: [], peek: null, toasts: [], prompt: null, hostStatus: null });
   const wsRef = useRef<WebSocket | null>(null);
   const queue = useRef<ClientMsg[]>([]);
@@ -114,6 +117,7 @@ export function useDuelSocket(roomId: string, hooks?: DuelSocketHooks) {
             const events = (Array.isArray(msg.events) ? msg.events : []) as EngineEvent[];
             eventsRef.current = [...(eventsRef.current ?? []), ...events];
             sincePrompt.current.push(...events);
+            if (events.some((e) => e.e.startsWith("chain"))) setChain((c) => applyChainEvents(c, events));
             // coins and dice get the same toasts as manual mode
             for (const ev of events) {
               if (ev.e === "coin") ev.results.forEach((heads) => toast({ event: { kind: "coin", player: ev.player, heads } }));
@@ -172,7 +176,7 @@ export function useDuelSocket(roomId: string, hooks?: DuelSocketHooks) {
   sendRef.current = send;
 
   const clearPeek = useCallback(() => setConn((c) => ({ ...c, peek: null })), []);
-  return { conn, send, toast, clearPeek, promptEvents };
+  return { conn, send, toast, clearPeek, promptEvents, chain };
 }
 
 // ---------- card data ----------
