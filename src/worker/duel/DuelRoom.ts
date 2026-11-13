@@ -90,6 +90,8 @@ interface RoomData {
   settings?: RoomSettings;
   /** Demo duel vs the bot (decks aren't shuffled); only ever set together with a bot. */
   demo?: boolean;
+  /** When the current duel started (for match history). */
+  duelStartedAt?: string;
   /** Turn timer state (ms). `turn` = the board turn the clock last saw, to refill at a new turn. */
   clock?: { remaining: [number, number]; running: Seat | null; since: number; turn: number };
 }
@@ -498,6 +500,7 @@ export class DuelRoom extends DurableObject<Env> {
 
   private async startDuel(first: Seat) {
     const room = this.room!;
+    room.duelStartedAt = new Date().toISOString();
     const [s0, s1] = room.seats;
     if (!s0?.deck || !s1?.deck) throw new RoomError("Both players need a deck.");
     if (room.mode === "engine" && this.hostMode()) {
@@ -773,6 +776,7 @@ export class DuelRoom extends DurableObject<Env> {
 
   private finish(winner: Seat | null, reason: string) {
     const room = this.room!;
+    if (room.stage === "duel") void this.recordMatch(winner, reason);
     if (room.clock) room.clock.running = null;
     if (room.mode === "engine") {
       room.prompts = [];
@@ -787,6 +791,25 @@ export class DuelRoom extends DurableObject<Env> {
     const text = winner === null ? `${reason} The duel is a draw.` : `${reason} ${room.seats[winner]?.name ?? room.board?.players[winner].name} wins!`;
     room.board?.log.push(text);
     this.systemLine(text);
+  }
+
+  /** Match history: one row per finished duel (never fails the duel if the write fails). */
+  private async recordMatch(winner: Seat | null, reason: string) {
+    const room = this.room!;
+    const [a, b] = room.seats;
+    try {
+      await this.env.DB.prepare(
+        `INSERT INTO matches (room_id, mode, p0_id, p0_name, p0_deck, p1_id, p1_name, p1_deck, winner, reason, turns, started_at, ended_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).bind(
+        room.roomId, room.mode,
+        a?.bot ? BOT_ID : a?.id ?? null, a?.name ?? null, a?.deck?.deckId ?? null,
+        b?.bot ? BOT_ID : b?.id ?? null, b?.name ?? null, b?.deck?.deckId ?? null,
+        winner, reason.slice(0, 200), room.board?.turn ?? null, room.duelStartedAt ?? null, new Date().toISOString(),
+      ).run();
+    } catch (e) {
+      console.error("match history", e);
+    }
   }
 
   private freeSeat(p: Seat) {

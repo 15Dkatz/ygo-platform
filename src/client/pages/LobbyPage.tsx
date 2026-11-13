@@ -1,5 +1,5 @@
 // PHASE 3 owns this page (room list, create room with Manual / Rules-enforced toggle).
-import { demoDeck } from "../../shared/starterDecks.ts";
+import { STARTER_DECKS, demoDeck } from "../../shared/starterDecks.ts";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api.ts";
@@ -18,7 +18,43 @@ function ago(iso: string) {
   const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
   if (s < 60) return "just now";
   if (s < 3600) return `${Math.floor(s / 60)} min ago`;
-  return `${Math.floor(s / 3600)} h ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
+  return `${Math.floor(s / 86400)} d ago`;
+}
+
+interface MatchRow {
+  id: number; roomId: string; mode: string; turns: number | null; reason: string | null; startedAt: string | null; endedAt: string;
+  result: "win" | "loss" | "draw"; deckId: string | null; opponent: string | null; opponentBot: boolean;
+}
+
+/** Your recent finished duels (account or guest). */
+function RecentDuels({ deckName, refreshKey }: { deckName(id: string | null): string; refreshKey: unknown }) {
+  const [rows, setRows] = useState<MatchRow[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    api<{ matches: MatchRow[] }>("/api/matches").then((r) => { if (alive) setRows(r.matches); }).catch(() => { if (alive) setRows([]); });
+    return () => { alive = false; };
+  }, [refreshKey]);
+  if (!rows || !rows.length) return null;
+  const wins = rows.filter((r) => r.result === "win").length, losses = rows.filter((r) => r.result === "loss").length;
+  return (
+    <div className="lobby-card lobby-history">
+      <h2>Recent duels <span className="muted lobby-record">{wins}W · {losses}L{rows.length - wins - losses ? ` · ${rows.length - wins - losses}D` : ""} (last {rows.length})</span></h2>
+      <ul className="lobby-history-list">
+        {rows.map((m) => (
+          <li key={m.id}>
+            <span className={`lobby-result is-${m.result}`}>{m.result === "win" ? "Win" : m.result === "loss" ? "Loss" : "Draw"}</span>
+            <span className="lobby-history-main">
+              <b>vs {m.opponentBot ? "Bot" : m.opponent ?? "?"}</b>
+              <span className="muted"> · {deckName(m.deckId)} · {m.mode === "engine" ? "Rules" : "Manual"}{m.turns ? ` · ${m.turns} turns` : ""}</span>
+              {m.reason && <small className="muted lobby-history-reason">{m.reason}</small>}
+            </span>
+            <span className="muted lobby-history-when" title={new Date(m.endedAt).toLocaleString()}>{ago(m.endedAt)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 export function LobbyPage() {
@@ -253,6 +289,11 @@ export function LobbyPage() {
           </ul>
         )}
       </div>
+      <RecentDuels refreshKey={identity?.id} deckName={(id) => {
+        if (!id) return "a deck";
+        if (id.startsWith("demo:")) return "Demo deck";
+        return [...(decks ?? []), ...STARTER_DECKS].find((d) => d.id === id)?.name ?? "a deck";
+      }} />
     </section>
   );
 }

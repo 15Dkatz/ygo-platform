@@ -51,3 +51,16 @@
 .lobby-settings-grid { display: grid; gap: 10px; padding-bottom: 10px; }
 .lobby-settings select { width: 100%; }
 .lobby-check { display: flex; align-items: center; gap: 8px; }
+
+/* recent duels (match history) */
+.lobby-history { margin-top: 14px; }
+.lobby-record { font-size: 13px; font-weight: 500; }
+.lobby-history-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.lobby-history-list li { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: var(--radius); background: var(--surface-2); }
+.lobby-history-main { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 4px; }
+.lobby-history-reason { flex-basis: 100%; }
+.lobby-history-when { font-size: 12px; white-space: nowrap; }
+.lobby-result { font-size: 12px; font-weight: 800; padding: 2px 8px; border-radius: 999px; min-width: 44px; text-align: center; }
+.lobby-result.is-win { background: color-mix(in srgb, var(--ok) 20%, transparent); color: var(--ok); }
+.lobby-result.is-loss { background: var(--danger-soft); color: var(--danger); }
+.lobby-result.is-draw { background: var(--surface); color: var(--muted); }

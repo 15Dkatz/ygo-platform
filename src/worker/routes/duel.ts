@@ -70,6 +70,27 @@ duel.post("/api/rooms", async (c) => {
   return c.json({ roomId }, 201);
 });
 
+/** GET /api/matches -> { matches } : your recent finished duels (newest first), as account or guest. */
+duel.get("/api/matches", async (c) => {
+  const ident = getIdentity(c);
+  if (!ident) return c.json({ matches: [] });
+  const r = await c.env.DB.prepare(
+    `SELECT id, room_id, mode, p0_id, p0_name, p0_deck, p1_id, p1_name, p1_deck, winner, reason, turns, started_at, ended_at
+     FROM matches WHERE p0_id = ? OR p1_id = ? ORDER BY ended_at DESC LIMIT 20`,
+  ).bind(ident.id, ident.id).all().catch(() => ({ results: [] as Record<string, unknown>[] }));
+  const matches = r.results.map((m) => {
+    const seat = m.p0_id === ident.id ? 0 : 1;
+    const opp = seat === 0 ? 1 : 0;
+    return {
+      id: m.id, roomId: m.room_id, mode: m.mode, turns: m.turns, reason: m.reason, startedAt: m.started_at, endedAt: m.ended_at,
+      result: m.winner === null ? "draw" : m.winner === seat ? "win" : "loss",
+      deckId: seat === 0 ? m.p0_deck : m.p1_deck,
+      opponent: opp === 0 ? m.p0_name : m.p1_name, opponentBot: (opp === 0 ? m.p0_id : m.p1_id) === "bot",
+    };
+  });
+  return c.json({ matches });
+});
+
 duel.get("/api/rooms", async (c) => {
   const since = new Date(Date.now() - 6 * 3600_000).toISOString();
   const r = await c.env.DB.prepare(
