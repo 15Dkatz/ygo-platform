@@ -10,9 +10,67 @@ export interface DuelSettings {
   matchup: boolean;
   /** Ask before ending the turn with an unused Normal Summon. */
   confirmEnd: boolean;
+  /** Field and hand size multipliers (1 = fitted to the window). */
+  fieldScale: number;
+  handScale: number;
+  /** Put summoned / set cards in a zone by itself (Extra Monster Zone first, then the middle) instead of asking. */
+  autoPlace: boolean;
+  /** Battle Phase: drag your monster onto an opponent's monster to attack it. */
+  dragAttack: boolean;
+  /** Side panels fade while the mouse is away from them. */
+  calmPanels: boolean;
+  /** Animations: how the card whose effect is resolving is marked, and in what colour. */
+  resolveFx: ResolveFx;
+  resolveColor: ResolveColor;
+  /** The big "CHAIN?" / "YOUR MOVE" callouts. */
+  callouts: boolean;
+  /** Red / green / accent flashes around the screen edge (damage, heals, callouts). */
+  edgeFlash: boolean;
+  /** The light running across the zone labels. */
+  labelShimmer: boolean;
+  /** The turn sign's heartbeat. */
+  heartbeat: boolean;
+  /** Layout: field up / down (in card widths, negative = up). */
+  fieldY: number;
+  /** 3D camera distance in px (bigger = flatter, the far side shrinks less). */
+  camera: number;
+  /** 3D camera height: where you look from, % of the board height (100 = from your edge). */
+  cameraY: number;
+  /** How far your hand sits below the board edge (% of a card; lower = more of it shows). */
+  handDrop: number;
+  /** How far the opponent's hand sits above the board edge (% of a card). */
+  oppHandDrop: number;
+  /** Opponent's hand card size multiplier. */
+  oppHandScale: number;
+  /** Size of the big card preview shown while you hover a card. */
+  previewScale: number;
 }
-export const TILT_MAX = 30;
-const DEFAULTS: DuelSettings = { tilt: 20, stats: true, matchup: true, confirmEnd: true };
+export const RESOLVE_FX = ["rings", "sparkle", "fireworks", "aura", "minimal"] as const;
+export type ResolveFx = (typeof RESOLVE_FX)[number];
+export const RESOLVE_FX_LABEL: Record<ResolveFx, string> = { rings: "Shockwave rings", sparkle: "Sparkles", fireworks: "Fireworks", aura: "Flame aura", minimal: "Minimal outline" };
+export const RESOLVE_COLORS = ["theme", "gold", "crimson", "azure", "emerald", "rainbow"] as const;
+export type ResolveColor = (typeof RESOLVE_COLORS)[number];
+export const RESOLVE_COLOR_LABEL: Record<ResolveColor, string> = { theme: "Theme colour", gold: "Gold", crimson: "Crimson", azure: "Azure", emerald: "Emerald", rainbow: "Rainbow" };
+
+/** Slider ranges / defaults for the layout settings. */
+export const LAYOUT = {
+  fieldY: { min: -1.5, max: 1.5, step: 0.05, def: 0.45 },
+  camera: { min: 700, max: 4000, step: 50, def: 1450 },
+  cameraY: { min: 0, max: 150, step: 5, def: 80 },
+  handDrop: { min: 10, max: 85, step: 1, def: 44 },
+  oppHandDrop: { min: 10, max: 95, step: 1, def: 24 },
+  oppHandScale: { min: 0.6, max: 1.8, step: 0.05, def: 1.15 },
+  previewScale: { min: 0.6, max: 2, step: 0.05, def: 1 },
+} as const;
+export type LayoutKey = keyof typeof LAYOUT;
+export const SCALE_RANGE = { field: [0.8, 1.6], hand: [0.8, 2.0] } as const;
+export const TILT_MAX = 60;
+/** Defaults: a big field and hand (the "middle" setting; the sliders go both ways). */
+export const DEFAULT_SCALE = { field: 1.25, hand: 1.2 } as const;
+export const DEFAULT_TILT = 28;
+const DEFAULTS: DuelSettings = { tilt: DEFAULT_TILT, stats: true, matchup: true, confirmEnd: true, fieldScale: DEFAULT_SCALE.field, handScale: DEFAULT_SCALE.hand, autoPlace: true, dragAttack: true, calmPanels: true,
+  resolveFx: "rings", resolveColor: "theme", callouts: true, edgeFlash: true, labelShimmer: true, heartbeat: true,
+  ...(Object.fromEntries(Object.entries(LAYOUT).map(([k, v]) => [k, v.def])) as Record<LayoutKey, number>) };
 const KEY = "ygo.duelSettings";
 
 function load(): DuelSettings {
@@ -21,7 +79,14 @@ function load(): DuelSettings {
     // the old on/off 3D switch
     const legacyOff = localStorage.getItem("ygo.tilt") === "off";
     const s = { ...DEFAULTS, ...(legacyOff ? { tilt: 0 } : {}), ...(raw ?? {}) };
-    return { ...s, tilt: Math.min(TILT_MAX, Math.max(0, Number(s.tilt) || 0)) };
+    const clamp = (v: unknown, [lo, hi]: readonly [number, number], d: number) => Math.min(hi, Math.max(lo, Number(v) || d));
+    for (const k of Object.keys(LAYOUT) as LayoutKey[]) {
+      const r = LAYOUT[k], v = Number(s[k]);
+      s[k] = Number.isFinite(v) ? Math.min(r.max, Math.max(r.min, v)) : r.def;
+    }
+    if (!(RESOLVE_FX as readonly string[]).includes(s.resolveFx)) s.resolveFx = DEFAULTS.resolveFx;
+    if (!(RESOLVE_COLORS as readonly string[]).includes(s.resolveColor)) s.resolveColor = DEFAULTS.resolveColor;
+    return { ...s, tilt: Math.min(TILT_MAX, Math.max(0, Number(s.tilt) || 0)), fieldScale: clamp(s.fieldScale, SCALE_RANGE.field, DEFAULT_SCALE.field), handScale: clamp(s.handScale, SCALE_RANGE.hand, DEFAULT_SCALE.hand) };
   } catch { return DEFAULTS; }
 }
 

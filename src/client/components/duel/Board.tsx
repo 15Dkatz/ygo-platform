@@ -16,6 +16,8 @@ export interface BoardMarks {
   places: Set<string>;         // zones a select-place prompt offers
   piles: Map<string, number>;  // pile zoneKey -> how many of its cards are actionable / selectable
   badges: Map<string, string>; // uid -> small badge text (chain link, counters to remove)
+  drag?: Set<string>;          // field cards you can drag (drag-to-attack)
+  source?: string;             // the card whose effect you're deciding for (glows; click to return)
 }
 
 
@@ -33,6 +35,8 @@ export interface BoardUI {
   matchup?: Map<string, Matchup>;
   /** Hide the ATK / DEF strips (duel settings). */
   hideStats?: boolean;
+  /** Hover action buttons for a card (rules-enforced duels, your turn). */
+  quick?: (uid: string) => { label: string; run(): void }[];
   /** Your own display order of your hand (uids), after a local Shuffle hand. Cards not listed keep their order at the end. */
   handOrder?: string[] | null;
   /** Bottom side of the board (your seat; seat 0 for spectators). */
@@ -53,7 +57,7 @@ export interface BoardUI {
 
 /** Can the viewer drag this card? (manual: any card you control; engine: hand cards with a legal action) */
 const canDrag = (ui: BoardUI, card: CardInstance, controller: Seat | undefined, zone: Zone) =>
-  ui.you !== null && controller === ui.you && (!ui.marks || (zone === "hand" && ui.marks.actionable.has(card.uid)));
+  ui.you !== null && controller === ui.you && (!ui.marks || (zone === "hand" && ui.marks.actionable.has(card.uid)) || !!ui.marks.drag?.has(card.uid));
 
 export const DRAG_MIME = "application/x-ygo-uid";
 
@@ -112,6 +116,8 @@ function Slot({ card, at, ui, label, className = "" }: { card: CardInstance | nu
           badge={ui.marks?.badges.get(card.uid)}
           onHover={ui.onHover}
           onClick={(e) => { e.stopPropagation(); ui.onCard(card, at, e); }}
+          quick={ui.quick?.(card.uid)}
+          source={ui.marks?.source === card.uid}
         />
       )}
       {card && !ui.hideStats && (at.zone === "monster" || at.zone === "extraMonster") && <StatStrip card={card} />}
@@ -128,10 +134,24 @@ function StatStrip({ card }: { card: CardInstance }) {
   const atk = card.atk ?? data.atk ?? 0, def = card.def ?? data.defense ?? 0;
   const tone = (now: number, base: number | null | undefined) => (base == null || now === base ? "" : now > base ? "is-up" : "is-down");
   const defPos = card.position === "def";
+  const xyz = /XYZ/i.test(data.type ?? "");
+  // current Level / Rank (engine duels report changes); Links show their rating
+  const lv = card.level ?? data.level ?? 0;
+  const tuner = card.tuner ?? /Tuner/.test(data.type ?? "");
+  const mats = card.materials?.length ?? 0;
+  const lvTone = card.level === undefined || data.level == null || card.level === data.level ? "" : card.level > data.level ? "is-up" : "is-down";
   return (
-    <span className="duel-stats" aria-label={`ATK ${atk}${link ? "" : `, DEF ${def}`}`}>
-      <b className={`${tone(atk, data.atk)} ${defPos ? "is-dim" : ""}`}>{atk}</b>
-      {!link && <><i>/</i><b className={`${tone(def, data.defense)} ${defPos ? "" : "is-dim"}`}>{def}</b></>}
+    <span className="duel-statbox">
+      <span className="duel-traits">
+        {link ? <span className="duel-trait is-link" title={`Link ${data.linkval ?? lv}`}>L{data.linkval ?? lv}</span>
+          : lv > 0 && <span className={`duel-trait ${xyz ? "is-rank" : "is-level"} ${lvTone}`} title={`${xyz ? "Rank" : "Level"} ${lv}`}>{xyz ? "✦" : "★"}{lv}</span>}
+        {tuner && <span className="duel-trait is-tuner" title="Tuner">TUNER</span>}
+        {mats > 0 && <span className="duel-trait is-mats" title={`${mats} Xyz material${mats === 1 ? "" : "s"}`}>◉{mats}</span>}
+      </span>
+      <span className="duel-stats" aria-label={`ATK ${atk}${link ? "" : `, DEF ${def}`}`}>
+        <b className={`${tone(atk, data.atk)} ${defPos ? "is-dim" : ""}`}>{atk}</b>
+        {!link && <><i>/</i><b className={`${tone(def, data.defense)} ${defPos ? "" : "is-dim"}`}>{def}</b></>}
+      </span>
     </span>
   );
 }
@@ -175,6 +195,8 @@ function Hand({ cards: inOrder, player, ui, own }: { cards: CardInstance[]; play
               style={{ ["--i" as string]: i - (cards.length - 1) / 2 }}
               onHover={ui.onHover}
               onClick={own || mark ? (e) => { e.stopPropagation(); ui.onCard(c, { zone: "hand", player, slot: real.get(c.uid) ?? i }, e); } : undefined}
+              quick={own ? ui.quick?.(c.uid) : undefined}
+              source={ui.marks?.source === c.uid}
             />
           );
         })}
@@ -185,7 +207,7 @@ function Hand({ cards: inOrder, player, ui, own }: { cards: CardInstance[]; play
 }
 
 /** Both fields: opponent mirrored at the top, the 2 shared Extra Monster Zones in the middle. */
-export function Board({ board, ui, top, bottom, rail, status, corner }: {
+export function Board({ board, ui, top, bottom, rail, status, corner, gaps, right }: {
   board: BoardState; ui: BoardUI;
   /** Drawn on the board itself: player info in the opponent's (top) and your (bottom) hand strips, the phase
    *  track between the Extra Monster Zones, whose-move status left of it, Next phase right of it, and the
@@ -193,6 +215,10 @@ export function Board({ board, ui, top, bottom, rail, status, corner }: {
    *  On PC: player info in the left corners, the phase rail (track + Next phase) between them, the whose-move
    *  status right of the field, tools + End turn in your bottom-right corner. */
   top?: ReactNode; bottom?: ReactNode; rail?: ReactNode; status?: ReactNode; corner?: ReactNode;
+  /** What fills the three empty cells of the middle row (left of, between and right of the Extra Monster Zones). */
+  gaps?: [ReactNode, ReactNode, ReactNode];
+  /** Right edge, vertically centred (the turn number). */
+  right?: ReactNode;
 }) {
   const me = ui.me;
   const opp: Seat = me === 0 ? 1 : 0;
@@ -207,8 +233,9 @@ export function Board({ board, ui, top, bottom, rail, status, corner }: {
     <div className="duel-board-wrap">
       <Ambience />
       <Hand cards={P[opp].hand} player={opp} ui={ui} own={ui.you === opp} />
+      {/* the panels float in the board's corners (PC) or stack around the field (phones) */}
+      {top && <div className="duel-plate duel-plate-top">{top}</div>}
       <div className="duel-field">
-        {top && <div className="duel-plate duel-plate-top">{top}</div>}
         {/* opponent: S/T row then monster row, mirrored */}
         <Pile cards={P[opp].deck} at={{ zone: "deck", player: opp }} ui={ui} />
         {[...idx].reverse().map((i) => slot(opp, "spelltrap", i, "S/T"))}
@@ -219,11 +246,11 @@ export function Board({ board, ui, top, bottom, rail, status, corner }: {
         <Slot card={P[opp].field} at={{ zone: "field", player: opp }} ui={ui} label="Field" className="duel-fieldzone" />
 
         <Pile cards={P[opp].banished} at={{ zone: "banished", player: opp }} ui={ui} />
-        <div className="duel-gap" />
+        <div className="duel-gap">{gaps?.[0]}</div>
         <Slot card={board.extraMonster[emzLeft]} at={{ zone: "extraMonster", player: me, slot: emzLeft }} ui={ui} label="Extra Monster" className="duel-emz" />
-        <div className="duel-gap" />
+        <div className="duel-gap">{gaps?.[1]}</div>
         <Slot card={board.extraMonster[emzRight]} at={{ zone: "extraMonster", player: me, slot: emzRight }} ui={ui} label="Extra Monster" className="duel-emz" />
-        <div className="duel-gap" />
+        <div className="duel-gap">{gaps?.[2]}</div>
         <Pile cards={P[me].banished} at={{ zone: "banished", player: me }} ui={ui} />
 
         <Slot card={P[me].field} at={{ zone: "field", player: me }} ui={ui} label="Field" className="duel-fieldzone" />
@@ -233,11 +260,12 @@ export function Board({ board, ui, top, bottom, rail, status, corner }: {
         <Pile cards={P[me].extra} at={{ zone: "extra", player: me }} ui={ui} />
         {idx.map((i) => slot(me, "spelltrap", i, "S/T"))}
         <Pile cards={P[me].deck} at={{ zone: "deck", player: me }} ui={ui} />
-        {bottom && <div className="duel-plate duel-plate-bottom">{bottom}</div>}
-        {rail && <div className="duel-rail">{rail}</div>}
-        {status && <div className="duel-status">{status}</div>}
-        {corner && <div className="duel-corner">{corner}</div>}
       </div>
+      {bottom && <div className="duel-plate duel-plate-bottom">{bottom}</div>}
+      {rail && <div className="duel-rail">{rail}</div>}
+      {status && <div className="duel-status">{status}</div>}
+      {corner && <div className="duel-corner">{corner}</div>}
+      {right && <div className="duel-rightmid">{right}</div>}
       <Hand cards={P[me].hand} player={me} ui={ui} own={ui.you === me} />
     </div>
   );

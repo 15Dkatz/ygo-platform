@@ -16,6 +16,8 @@ import { botResponse } from "./engine/bot.ts";
 import { BadResponse, restoreRoomEngine, startRoomEngine, type RoomEngineSession, type RoomEngineUpdate } from "./engine/roomHook.ts";
 import { eventsFor } from "./engine/EngineDuel.ts";
 import type { EngineEvent } from "../../shared/enginePrompts.ts";
+import { stepClock } from "../../shared/clock.ts";
+import { cleanRarities, type RarityMap } from "../../shared/rarity.ts";
 
 /** DO storage key of the engine snapshot (seed + decks + responses; replayed on wake). */
 const ENGINE_KEY = "engine";
@@ -54,7 +56,7 @@ const STALE_MS = 75_000;
 interface SeatState {
   id: string;
   name: string;
-  deck: { deckId: string; main: number[]; extra: number[]; side: number[] } | null;
+  deck: { deckId: string; main: number[]; extra: number[]; side: number[]; rarity?: RarityMap } | null;
   connected: boolean;
   leftAt: number | null;
   bot?: boolean;
@@ -93,7 +95,7 @@ interface RoomData {
   /** When the current duel started (for match history). */
   duelStartedAt?: string;
   /** Turn timer state (ms). `turn` = the board turn the clock last saw, to refill at a new turn. */
-  clock?: { remaining: [number, number]; running: Seat | null; since: number; turn: number };
+  clock?: { remaining: [number, number]; running: Seat | null; since: number; turn: number; decision?: string | null };
 }
 
 interface Attachment { id: string | null; name: string; seat: Seat | null; since?: number }
@@ -413,7 +415,7 @@ export class DuelRoom extends DurableObject<Env> {
         if (room.stage === "finished") this.resetToLobby();
         room.seats[BOT_SEAT] = {
           id: BOT_ID, name: "Bot", connected: true, leftAt: null, bot: true,
-          deck: { deckId: String(msg.deckId ?? "").slice(0, 64), main: msg.main, extra: msg.extra, side: msg.side ?? [] },
+          deck: { deckId: String(msg.deckId ?? "").slice(0, 64), main: msg.main, extra: msg.extra, side: msg.side ?? [], rarity: cleanRarities((msg as { rarity?: unknown }).rarity) },
         };
         this.systemLine("A bot took the empty seat. (It plays random legal moves.)");
         this.advanceLobby();
@@ -459,7 +461,7 @@ export class DuelRoom extends DurableObject<Env> {
     if (!a.id) throw new RoomError("Pick a display name in the lobby before joining.");
     const err = validateDeck(msg) ?? (room.mode === "engine" ? await skillCardProblem(this.env.DB, msg) : null);
     if (err) throw new RoomError(err);
-    const deck = { deckId: String(msg.deckId ?? "").slice(0, 64), main: msg.main, extra: msg.extra, side: msg.side ?? [] };
+    const deck = { deckId: String(msg.deckId ?? "").slice(0, 64), main: msg.main, extra: msg.extra, side: msg.side ?? [], rarity: cleanRarities((msg as { rarity?: unknown }).rarity) };
     let seat = a.seat;
     if (seat === null) {
       if (room.stage !== "lobby" && room.stage !== "finished") throw new RoomError("This duel has already started — you can spectate.");
@@ -699,10 +701,28 @@ export class DuelRoom extends DurableObject<Env> {
     return seat !== null && room.seats[seat]?.bot ? null : seat;
   }
 
+  /** The clock's starting time per player (ms), 0 = no timer. */
+  private clockStartMs(): number {
+    const s = this.settings();
+    return s.timeControl === "chess" ? s.bankSec * 1000 : s.timeControl === "turn" ? s.turnTimerSec * 1000 : 0;
+  }
+
+  /** The decision the clock is waiting on ("seat:prompt id"; manual: "seat:log length"), to credit the
+   *  chess increment to whoever answered it. */
+  private decisionKey(seat: Seat | null): string | null {
+    const room = this.room!;
+    if (seat === null || !room.board) return null;
+    if (room.mode === "engine") {
+      const p = room.prompts?.find((x) => x.seat === seat)?.prompt as { id?: number } | undefined;
+      return p?.id !== undefined ? `${seat}:${p.id}` : null;
+    }
+    return `${seat}:${room.board.log.length}`;
+  }
+
   private startClock() {
     const room = this.room!;
-    const ms = this.settings().turnTimerSec * 1000;
-    room.clock = ms ? { remaining: [ms, ms], running: null, since: Date.now(), turn: 0 } : undefined;
+    const ms = this.clockStartMs();
+    room.clock = ms ? { remaining: [ms, ms], running: null, since: Date.now(), turn: 0, decision: null } : undefined;
   }
 
   /** Charge elapsed time to whoever was on the clock, refill at a new turn, switch the clock,
@@ -711,22 +731,13 @@ export class DuelRoom extends DurableObject<Env> {
     const room = this.room!;
     const c = room.clock;
     if (!c || room.stage !== "duel" || !room.board) return;
-    const now = Date.now();
-    if (c.running !== null) c.remaining[c.running] = Math.max(0, c.remaining[c.running] - (now - c.since));
-    c.since = now;
-    if (c.running !== null && c.remaining[c.running] <= 0) {
-      const loser = c.running;
-      c.running = null;
-      this.finish(other(loser), `${room.seats[loser]?.name ?? "A player"} ran out of time.`);
+    const out = stepClock(c, this.settings(), Date.now(), room.board.turn, this.waitingOn(), (seat) => this.decisionKey(seat));
+    if (out !== null) {
+      this.finish(other(out), `${room.seats[out]?.name ?? "A player"} ran out of time.`);
       void this.save();
       void this.updateIndex();
       return;
     }
-    if (room.board.turn !== c.turn) {                 // new turn: the turn player gets a full clock
-      c.turn = room.board.turn;
-      c.remaining[room.board.turnPlayer] = this.settings().turnTimerSec * 1000;
-    }
-    c.running = this.waitingOn();
     // persist right away: the room hibernates between messages and must not wake with a stale clock
     void this.ctx.storage.put("room", room);
   }
@@ -924,6 +935,7 @@ export class DuelRoom extends DurableObject<Env> {
     const seats = room.seats.map((s) => s && {
       name: s.name, connected: s.connected, ready: !!s.deck, bot: s.bot || undefined,
       deck: s.deck ? { main: s.deck.main.length, extra: s.deck.extra.length, side: s.deck.side.length } : undefined,
+      rarity: s.deck?.rarity && Object.keys(s.deck.rarity).length ? s.deck.rarity : undefined,
     }) as SessionInfo["seats"];
     const showNotice = room.mode === "engine" && !engineAvailable();
     return {
@@ -935,12 +947,19 @@ export class DuelRoom extends DurableObject<Env> {
       },
       chooser: room.chooser, winner: room.winner, endReason: room.endReason, rematch: room.rematch,
       settings: this.settings(),
-      timer: room.clock && this.settings().turnTimerSec && (room.stage === "duel" || room.stage === "finished")
-        ? { limitSec: this.settings().turnTimerSec, remaining: room.clock.remaining, running: room.clock.running, since: room.clock.since, serverNow: Date.now() }
+      timer: room.clock && this.clockStartMs() && (room.stage === "duel" || room.stage === "finished")
+        ? {
+          mode: this.settings().timeControl === "chess" ? "chess" : "turn", incrementSec: this.settings().incrementSec,
+          limitSec: this.clockStartMs() / 1000, remaining: room.clock.remaining, running: room.clock.running, since: room.clock.since, serverNow: Date.now(),
+        }
         : undefined,
       engineNotice: showNotice ? ENGINE_NOTICE : undefined,
       switchVotes: room.mode === "engine" ? room.switchVotes : undefined,
       engineHost: room.mode === "engine" && this.hostMode() ? HOST_SEAT : undefined,
+      // what the duel is waiting on, for everyone (the hint only: never the cards)
+      deciding: room.mode === "engine" && room.stage === "duel" && room.prompts?.[0]
+        ? { seat: room.prompts[0].seat, kind: String((room.prompts[0].prompt as { kind?: string }).kind ?? ""), hint: (room.prompts[0].prompt as { hint?: string }).hint }
+        : undefined,
     };
   }
 

@@ -52,3 +52,21 @@ describe("auto-chaining", () => {
     expect(autoAnswer(chain([{ location: "monster" }], true), 0, [], "ask")).toBeNull();
   });
 });
+
+describe("auto-pass: quick effects repeating at phase changes", () => {
+  const utopia = [{ location: "monster", code: 84013237 }];
+  const phaseOnly: EngineEvent[] = [{ e: "phase", phase: "standby" }, { e: "draw", player: 1, codes: [0] }];
+  it("passes a monster quick effect offered again at a bare phase change", () => {
+    expect(shouldAutoPass(chain(utopia), 0, phaseOnly, "smart", () => true, new Set([84013237]))).toBe(true);
+  });
+  it("asks the first time a monster effect is offered (it may be a trigger)", () => {
+    expect(shouldAutoPass(chain(utopia), 0, phaseOnly, "smart", () => true, new Set())).toBe(false);
+  });
+  it("asks again once something happens", () => {
+    const summoned: EngineEvent[] = [{ e: "summon", how: "normal", card: { code: 5, controller: 0, location: "monster", sequence: 1 } }];
+    expect(shouldAutoPass(chain(utopia), 0, summoned, "smart", () => true, new Set([84013237]))).toBe(false);
+  });
+  it("never passes in 'ask' mode", () => {
+    expect(shouldAutoPass(chain(utopia), 0, phaseOnly, "ask", () => true, new Set([84013237]))).toBe(false);
+  });
+});

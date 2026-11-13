@@ -92,11 +92,14 @@ duel.get("/api/matches", async (c) => {
 });
 
 duel.get("/api/rooms", async (c) => {
-  const since = new Date(Date.now() - 6 * 3600_000).toISOString();
+  // a duel stays listed while it's active; a waiting room only while it's fresh (a host who left days ago
+  // still has a "waiting" row, and anyone opening it bumps updated_at)
+  const ago = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
   const r = await c.env.DB.prepare(
     `SELECT room_id, name, mode, host, players, status, spectators, created_at, settings FROM rooms
-     WHERE status IN ('waiting', 'dueling') AND updated_at > ? ORDER BY created_at DESC LIMIT 100`,
-  ).bind(since).all<{ room_id: string; name: string; mode: DuelMode; host: string; players: string; status: RoomInfo["status"]; spectators: number; created_at: string; settings: string | null }>();
+     WHERE (status = 'dueling' AND updated_at > ?) OR (status = 'waiting' AND created_at > ? AND updated_at > ?)
+     ORDER BY created_at DESC LIMIT 100`,
+  ).bind(ago(6), ago(3), ago(1)).all<{ room_id: string; name: string; mode: DuelMode; host: string; players: string; status: RoomInfo["status"]; spectators: number; created_at: string; settings: string | null }>();
   const rooms: RoomInfo[] = r.results.map((row) => ({
     roomId: row.room_id, name: row.name, mode: row.mode, host: row.host,
     players: JSON.parse(row.players || "[]"), status: row.status, created_at: row.created_at, spectators: row.spectators,

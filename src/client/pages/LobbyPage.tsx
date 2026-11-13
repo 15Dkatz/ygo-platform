@@ -1,11 +1,11 @@
 // PHASE 3 owns this page (room list, create room with Manual / Rules-enforced toggle).
-import { STARTER_DECKS, demoDeck } from "../../shared/starterDecks.ts";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { STARTER_DECKS, demoDeck, isStarterDeck } from "../../shared/starterDecks.ts";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api.ts";
 import type { RoomInfo } from "../../shared/duel.ts";
 import type { DuelMode } from "../../shared/types.ts";
-import { DEFAULT_SETTINGS, LP_CHOICES, TIMER_CHOICES, cleanSettings, formatTimer, type RoomSettings } from "../../shared/roomSettings.ts";
+import { CHESS_CHOICES, DEFAULT_SETTINGS, LP_CHOICES, TIMER_CHOICES, cleanSettings, formatTimeControl, formatTimer, parseTimeControl, timeControlValue, type RoomSettings } from "../../shared/roomSettings.ts";
 import { DeckSelect, NameForm, useDecks } from "../components/duel/DeckPicker.tsx";
 import { useDuelIdentity } from "../components/duel/useDuel.ts";
 import { EngineSupportNote, skillCards, useEngineSupport } from "../components/engine/EngineSupportNote.tsx";
@@ -74,6 +74,7 @@ export function LobbyPage() {
     try { localStorage.setItem("ygo.roomSettings", JSON.stringify(next)); } catch { /* private mode */ }
     return next;
   });
+  const saveSettings = (next: RoomSettings) => { try { localStorage.setItem("ygo.roomSettings", JSON.stringify(next)); } catch { /* private mode */ } return next; };
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [renaming, setRenaming] = useState(false);
@@ -84,6 +85,16 @@ export function LobbyPage() {
   // Skill cards block rules-enforced duels (yours and the bot's deck)
   const mySkills = skillCards(useEngineSupport(deck ? [...deck.main, ...deck.extra, ...deck.side] : null));
   const botSkills = skillCards(useEngineSupport(botDeck ? [...botDeck.main, ...botDeck.extra, ...botDeck.side] : null));
+  // a remembered deck that can't play rules-enforced duels (Skill cards) shouldn't be the default: start on a starter deck
+  const userPicked = useRef(false);
+  const pickDeck = (id: string) => { userPicked.current = true; setDeckId(id); };
+  useEffect(() => {
+    if (userPicked.current || !decks || !deck || !mySkills.length) return;
+    const ok = decks.find((d) => isStarterDeck(d.id));
+    if (ok && ok.id !== deck.id) setDeckId(ok.id);
+    userPicked.current = true;   // only once per visit
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [decks, deck, mySkills.length]);
   const [quickBusy, setQuickBusy] = useState(false);
   const [quickErr, setQuickErr] = useState<string | null>(null);
 
@@ -119,7 +130,7 @@ export function LobbyPage() {
   /** Demo: Synchro Warriors (you, on autopilot) vs a bot on Rank 4 Xyz, to watch a whole duel. */
   const demoDuel = async () => {
     if (!identity) return;
-    const bot = demoDeck("xyz");
+    const bot = demoDeck("branded");
     setQuickBusy(true);
     setQuickErr(null);
     try {
@@ -172,8 +183,10 @@ export function LobbyPage() {
           )}
           <div className="lobby-field">
             <span>Deck</span>
-            <DeckSelect decks={decks} deckId={deckId} onChange={setDeckId} />
+            <DeckSelect decks={decks} deckId={deckId} onChange={pickDeck} />
           </div>
+          {/* once, for both Quick duel and Create a room */}
+          {deck && mySkills.length > 0 && <EngineSupportNote ids={[...deck.main, ...deck.extra, ...deck.side]} label="your deck" />}
         </div>
 
         <div className="lobby-card lobby-quick">
@@ -186,13 +199,12 @@ export function LobbyPage() {
               {decks?.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
             </select>
           </div>
-          {deck && mySkills.length > 0 && <EngineSupportNote ids={[...deck.main, ...deck.extra, ...deck.side]} label="your deck" />}
           {botDeck && botDeck !== deck && botSkills.length > 0 && <EngineSupportNote ids={[...botDeck.main, ...botDeck.extra, ...botDeck.side]} label="the bot's deck" />}
           <button className="primary" disabled={quickBusy || !identity || !deck || !botDeck || mySkills.length > 0 || botSkills.length > 0} onClick={quickDuel}>
             {quickBusy ? "Starting…" : "Play vs bot"}
           </button>
           <button disabled={quickBusy || !identity} onClick={demoDuel}
-            title="Both sides play themselves (Synchro Warriors vs Rank 4 Xyz) so you can watch the animations. Speed and Autopilot can be changed in the duel.">
+            title="Both sides play themselves (Kewl Tune Synchro vs Branded Despia Fusion: hand traps, long chains, GY and Extra Deck plays) so you can watch the animations. Speed and Autopilot can be changed in the duel.">
             ▶ Watch a demo duel
           </button>
           {!deck && identity && <small className="muted">Choose your deck first.</small>}
@@ -220,14 +232,20 @@ export function LobbyPage() {
             </small>
           </div>
           <details className="lobby-settings">
-            <summary>Room settings <span className="muted">· {formatTimer(settings.turnTimerSec)} · {settings.startingLP} LP · {settings.visibility === "public" ? "public" : "unlisted"}{settings.spectators ? "" : " · no spectators"}</span></summary>
+            <summary>Room settings <span className="muted">· {formatTimeControl(settings)} · {settings.startingLP} LP · {settings.visibility === "public" ? "public" : "unlisted"}{settings.spectators ? "" : " · no spectators"}</span></summary>
             <div className="lobby-settings-grid">
               <label className="lobby-field">
-                <span>Turn timer</span>
-                <select value={settings.turnTimerSec} onChange={(e) => setSetting("turnTimerSec", Number(e.target.value))}>
-                  {TIMER_CHOICES.map((t) => <option key={t} value={t}>{t ? `${formatTimer(t)} per turn` : "No timer"}</option>)}
+                <span>Time control</span>
+                <select value={timeControlValue(settings)} onChange={(e) => setSettingsState((s) => saveSettings({ ...s, ...parseTimeControl(e.target.value) }))}>
+                  <option value="off">No timer</option>
+                  <optgroup label="Chess clock: a bank for the duel + seconds per decision">
+                    {CHESS_CHOICES.map(([b, i]) => <option key={`${b}+${i}`} value={`chess:${b}+${i}`}>{b / 60} min + {i}s per decision</option>)}
+                  </optgroup>
+                  <optgroup label="Per turn: a fresh clock every turn">
+                    {TIMER_CHOICES.filter(Boolean).map((t) => <option key={t} value={`turn:${t}`}>{formatTimer(t)} per turn</option>)}
+                  </optgroup>
                 </select>
-                <small className="muted">Your clock only runs while the duel waits on you. Running out loses the duel.</small>
+                <small className="muted">Only the player who has to decide loses time (including chain responses on the other player's turn). Running out loses the duel.</small>
               </label>
               <label className="lobby-field">
                 <span>Starting LP</span>
@@ -248,7 +266,7 @@ export function LobbyPage() {
               </label>
             </div>
           </details>
-          {mode === "engine" && deck && <EngineSupportNote ids={[...deck.main, ...deck.extra, ...deck.side]} />}
+          {mode === "engine" && deck && mySkills.length > 0 && <small className="lobby-error">Your deck can't be used in rules-enforced duels (see above). Pick another deck, or Manual.</small>}
           <button className="primary" disabled={busy || !identity || !deck || (mode === "engine" && mySkills.length > 0)}>{busy ? "Creating…" : "Create and sit down"}</button>
           {!deck && identity && <small className="muted">Choose a deck first.</small>}
           {err && <small className="lobby-error">{err}</small>}
@@ -272,7 +290,7 @@ export function LobbyPage() {
                   <div className="lobby-room-main">
                     <b>{r.name}</b>
                     <span className={`lobby-chip ${r.mode === "engine" ? "is-beta" : ""}`}>{r.mode === "engine" ? "Rules" : "Manual"}</span>
-                    {r.settings?.turnTimerSec ? <span className="lobby-chip" title="Turn timer">⏱ {formatTimer(r.settings.turnTimerSec)}</span> : null}
+                    {r.settings && r.settings.timeControl !== "off" ? <span className="lobby-chip" title="Time control">⏱ {formatTimeControl(r.settings)}</span> : null}
                     {r.settings && r.settings.startingLP !== 8000 ? <span className="lobby-chip">{r.settings.startingLP} LP</span> : null}
                     <span className={`lobby-chip is-${r.status}`}>{open ? "Open" : r.status === "dueling" ? "Dueling" : r.status}</span>
                   </div>

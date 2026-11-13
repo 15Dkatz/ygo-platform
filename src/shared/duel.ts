@@ -26,6 +26,10 @@ export interface CardInstance {
   /** Current ATK / DEF of a face-up monster (rules-enforced duels: includes boosts). Never set for face-down cards. */
   atk?: number;
   def?: number;
+  /** Current Level (or Rank for Xyz) of a face-up monster, rules-enforced duels (includes changes). */
+  level?: number;
+  /** A face-up monster that is currently a Tuner. */
+  tuner?: boolean;
 }
 
 export interface PlayerBoard {
@@ -65,11 +69,15 @@ export interface RoomInfo {
 
 /** Per-player turn clock (ms). `running` = whose clock is ticking; it started at server time `since`.
  *  Clients estimate the server clock with `serverNow` (server time when the message was sent). */
-export interface TurnClock { limitSec: number; remaining: [number, number]; running: 0 | 1 | null; since: number; serverNow: number }
+export interface TurnClock {
+  /** "turn": refilled every turn; "chess": a bank for the duel plus `incrementSec` per decision. */
+  mode?: "turn" | "chess"; incrementSec?: number;
+  limitSec: number; remaining: [number, number]; running: 0 | 1 | null; since: number; serverNow: number;
+}
 
 /** Every websocket message is one JSON envelope. Phases may add new `t` values. */
 export type ClientMsg =
-  | { t: "join"; deckId: string; main: number[]; extra: number[]; side: number[] }
+  | { t: "join"; deckId: string; main: number[]; extra: number[]; side: number[]; rarity?: Record<string, import("./rarity.ts").Rarity> }
   | { t: "chat"; text: string }
   | { t: "action"; action: unknown }          // manual-mode board action (phase 3 defines)
   | { t: "respond"; response: unknown }       // answer to an engine prompt (phase 4 defines)
@@ -82,7 +90,7 @@ export type ClientMsg =
   | { t: "rematch" }                           // after a finished duel; both must ask
   | { t: "leave" }                             // give up the seat (before the duel) / forfeit (during)
   // --- additive (bot opponent, rules-enforced rooms): only the host (seat 0), before the duel ---
-  | { t: "addBot"; deckId: string; main: number[]; extra: number[]; side: number[] }
+  | { t: "addBot"; deckId: string; main: number[]; extra: number[]; side: number[]; rarity?: Record<string, import("./rarity.ts").Rarity> }
   | { t: "removeBot" }
   // --- additive (host-runs-rules mode): only accepted from the host's socket ---
   | { t: "hostUpdate"; update: unknown; snapshot: unknown }   // one engine step, unmasked (the server masks per viewer);
@@ -135,6 +143,8 @@ export interface SeatInfo {
   connected: boolean;
   ready: boolean;                                   // deck submitted
   deck?: { main: number; extra: number; side: number };
+  /** Card rarities of this player's deck (cosmetic foils; everyone sees them). */
+  rarity?: Record<string, import("./rarity.ts").Rarity>;
 }
 
 export interface SessionInfo {
@@ -152,6 +162,8 @@ export interface SessionInfo {
   switchVotes?: [boolean, boolean];
   /** Rules-enforced room whose engine runs in a player's browser: that player's seat. */
   engineHost?: 0 | 1;
+  /** Rules-enforced: who the duel waits on and what for (the hint, no cards). */
+  deciding?: { seat: 0 | 1; kind: string; hint?: string };
   settings?: RoomSettings;
   timer?: TurnClock;
 }

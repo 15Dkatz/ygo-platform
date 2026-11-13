@@ -115,18 +115,96 @@ export const STARTER_DECKS: Deck[] = [
     ...n(46772449, 1), // Evilswarm Exciton Knight (Rank 4)
     ...n(95169481, 1), // Diamond Dire Wolf (Rank 4)
   ]),
+  // ---- advanced test decks: long chains, hand traps, GY / banish / Extra Deck navigation ----
+  deck("kewl", "Starter: Kewl Tune Synchro", [
+    ...n(89392810, 3), // Kewl Tune Reco (Tuner, Lv3)
+    ...n(16509007, 3), // Kewl Tune Mix (Tuner, Lv2)
+    ...n(16387555, 3), // Kewl Tune Cue (Tuner, Lv3)
+    ...n(43904702, 3), // Kewl Tune Clip (Tuner, Lv2)
+    ...n(14558127, 3), // Ash Blossom & Joyous Spring
+    ...n(73642296, 2), // Ghost Belle & Haunted Mansion
+    ...n(97268402, 2), // Effect Veiler
+    ...n(14442329, 3), // JJ "Kewl Tune"
+    ...n(78058681, 3), // Kewl Tune Synchro
+    ...n(84211599, 1), // Pot of Prosperity
+    ...n(49238328, 2), // Pot of Extravagance
+    ...n(81439173, 1), // Foolish Burial
+    ...n(14087893, 2), // Book of Moon
+    ...n(8267140, 2),  // Cosmic Cyclone
+    ...n(24299458, 1), // Forbidden Droplet
+    ...n(14532163, 1), // Lightning Storm
+    ...n(40847034, 2), // Kewl Tune Playlist
+    ...n(10045474, 3), // Infinite Impermanence
+  ], [
+    ...n(15665977, 2), // Kewl Tune RS (Synchro Tuner, Lv5)
+    ...n(88170262, 2), // Kewl Tune Remix (Lv5)
+    ...n(39576656, 2), // Kewl Tune Crackle (Lv5)
+    ...n(41069676, 2), // Kewl Tune Loudness War (Lv6)
+    ...n(42781164, 2), // Kewl Tune Track Maker (Lv4)
+    ...n(65961304, 2), // Kewl Tune B2B (Lv10)
+    ...n(37675907, 1), // Accel Synchron
+    ...n(50091196, 1), // Formula Synchron
+  ]),
+  deck("branded", "Starter: Branded Despia Fusion", [
+    ...n(68468459, 3), // Fallen of Albaz
+    ...n(62962630, 3), // Aluber the Jester of Despia
+    ...n(36577931, 2), // Despian Tragedy
+    ...n(90179822, 1), // Despian Comedy
+    ...n(99456344, 1), // Dramaturge of Despia
+    ...n(81555617, 1), // Ad Libitum of Despia
+    ...n(45883110, 2), // Guiding Quem, the Virtuous
+    ...n(19096726, 1), // Tri-Brigade Mercourier
+    ...n(14558127, 3), // Ash Blossom & Joyous Spring
+    ...n(73642296, 2), // Ghost Belle & Haunted Mansion
+    ...n(44362883, 1), // Branded Fusion
+    ...n(36637374, 1), // Branded Opening
+    ...n(82738008, 2), // Branded in Red
+    ...n(18973184, 1), // Branded Lost
+    ...n(99543666, 1), // Despia, Theater of the Branded
+    ...n(29948294, 1), // Branded in High Spirits
+    ...n(81439173, 1), // Foolish Burial
+    ...n(84211599, 1), // Pot of Prosperity
+    ...n(54693926, 1), // Dark Ruler No More
+    ...n(8267140, 2),  // Cosmic Cyclone
+    ...n(14087893, 2), // Book of Moon
+    ...n(17751597, 2), // Branded Retribution
+    ...n(6763530, 2),  // Branded Banishment
+    ...n(10045474, 3), // Infinite Impermanence
+  ], [
+    ...n(44146295, 1), // Mirrorjade the Iceblade Dragon
+    ...n(70534340, 1), // Lubellion the Searing Dragon
+    ...n(41373230, 2), // Titaniklad the Ash Dragon
+    ...n(24915933, 1), // Granguignol the Dusk Dragon
+    ...n(51409648, 1), // Rindbrumm the Striking Dragon
+    ...n(72272462, 1), // Despian Quaeritis
+    ...n(18666161, 1), // Despian Proskenion
+    ...n(6855503, 1),  // Masquerade the Blazing Dragon
+    ...n(34848821, 2), // Brigrand the Glory Dragon
+    ...n(1906812, 1),  // Sprind the Irondash Dragon
+    ...n(3410461, 1),  // Alba-Lenatus the Abyss Dragon
+  ]),
 ];
+
+// a few foils in the advanced decks, to show the rarities off
+const FOILS: Record<string, Deck["rarity"]> = {
+  "starter:kewl": { 89392810: "starlight", 16509007: "prismatic", 16387555: "gold", 43904702: "ghost", 78058681: "platinum", 14558127: "ultra", 14442329: "super", 15665977: "ultra", 65961304: "starlight", 10045474: "rare" },
+  "starter:branded": { 68468459: "starlight", 62962630: "secret", 36577931: "ultimate", 45883110: "collector", 90179822: "platinum", 99543666: "gold", 44362883: "ultra", 14558127: "ultra", 44146295: "starlight", 41373230: "super", 17751597: "rare" },
+};
+for (const d of STARTER_DECKS) if (FOILS[d.id]) d.rarity = FOILS[d.id];
 
 export const isStarterDeck = (id: string) => id.startsWith("starter:");
 
 /** Demo duels: a starter deck whose opening hand holds a combo (the rest shuffled), for rooms whose
  *  decks keep their order. Synchro: Genex Controller (Tuner, Lv3) + Gene-Warped Warwolf (Lv4) +
  *  Double Summon -> a Level 7 Synchro. Xyz: two Level 4s + Double Summon -> a Rank 4. */
-const DEMO_OPENING: Record<"synchro" | "xyz", number[]> = {
+const DEMO_OPENING: Record<"synchro" | "xyz" | "kewl" | "branded", number[]> = {
   synchro: [68505803, 69247929, 43422537, 56120475, 12607053],   // Genex Controller, Warwolf, Double Summon, Sakuretsu Armor, Waboku
   xyz: [69247929, 43096270, 43422537, 4206964, 12607053],        // Warwolf, Alexandrite Dragon, Double Summon, Trap Hole, Waboku
+  kewl: [89392810, 16509007, 14442329, 14558127, 10045474],      // Reco, Mix, JJ "Kewl Tune", Ash Blossom, Infinite Impermanence
+  branded: [68468459, 44362883, 62962630, 14558127, 17751597],   // Fallen of Albaz, Branded Fusion, Aluber, Ash Blossom, Branded Retribution
 };
-export function demoDeck(kind: "synchro" | "xyz", rng: () => number = Math.random): Deck {
+export type DemoKind = keyof typeof DEMO_OPENING;
+export function demoDeck(kind: DemoKind, rng: () => number = Math.random): Deck {
   const base = STARTER_DECKS.find((d) => d.id === `starter:${kind}`)!;
   const rest = [...base.main];
   for (const code of DEMO_OPENING[kind]) {

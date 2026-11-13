@@ -1,0 +1,112 @@
+/* Field type, per theme: each skin gets its own lettering for the zone labels, phases, turn, LP and the
+   big phase banner, plus a small animation of its own. Fonts load from Google Fonts (index.html).
+   Arcane is the default (no data-skin attribute). `:not(#_)` lifts these over skins.css. */
+
+:root { --font-field: var(--font-display); --font-num: var(--font-field); }
+
+.duel-zone-label, .duel-pile-name, .duel-phasebtn, .duel-phasecell-end, .duel-turnbadge b, .duel-phasefx-text { font-family: var(--font-field); }
+.duel-lp-num, .duel-lp-hit b, .duel-pile-count, .duel-turnbadge b { font-family: var(--font-num); }
+
+/* a band of light that runs across the labels, column by column (a wave over the board) */
+@keyframes field-sheen { 0%, 62% { background-position: 160% 0; } 100% { background-position: -60% 0; } }
+.duel-zone-label {
+  /* the band, over a solid layer of the label's own colour (the band's box is narrower than the label) */
+  background:
+    linear-gradient(105deg, transparent 42%, var(--sheen, #fff) 50%, transparent 58%) 160% 0 / 250% 100% no-repeat,
+    linear-gradient(currentColor, currentColor);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  text-shadow: none; filter: drop-shadow(0 1px 0 var(--zone-hi, transparent));
+  animation: field-sheen var(--sheen-time, 7s) ease-in-out infinite;
+}
+.duel-zone[data-slot="1"] .duel-zone-label { animation-delay: .15s; }
+.duel-zone[data-slot="2"] .duel-zone-label { animation-delay: .3s; }
+.duel-zone[data-slot="3"] .duel-zone-label { animation-delay: .45s; }
+.duel-zone[data-slot="4"] .duel-zone-label { animation-delay: .6s; }
+
+/* ================= Arcane: runic letters that glow, a breathing aura on the current phase ================= */
+:root:not([data-skin]):not(#_) { --font-field: "Metamorphous", "Cinzel", Georgia, serif; --font-num: "Orbitron", "Segoe UI", sans-serif; --sheen: #e9dcff; }
+:root:not([data-skin]):not(#_) .duel-zone-label { letter-spacing: .1em; filter: drop-shadow(0 0 4px color-mix(in srgb, currentColor 55%, transparent)); }
+:root:not([data-skin]):not(#_) .duel-phasebtn { letter-spacing: .12em; }
+:root:not([data-skin]):not(#_) .duel-phasebtn.is-active { animation: arcane-aura 2.4s ease-in-out infinite; }
+:root:not([data-skin]):not(#_) .duel-lp-num, :root:not([data-skin]):not(#_) .duel-turnbadge b { letter-spacing: .04em; font-weight: 900; }
+:root:not([data-skin]):not(#_) .duel-lp-num { text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 60%, transparent); }
+:root:not([data-skin]):not(#_) .duel-phasefx-text { letter-spacing: .14em; animation-name: arcane-banner; }
+@keyframes arcane-aura {
+  0%, 100% { box-shadow: 0 0 10px color-mix(in srgb, currentColor 0%, var(--accent)), inset 0 0 0 1px rgb(255 255 255 / .25); }
+  50% { box-shadow: 0 0 26px 4px var(--accent), inset 0 0 12px rgb(255 255 255 / .35); }
+}
+@keyframes arcane-banner {
+  0% { opacity: 0; letter-spacing: .9em; filter: blur(12px); transform: scale(1.15); }
+  25% { opacity: 1; letter-spacing: .14em; filter: blur(0); transform: scale(1); }
+  75% { opacity: 1; filter: blur(0); }
+  100% { opacity: 0; letter-spacing: .3em; filter: blur(6px); }
+}
+
+/* ================= Vintage: old printer's capitals, a rubber stamp for the new phase ================= */
+:root[data-skin="vintage"]:not(#_) { --font-field: "IM Fell English SC", "Palatino Linotype", Georgia, serif; --font-num: "IM Fell English SC", Georgia, serif; --sheen: #fff6dc; --sheen-time: 11s; }
+:root[data-skin="vintage"]:not(#_) .duel-zone-label { font-style: normal; text-transform: none; letter-spacing: .04em; font-weight: 400; font-size: 1.15em; }
+:root[data-skin="vintage"]:not(#_) .duel-phasebtn, :root[data-skin="vintage"]:not(#_) .duel-phasecell-end { font-weight: 400; letter-spacing: .06em; }
+:root[data-skin="vintage"]:not(#_) .duel-phasebtn.is-active {
+  background: transparent; color: #9b1c12; border: 2px solid #9b1c12; box-shadow: none; border-radius: 4px;
+  animation: vintage-stamp .45s cubic-bezier(.3, 1.6, .5, 1) both; mix-blend-mode: multiply;
+}
+:root[data-skin="vintage"]:not(#_) .duel-lp-num { font-weight: 400; }
+:root[data-skin="vintage"]:not(#_) .duel-phasefx-text { animation-name: vintage-banner; }
+@keyframes vintage-stamp {
+  0% { transform: scale(1.8) rotate(-9deg); opacity: 0; }
+  60% { transform: scale(.94) rotate(-3deg); opacity: 1; }
+  100% { transform: scale(1) rotate(-3deg); }
+}
+@keyframes vintage-banner {
+  0% { opacity: 0; transform: scale(1.6) rotate(-6deg); filter: blur(2px); }
+  20% { opacity: 1; transform: scale(1) rotate(-3deg); filter: blur(0); }
+  80% { opacity: 1; transform: scale(1) rotate(-3deg); }
+  100% { opacity: 0; transform: scale(1) rotate(-3deg); filter: blur(3px); }
+}
+
+/* ================= Card table: art-deco casino letters, a flickering neon sign for the phase ================= */
+:root[data-skin="felt"]:not(#_) { --font-field: "Limelight", "Copperplate", Georgia, serif; --font-num: "Limelight", Georgia, serif; --sheen: #fff1b8; --sheen-time: 6s; }
+:root[data-skin="felt"]:not(#_) .duel-zone-label { color: #e8c76a; letter-spacing: .06em; font-weight: 400; }
+:root[data-skin="felt"]:not(#_) .duel-phasebtn, :root[data-skin="felt"]:not(#_) .duel-phasecell-end { font-weight: 400; letter-spacing: .08em; }
+:root[data-skin="felt"]:not(#_) .duel-phasebtn.is-active {
+  background: rgb(20 12 4 / .65); color: #ffe9a8; border-color: #ffcf5a;
+  text-shadow: 0 0 4px #fff3c4, 0 0 12px #ffb52e, 0 0 24px #ff8a00;
+  box-shadow: 0 0 14px #ffb52e88, inset 0 0 10px #ffb52e55;
+  animation: felt-neon 3.2s linear infinite;
+}
+:root[data-skin="felt"]:not(#_) .duel-lp-num { color: #ffe9a8; text-shadow: 0 0 10px #ffb52e99; }
+:root[data-skin="felt"]:not(#_) .duel-phasefx-text { animation-name: felt-banner; }
+@keyframes felt-neon {
+  0%, 18%, 22%, 25%, 53%, 57%, 100% { opacity: 1; }
+  20%, 24%, 55% { opacity: .45; text-shadow: none; }
+}
+@keyframes felt-banner {
+  0% { opacity: 0; } 6% { opacity: 1; } 9% { opacity: .2; } 12% { opacity: 1; } 15% { opacity: .4; } 18% { opacity: 1; }
+  80% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1.05); }
+}
+
+/* ================= Ancient stone: carved capitals, a glint across them, an ember-lit phase ================= */
+:root[data-skin="stone"]:not(#_) { --font-field: "Cinzel Decorative", "Cinzel", "Trajan Pro", Georgia, serif; --font-num: "Cinzel", "Trajan Pro", Georgia, serif; --sheen: #fff3c8; --sheen-time: 9s; }
+:root[data-skin="stone"]:not(#_) .duel-zone-label { letter-spacing: .12em; filter: drop-shadow(0 -1px 0 rgb(0 0 0 / .55)) drop-shadow(0 1px 0 rgb(255 255 255 / .18)); }
+:root[data-skin="stone"]:not(#_) .duel-phasebtn.is-active {
+  background: radial-gradient(circle at 50% 120%, #ff9b3a, #b8461a 55%, #5a2410);
+  color: #fff4d8; border-color: #ffb066; text-shadow: 0 0 6px #ffcf8a;
+  animation: stone-ember 2.8s ease-in-out infinite;
+}
+:root[data-skin="stone"]:not(#_) .duel-lp-num { letter-spacing: .03em; font-weight: 700; }
+:root[data-skin="stone"]:not(#_) .duel-phasefx-text { animation-name: stone-banner; }
+@keyframes stone-ember {
+  0%, 100% { box-shadow: 0 0 10px #ff7a2a88, inset 0 -6px 12px #ffb06655; filter: brightness(1); }
+  40% { box-shadow: 0 0 22px #ff7a2acc, inset 0 -6px 16px #ffd08a88; filter: brightness(1.15); }
+  60% { filter: brightness(.95); }
+}
+@keyframes stone-banner {
+  0% { opacity: 0; transform: translateY(18px); clip-path: inset(0 100% 0 0); }
+  30% { opacity: 1; transform: translateY(0); clip-path: inset(0 0 0 0); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-8px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .duel-zone-label, .duel-phasebtn.is-active, .duel-phasefx-text { animation: none !important; }
+}

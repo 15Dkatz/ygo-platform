@@ -336,10 +336,16 @@ export function decodeEvents(ctx: DecodeCtx, m: OcgMessage): EngineEvent[] {
       const [a, b] = m.results;   // indexed by team
       return [{ e: "rps", results: ctx.seatOf(0) === 0 ? [a, b] : [b, a] }];
     }
-    case OcgMessageType.CONFIRM_CARDS:
     case OcgMessageType.CONFIRM_DECKTOP:
     case OcgMessageType.CONFIRM_EXTRATOP:
-      return [{ e: "confirm", player: ctx.seatOf(m.player), cards: m.cards.map((c) => r(c)) }];
+      // excavating: everyone sees the top cards
+      return [{ e: "confirm", player: ctx.seatOf(m.player), cards: m.cards.map((c) => r(c)), public: true }];
+    case OcgMessageType.CONFIRM_CARDS: {
+      // ConfirmCards(p, cards): shown to p. Cards in a Deck stay private to p (looking at a Deck);
+      // anything else (a hand reveal, a face-down card flipped to show) is shown to both (as in YGOPro)
+      const cards = m.cards.map((c) => r(c));
+      return [{ e: "confirm", player: ctx.seatOf(m.player), cards, public: !cards.some((c) => c.location === "deck") }];
+    }
     case OcgMessageType.SHUFFLE_DECK: return [{ e: "shuffle", player: ctx.seatOf(m.player), where: "deck" }];
     case OcgMessageType.SHUFFLE_HAND: return [{ e: "shuffle", player: ctx.seatOf(m.player), where: "hand" }];
     case OcgMessageType.SHUFFLE_EXTRA: return [{ e: "shuffle", player: ctx.seatOf(m.player), where: "extra" }];

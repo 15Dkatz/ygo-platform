@@ -6,6 +6,7 @@
 //     the current board + open prompt (call it once after waking, before anything else);
 //   - `exportBoard()` / `snapshot()` are sync and valid once `start()` has resolved.
 
+import { cardToken } from "../../../shared/duel.ts";
 import { maskPrompt } from "./promptMask.ts";
 import type { OcgCoreSync, OcgResponse } from "ocgcore-wasm";
 import type { BoardState } from "../../../shared/duel.ts";
@@ -71,15 +72,27 @@ export function restoreRoomSession(deps: RoomEngineDeps, snapshot: unknown): Roo
 function roomSession(deps: RoomEngineDeps, saved: SavedDuel): RoomEngineSession {
   let duel: EngineDuel | null = null;
   const ready = () => { if (!duel) throw new Error("engine session not started (await start() first)"); return duel; };
+  // reveals from this batch and the one before (an excavation, then the choice, then where the cards go)
+  let prevConfirms: EngineEvent[] = [];
   const update = (d: EngineDuel, events: EngineEvent[]): RoomEngineUpdate => {
     const names = d.saved.setup.names ?? ["Player 1", "Player 2"];
-    const pub = eventsFor(eventsFor(events, 0), 1);   // what both players may see
+    const confirms = [...prevConfirms, ...events.filter((e) => e.e === "confirm")];
+    prevConfirms = events.filter((e) => e.e === "confirm");
+    const publicCodes = new Set<string>(), seen: [Set<string>, Set<string>] = [new Set(), new Set()];
+    for (const e of confirms) {
+      if (e.e !== "confirm") continue;
+      for (const c of e.cards) {
+        if (e.public) publicCodes.add(`${c.controller}:${c.code}`);
+        for (const s of [0, 1] as const) if (e.public || e.player === s) seen[s].add(`${c.controller}:${c.location}:${c.code}`);
+      }
+    }
+    const pub = eventsFor(eventsFor(events, 0, publicCodes), 1, publicCodes);   // what both players may see
     const u: RoomEngineUpdate = {
       board: d.toBoardState(null),
       // the opponent's hidden cards are blanked in the prompt (the core names them all)
-      prompts: d.prompt ? [{ seat: d.prompt.player, prompt: maskPrompt(d.prompt) }] : [],
+      prompts: d.prompt ? [{ seat: d.prompt.player, prompt: maskPrompt(d.prompt, d.prompt.player, seen[d.prompt.player]) }] : [],
       log: pub.map((e) => describeEvent(e, names, (c) => d.cardName(c))).filter((x): x is string => !!x),
-      events: [eventsFor(events, 0), eventsFor(events, 1)],
+      events: [eventsFor(events, 0, publicCodes), eventsFor(events, 1, publicCodes)],
     };
     if (d.finished) u.finished = { winner: d.status.winner, reason: winReason(d, events) };
     return u;
@@ -119,8 +132,9 @@ function winReason(d: EngineDuel, events: EngineEvent[]): string {
 const PHASE: Record<string, string> = { draw: "Draw Phase", standby: "Standby Phase", main1: "Main Phase 1", battle: "Battle Phase", main2: "Main Phase 2", end: "End Phase" };
 
 /** One public log line per event (or null for noise). */
-export function describeEvent(e: EngineEvent, names: [string, string], cardName: (code: number) => string | null = () => null): string | null {
-  const card = (code: number) => (code ? cardName(code) ?? `#${code}` : "a card");
+export function describeEvent(e: EngineEvent, names: [string, string], _cardName: (code: number) => string | null = () => null): string | null {   // (names: client-side, from [[code]] tokens)
+  // card names as [[code]] tokens: the client shows them as names you can hover (preview) and click (zoom)
+  const card = (code: number) => (code ? cardToken(code) : "a card");
   switch (e.e) {
     case "turn": return `Turn ${e.turn}: ${names[e.player]}`;
     case "phase": return e.step ? null : PHASE[e.phase] ?? null;

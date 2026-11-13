@@ -49,6 +49,7 @@ h1, h2, .brand, .duel-end-title, .duel-phasefx-text { font-family: var(--font-di
 :root[data-skin="vintage"]:not(#_) .duel-page.is-live .duel-plate .duel-pname { color: #3a2814; }
 :root[data-skin="vintage"]:not(#_) .duel-page.is-live .duel-topline, :root[data-skin="vintage"]:not(#_) .duel-page.is-live .duel-topline a { color: #f3e3bd; }
 :root[data-skin="vintage"]:not(#_) .duel-page.is-live .duel-topline .muted { color: #d9c49b; }
+:root[data-skin="vintage"]:not(#_) .duel-page.is-live .duel-topline button:not(.is-danger), :root[data-skin="vintage"]:not(#_) .duel-page.is-live .duel-topline select { color: #3a2512; }
 :root[data-skin="vintage"]:not(#_) .duel-phasetrack button { font-family: var(--font-display); font-size: 14px; }
 :root[data-skin="vintage"]:not(#_) .duel-page.is-live .duel-phasetrack button { color: #6b5032; }
 :root[data-skin="vintage"]:not(#_) .duel-page.is-live .duel-phasetrack button.is-active { color: #fbf1dc; }

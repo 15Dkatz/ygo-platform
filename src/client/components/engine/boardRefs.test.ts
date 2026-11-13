@@ -79,8 +79,9 @@ describe("engine ref -> board mapping", () => {
       extraMonster: [null, null], turn: 1, turnPlayer: 0, phase: "main1", log: [],
     };
     expect(visibleCode({ code: 44095762, controller: 1, location: "spelltrap", sequence: 0, position: "faceDown" }, 0, b)).toBe(0);
-    expect(visibleCode({ code: 44095762, controller: 1, location: "hand", sequence: 0 }, 0, b)).toBe(0);
-    expect(visibleCode({ code: 44095762, controller: 1, location: "deck", sequence: 0 }, 0, b)).toBe(0);
+    // hand / Deck: the server blanks what you may not see (promptMask.ts); a code it does send was revealed to you
+    expect(visibleCode({ code: 0, controller: 1, location: "hand", sequence: 0 }, 0, b)).toBe(0);
+    expect(visibleCode({ code: 44095762, controller: 1, location: "deck", sequence: 0 }, 0, b)).toBe(44095762);
     expect(visibleCode({ code: 44095762, controller: 1, location: "gy", sequence: 0 }, 0, b)).toBe(44095762);
     expect(visibleCode({ code: 44095762, controller: 0, location: "deck", sequence: 3 }, 0, b)).toBe(44095762);   // your own deck search
   });

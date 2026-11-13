@@ -19,14 +19,22 @@ export function hiddenFrom(ref: Ref, seat: Seat): boolean {
   return !!ref.position && FACE_DOWN.has(ref.position);
 }
 
-/** A copy of `prompt` with the opponent's hidden cards' codes set to 0. */
-export function maskPrompt<T extends EnginePrompt>(prompt: T, seat: Seat = prompt.player): T {
+const SELECTIONS = new Set(["selectCard", "selectUnselect", "selectSum", "selectTribute", "selectCounter"]);
+
+/** A copy of `prompt` with the opponent's hidden cards' codes set to 0, except cards that were just
+ *  shown to `seat` (`revealed`: "controller:location:code") and, in a selection, cards from the opponent's
+ *  Deck / Extra Deck (an effect that lets you choose from them lets you look at them). */
+export function maskPrompt<T extends EnginePrompt>(prompt: T, seat: Seat = prompt.player, revealed: ReadonlySet<string> = new Set()): T {
+  const picking = SELECTIONS.has(prompt.kind);
   const walk = (v: unknown): unknown => {
     if (Array.isArray(v)) return v.map(walk);
     if (!v || typeof v !== "object") return v;
     const out: Record<string, unknown> = {};
     for (const [k, x] of Object.entries(v)) out[k] = walk(x);
-    if (isRef(v) && hiddenFrom(v, seat)) out.code = 0;
+    if (isRef(v) && hiddenFrom(v, seat)) {
+      const shown = revealed.has(`${v.controller}:${v.location}:${v.code}`) || (picking && (v.location === "deck" || v.location === "extra"));
+      if (!shown) out.code = 0;
+    }
     return out;
   };
   return walk(prompt) as T;

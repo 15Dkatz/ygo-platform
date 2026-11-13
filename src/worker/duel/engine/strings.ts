@@ -25,6 +25,17 @@ const HINTS: Record<number, string> = {
   // a few client system strings (EDOPro strings.conf); unknown ids render as "#id"
   1150: "Activate", 1151: "Normal Summon", 1152: "Special Summon", 1153: "Set", 1154: "Flip Summon",
   1155: "Change to Defense Position", 1156: "Change to Attack Position",
+  // options / yes-no questions the scripts ask with system strings
+  31: "Attack directly?", 70: "Monster", 71: "Spell", 72: "Trap", 93: "Continue selecting?", 94: "Use this effect?", 210: "Continue?",
+  573: "Add it to your hand", 574: "Send it to the GY", 1213: "Attack directly", 1214: "Attack a monster",
+  // effect descriptions of the standard procedures (proc_*.lua)
+  1160: "Activate this card", 1163: "Pendulum Summon", 1170: "Fusion Summon", 1171: "Ritual Summon",
+  1172: "Synchro Summon", 1173: "Xyz Summon", 1174: "Link Summon",
+  // attributes (1010 + bit) and card types (1050 + bit), offered when you declare one
+  1010: "EARTH", 1011: "WATER", 1012: "FIRE", 1013: "WIND", 1014: "LIGHT", 1015: "DARK", 1016: "DIVINE",
+  1050: "Monster", 1051: "Spell", 1052: "Trap", 1054: "Normal", 1055: "Effect", 1056: "Fusion", 1057: "Ritual",
+  1059: "Spirit", 1060: "Union", 1061: "Gemini", 1062: "Tuner", 1063: "Synchro", 1064: "Token", 1066: "Quick-Play",
+  1067: "Continuous", 1068: "Equip", 1069: "Field", 1070: "Counter", 1071: "Flip", 1072: "Toon", 1073: "Xyz", 1074: "Pendulum", 1076: "Link",
 };
 
 /** `cardName` resolves a plain card code: the core sends one as the select hint when a

@@ -133,6 +133,7 @@ out.append(skin(
 {{s}} .duel-page.is-live .duel-plate .duel-pname {{ color: #3a2814; }}
 {{s}} .duel-page.is-live .duel-topline, {{s}} .duel-page.is-live .duel-topline a {{ color: #f3e3bd; }}
 {{s}} .duel-page.is-live .duel-topline .muted {{ color: #d9c49b; }}
+{{s}} .duel-page.is-live .duel-topline button:not(.is-danger), {{s}} .duel-page.is-live .duel-topline select {{ color: #3a2512; }}
 {{s}} .duel-phasetrack button {{ font-family: var(--font-display); font-size: 14px; }}
 {{s}} .duel-page.is-live .duel-phasetrack button {{ color: #6b5032; }}
 {{s}} .duel-page.is-live .duel-phasetrack button.is-active {{ color: #fbf1dc; }}

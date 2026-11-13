@@ -24,4 +24,32 @@ describe("prompt masking", () => {
     maskPrompt(prompt);
     expect((prompt as unknown as { cards: { code: number }[] }).cards[0].code).toBe(111);
   });
+  it("shows picks from the opponent's Deck (you look at them to choose)", () => {
+    const pick = { id: 2, player: 0, kind: "selectCard", min: 1, max: 1, canCancel: false,
+      cards: [{ code: 901, controller: 1, location: "deck", sequence: 5 }, { code: 902, controller: 1, location: "deck", sequence: 6 }] } as unknown as EnginePrompt;
+    expect((maskPrompt(pick) as unknown as { cards: { code: number }[] }).cards.map((c) => c.code)).toEqual([901, 902]);
+  });
+  it("shows the opponent's hand cards only when they were revealed to you", () => {
+    const m = maskPrompt(prompt, 0, new Set(["1:hand:444"])) as unknown as { cards: { code: number }[] };
+    expect(m.cards[3].code).toBe(444);
+    expect(m.cards[0].code).toBe(0);   // a set card stays hidden
+  });
+});
+
+describe("reveals in events", () => {
+  it("keeps a private look at a Deck private, and an excavation public", async () => {
+    const { eventsFor } = await import("./EngineDuel.ts");
+    const look = { e: "confirm", player: 0, public: false, cards: [{ code: 5, controller: 0, location: "deck", sequence: 0 }] } as const;
+    const dig = { e: "confirm", player: 0, public: true, cards: [{ code: 6, controller: 0, location: "deck", sequence: 0 }] } as const;
+    const [a, b] = eventsFor([look, dig] as never, 1) as unknown as { cards: { code: number }[] }[];
+    expect(a.cards[0].code).toBe(0);
+    expect(b.cards[0].code).toBe(6);
+    expect((eventsFor([look] as never, 0)[0] as unknown as { cards: { code: number }[] }).cards[0].code).toBe(5);
+  });
+  it("an excavated card's next move is public", async () => {
+    const { eventsFor } = await import("./EngineDuel.ts");
+    const move = { e: "move", code: 6, from: { code: 6, controller: 0, location: "deck", sequence: 0 }, to: { code: 6, controller: 0, location: "hand", sequence: 2 } };
+    expect((eventsFor([move] as never, 1)[0] as { code: number }).code).toBe(0);
+    expect((eventsFor([move] as never, 1, new Set(["0:6"]))[0] as { code: number }).code).toBe(6);
+  });
 });

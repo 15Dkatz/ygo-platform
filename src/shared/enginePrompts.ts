@@ -126,7 +126,9 @@ export type EngineEvent =
   | { e: "coin"; player: Seat; results: boolean[] }   // true = heads
   | { e: "dice"; player: Seat; results: number[] }
   | { e: "rps"; results: [number, number] }            // 1 scissors, 2 rock, 3 paper
-  | { e: "confirm"; player: Seat; cards: EngineCardRef[] }
+  /** Cards shown face-up. `public`: both players see them (excavating, revealing from the hand / field);
+   *  otherwise only `player` does (looking at your own Deck): the other player gets the count, codes hidden. */
+  | { e: "confirm"; player: Seat; cards: EngineCardRef[]; public?: boolean }
   | { e: "shuffle"; player: Seat; where: "deck" | "hand" | "extra" }
   | { e: "target"; cards: EngineCardRef[] }
   | { e: "hint"; player: Seat; text: string }

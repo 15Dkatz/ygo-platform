@@ -336,7 +336,7 @@ export class EngineDuel {
   toBoardState(viewer: Seat | null): BoardState {
     const h = this.handle!;
     const flags = (OcgQueryFlags.CODE | OcgQueryFlags.POSITION | OcgQueryFlags.OVERLAY_CARD | OcgQueryFlags.COUNTERS | OcgQueryFlags.OWNER
-      | OcgQueryFlags.ATTACK | OcgQueryFlags.DEFENSE) as never;
+      | OcgQueryFlags.ATTACK | OcgQueryFlags.DEFENSE | OcgQueryFlags.LEVEL | OcgQueryFlags.RANK) as never;
     const names = this.saved.setup.names ?? ["Player 1", "Player 2"];
     const extraMonster: (CardInstance | null)[] = [null, null];
     const players = ([0, 1] as const).map((seat): PlayerBoard => {
@@ -356,9 +356,12 @@ export class EngineDuel {
         if (p) card.position = p;
         // current stats of face-up monsters (public); face-down ones get none
         if (location === OcgLocation.MZONE && faceUp) {
-          const st = info as { attack?: number; defense?: number };
+          const st = info as { attack?: number; defense?: number; level?: number; rank?: number };
           if (typeof st.attack === "number") card.atk = st.attack;
           if (typeof st.defense === "number") card.def = st.defense;
+          // current Level / Rank (Xyz monsters have a Rank and no Level)
+          const lv = (st.rank ?? 0) > 0 ? st.rank! : st.level ?? 0;
+          if (lv > 0) card.level = lv;
         }
         if (info.counters && Object.keys(info.counters).length) {
           card.counters = Object.fromEntries(Object.entries(info.counters).map(([k, v]) => [`0x${Number(k).toString(16)}`, v]));
@@ -412,19 +415,25 @@ function visibleRef(c: EngineCardRef, viewer: Seat): boolean {
 }
 const mask = (c: EngineCardRef, v: Seat): EngineCardRef => (visibleRef(c, v) ? c : { ...c, code: HIDDEN_CODE });
 
-/** Strip what `viewer` may not see. Prompts are only ever sent to their own player. */
-export function eventsFor(events: EngineEvent[], viewer: Seat): EngineEvent[] {
+/** Cards publicly revealed a moment ago ("controller:code"): where they go next is public too. */
+export type RevealedSet = ReadonlySet<string>;
+
+/** Strip what `viewer` may not see. Prompts are only ever sent to their own player. `revealed` = cards
+ *  both players just saw (an excavation): their next move isn't hidden. */
+export function eventsFor(events: EngineEvent[], viewer: Seat, revealed: RevealedSet = new Set()): EngineEvent[] {
   return events.map((ev): EngineEvent => {
     switch (ev.e) {
       case "draw": return ev.player === viewer ? ev : { ...ev, codes: ev.codes.map(() => HIDDEN_CODE) };
       case "move": {
-        const seen = (ev.to && visibleRef(ev.to, viewer)) || (ev.from && ev.from.location !== "hand" && ev.from.location !== "deck" && visibleRef(ev.from, viewer));
+        const seen = (ev.to && visibleRef(ev.to, viewer)) || (ev.from && ev.from.location !== "hand" && ev.from.location !== "deck" && visibleRef(ev.from, viewer))
+          || (!!ev.from && revealed.has(`${ev.from.controller}:${ev.code}`));
         return seen ? ev : { ...ev, code: HIDDEN_CODE, from: ev.from && { ...ev.from, code: HIDDEN_CODE }, to: ev.to && { ...ev.to, code: HIDDEN_CODE } };
       }
       case "set": return { ...ev, card: mask(ev.card, viewer) };
       case "reposition": return { ...ev, card: mask(ev.card, viewer) };
       case "summon": return ev;
-      case "confirm": return ev;   // confirming = revealing to the opponent
+      // a private look (your own Deck): the other player sees that cards were looked at, not which
+      case "confirm": return ev.public || ev.player === viewer ? ev : { ...ev, cards: ev.cards.map((c) => ({ ...c, code: HIDDEN_CODE })) };
       case "target": return { ...ev, cards: ev.cards.map((c) => mask(c, viewer)) };
       default: return ev;
     }

@@ -3,6 +3,7 @@ import type { Card, LibraryCard } from "../../../shared/types.ts";
 import { CardImage } from "./CardImage.tsx";
 import { kindLine, statLine, typeLine } from "./cardInfo.ts";
 import "./cards.css";
+import { CardText } from "./CardText.tsx";
 
 /**
  * Hover preview of a card (big image + text) that follows the mouse.
@@ -79,7 +80,7 @@ export function CardPreviewLayer({ scope = "page" }: { scope?: string }) {
         <p className="muted">{typeLine(c)}</p>
         <p className="muted">{[kindLine(c), statLine(c)].filter(Boolean).join(" · ")}</p>
         {lib && lib.tags.length > 0 && <p className="muted small">{lib.tags.join(" · ")}</p>}
-        <p className="card-preview-text">{text.length > 420 ? text.slice(0, 420) + "…" : text}</p>
+        <CardText className="card-preview-text" text={text.length > 520 ? text.slice(0, 520) + "…" : text} />
       </div>
     </div>
   );

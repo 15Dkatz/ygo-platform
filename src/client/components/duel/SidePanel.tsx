@@ -2,41 +2,56 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { cardImage } from "../../api.ts";
 import type { ChatLine } from "./useDuel.ts";
 import { getCard } from "./useDuel.ts";
+import { CardText } from "../cards/CardText.tsx";
+import { RarityFoil, useRarity } from "../cards/Rarity.tsx";
 
 /** Big card preview with its text. */
 export function CardPreview({ code, onZoom, large }: { code: number | null; onZoom?: (code: number) => void; large?: boolean }) {
   const card = code ? getCard(code) : null;
+  const rarity = useRarity()(code && code > 0 ? code : 0, undefined);
   if (!code || code <= 0) return <div className="duel-preview is-empty muted">Hover a card (long-press on touch) to read it here.</div>;
   const stats = card && card.category === "Monster"
     ? [card.attribute, card.race, card.linkval ? `LINK-${card.linkval}` : card.level ? `${/XYZ/i.test(card.type ?? "") ? "Rank" : "Level"} ${card.level}` : null, card.scale != null ? `Scale ${card.scale}` : null].filter(Boolean).join(" · ")
     : card ? [card.race, card.category].filter(Boolean).join(" ") : "";
   return (
     <div className={`duel-preview ${large ? "is-large" : ""}`}>
+      {/* the card's foil, big (it follows the mouse here too) */}
       {onZoom
-        ? <button className="duel-preview-zoom" onClick={() => onZoom(code)} title="Zoom" aria-label={`Zoom ${card?.name ?? "card"}`}><img src={cardImage(code, "full")} alt={card?.name ?? ""} /></button>
-        : <img src={cardImage(code, "full")} alt={card?.name ?? ""} />}
+        ? <button className="duel-preview-zoom" onClick={() => onZoom(code)} title="Zoom" aria-label={`Zoom ${card?.name ?? "card"}`}>
+            <span className="duel-preview-art" data-foil={rarity !== "common" ? rarity : undefined}><img src={cardImage(code, "full")} alt={card?.name ?? ""} /><RarityFoil rarity={rarity} type={card?.type} code={code} /></span>
+          </button>
+        : <span className="duel-preview-art" data-foil={rarity !== "common" ? rarity : undefined}><img src={cardImage(code, "full")} alt={card?.name ?? ""} /><RarityFoil rarity={rarity} type={card?.type} code={code} /></span>}
       <div className="duel-preview-text">
         <h3>{card?.name ?? `Card ${code}`}</h3>
         {card && <div className="muted">{card.type}{stats ? ` — ${stats}` : ""}</div>}
         {card && card.category === "Monster" && (
           <div className="duel-preview-atk">ATK {card.atk ?? "?"}{card.linkval ? "" : ` / DEF ${card.defense ?? "?"}`}</div>
         )}
-        {card?.desc && <p>{card.desc}</p>}
+        {card?.desc && <CardText text={card.desc} />}
       </div>
     </div>
   );
 }
 
-/** Renders a log line, turning [[code]] tokens into hoverable card names. */
-export function LogText({ text, onHover }: { text: string; onHover(code: number | null): void }) {
+const LOG_HOVER_MS = 1000;
+let logHoverTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Renders a log line, turning [[code]] tokens into card names: rest on one to preview, click to zoom. */
+export function LogText({ text, onHover, onZoom }: { text: string; onHover(code: number | null): void; onZoom?(code: number): void }) {
   const parts = text.split(/(\[\[\d+\]\])/g);
+  // reading down the log shouldn't flash a card for every name you pass: preview after resting on one
+  // for a moment (or right away on click)
+  const enter = (code: number) => { clearTimeout(logHoverTimer); logHoverTimer = setTimeout(() => onHover(code), LOG_HOVER_MS); };
+  const leave = () => { clearTimeout(logHoverTimer); onHover(null); };
   return (
     <>
       {parts.map((p, i) => {
         const m = /^\[\[(\d+)\]\]$/.exec(p);
         if (!m) return <span key={i}>{p}</span>;
         const code = Number(m[1]);
-        return <b key={i} className="duel-log-card" onMouseEnter={() => onHover(code)} onClick={() => onHover(code)}>{getCard(code)?.name ?? `#${code}`}</b>;
+        return <b key={i} className="duel-log-card" role="button" tabIndex={0} title="Rest the mouse here to preview, click to zoom"
+          onMouseEnter={() => enter(code)} onMouseLeave={leave}
+          onClick={() => { clearTimeout(logHoverTimer); if (onZoom) onZoom(code); else onHover(code); }}>{getCard(code)?.name ?? `#${code}`}</b>;
       })}
     </>
   );

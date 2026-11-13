@@ -17,6 +17,8 @@ import { CardPreviewLayer, preview, previewHandlers } from "../components/cards/
 import { CARD_DRAG_TYPE, CardSearchPanel } from "../components/cards/CardSearchPanel.tsx";
 import { banLimit, downloadText, safeFileName } from "../components/cards/cardInfo.ts";
 import "./DeckBuilderPage.css";
+import { RARITIES, RARITY_LABEL, RARITY_SHORT, rarityOf, type Rarity } from "../../shared/rarity.ts";
+import { RarityFoil, useFoilPointer } from "../components/cards/Rarity.tsx";
 
 const SECTIONS: { key: Section; label: string; min?: number; max: number }[] = [
   { key: "main", label: "Main Deck", min: 40, max: 60 },
@@ -135,6 +137,13 @@ export function DeckBuilderPage() {
   }, [menu]);
 
   const update = useCallback((fn: (d: Deck) => Deck) => setDeck((d) => (d ? fn(d) : d)), []);
+  /** One rarity for every copy of a card (Common = no entry). */
+  const setRarity = (id: number, r: Rarity) => update((d) => {
+    const next = { ...(d.rarity ?? {}) };
+    if (r === "common") delete next[String(id)]; else next[String(id)] = r;
+    return { ...d, rarity: next };
+  });
+  useFoilPointer();
   const counts = useMemo(() => {
     const m = new Map<number, number>();
     if (deck) for (const id of [...deck.main, ...deck.extra, ...deck.side]) m.set(id, (m.get(id) ?? 0) + 1);
@@ -284,14 +293,17 @@ export function DeckBuilderPage() {
                       const c = cardOf(id);
                       const lim = banLimit(banOf(c, format));
                       const over3 = (counts.get(id) ?? 0) > Math.min(MAX_COPIES, lim);
+                      const rar = rarityOf(deck.rarity, id);
                       return (
-                        <button key={`${i}-${id}`} type="button" className={`db-card${over3 ? " illegal" : ""}`} title={`${c.name} — click to remove, right-click for more`}
+                        <button key={`${i}-${id}`} type="button" className={`db-card${over3 ? " illegal" : ""}`} data-foil={rar !== "common" ? rar : undefined} title={`${c.name} — click to remove, right-click for more`}
                           draggable
                           onDragStart={(e) => { e.dataTransfer.setData(CARD_DRAG_TYPE, JSON.stringify({ id, from: s.key, index: i } satisfies DragData)); e.dataTransfer.effectAllowed = "move"; }}
                           onClick={() => removeAt(s.key, i)}
                           onContextMenu={(e: MouseEvent) => { e.preventDefault(); preview.hide(); setMenu({ x: e.clientX, y: e.clientY, section: s.key, index: i }); }}
                           {...previewHandlers(c)}>
                           <CardImage card={c} />
+                          <RarityFoil rarity={rar} type={c.type} code={id} />
+                          {rar !== "common" && <span className={`rarity-badge r-${rar}`} title={RARITY_LABEL[rar]}>{RARITY_SHORT[rar]}</span>}
                           {lim < 3 && <span className={`cs-ban ban-${lim}`}>{lim}</span>}
                         </button>
                       );
@@ -310,11 +322,20 @@ export function DeckBuilderPage() {
         const extra = isExtraDeckType(c.type);
         const other: Section = menu.section === "side" ? (extra ? "extra" : "main") : "side";
         return (
-          <div className="db-menu" role="menu" style={{ left: Math.min(menu.x, innerWidth - 200), top: Math.min(menu.y, innerHeight - 160) }} onClick={(e) => e.stopPropagation()}>
+          <div className="db-menu" role="menu" style={{ left: Math.min(menu.x, innerWidth - 200), top: Math.min(menu.y, innerHeight - 230) }} onClick={(e) => e.stopPropagation()}>
             <div className="db-menu-title">{c.name}</div>
             <button type="button" role="menuitem" onClick={() => { add(c, menu.section); setMenu(null); }}>Add a copy</button>
             <button type="button" role="menuitem" onClick={() => { move(menu.section, menu.index, other); setMenu(null); }}>Move to {other === "side" ? "Side" : other === "extra" ? "Extra" : "Main"} Deck</button>
             <button type="button" role="menuitem" onClick={() => { removeAt(menu.section, menu.index); setMenu(null); }}>Remove</button>
+            <div className="db-menu-rarity" role="group" aria-label="Rarity">
+              <span className="muted">Rarity (all copies)</span>
+              <div>
+                {RARITIES.map((r) => (
+                  <button key={r} type="button" className={`rarity-pick r-${r} ${rarityOf(deck.rarity, c.id) === r ? "is-on" : ""}`} title={RARITY_LABEL[r]}
+                    onClick={() => { setRarity(c.id, r); setMenu(null); }}>{RARITY_SHORT[r]}</button>
+                ))}
+              </div>
+            </div>
           </div>
         );
       })()}

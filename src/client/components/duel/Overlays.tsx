@@ -19,7 +19,19 @@ export function ContextMenu({ x, y, title, items, onClose }: { x: number; y: num
     setPos({ left: Math.max(8, Math.min(x, innerWidth - r.width - 8)), top: Math.max(8, Math.min(y, innerHeight - r.height - 8)) });
   }, [x, y, cur]);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { onClose(); return; }
+      // arrows move between items, 1-9 pick one
+      const btns = [...(ref.current?.querySelectorAll<HTMLButtonElement>(".duel-menu-item") ?? [])];
+      const i = btns.indexOf(document.activeElement as HTMLButtonElement);
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault(); e.stopImmediatePropagation();
+        btns[(i + (e.key === "ArrowDown" ? 1 : btns.length - 1)) % btns.length]?.focus();
+      } else if (/^[1-9]$/.test(e.key)) {
+        const b = btns[Number(e.key) - 1];
+        if (b && !b.classList.contains("duel-menu-close")) { e.preventDefault(); e.stopImmediatePropagation(); b.click(); }
+      }
+    };
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
   }, [onClose]);
@@ -46,7 +58,7 @@ export function ContextMenu({ x, y, title, items, onClose }: { x: number; y: num
             }}
           >
             <span>{it.label}</span>
-            {it.sub ? <span className="muted">›</span> : it.key ? <kbd>{it.key}</kbd> : null}
+            {it.sub ? <span className="muted">›</span> : it.key ? <kbd>{it.key}</kbd> : i < 9 ? <kbd className="duel-menu-num">{i + 1}</kbd> : null}
           </button>
         ))}
         {/* an obvious way out */}

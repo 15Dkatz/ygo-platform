@@ -6,6 +6,7 @@ import { CardImage } from "../cards/CardImage.tsx";
 import { CardPreviewLayer, preview, previewHandlers } from "../cards/CardPreview.tsx";
 import { kindLine, statLine, typeLine } from "../cards/cardInfo.ts";
 import "./card-dialog.css";
+import { CardText } from "../cards/CardText.tsx";
 
 interface Props {
   card: LibraryCard | null;
@@ -181,7 +182,7 @@ export function CardDialog(p: Props) {
                   })}
                 </ul>
               </div>
-              <p className="dlg-text">{c.desc}</p>
+              <CardText className="dlg-text" text={c.desc ?? ""} />
             </div>
           </div>
           <CardPreviewLayer scope={SCOPE} />

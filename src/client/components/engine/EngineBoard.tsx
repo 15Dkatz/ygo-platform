@@ -10,7 +10,8 @@ import type { BoardMarks, ZoneRef } from "../duel/Board.tsx";
 import { CardBack, CardFace, CardView } from "../duel/CardView.tsx";
 import type { MenuItem } from "../duel/menus.ts";
 import { Modal } from "../duel/Overlays.tsx";
-import { indexBoard, refUid, visibleCode, zoneKey } from "./boardRefs.ts";
+import { engineFirst, indexBoard, placeZone, refUid, visibleCode, zoneKey } from "./boardRefs.ts";
+import { useDuelSettings } from "../duel/duelSettings.ts";
 import {
   actionsByUid, answersOnClick, dropChoices, isSelectPrompt, layoutRefs, pileKeyOf, placeKeys,
   selectItems, selectResponse, selectStatus, type CardAction, type SelectItem,
@@ -31,11 +32,23 @@ export interface EngineBoardOpts {
   toast(text: string): void;
   /** Chain Link badges from the animation layer (uid -> "1" or "1·3"). */
   chainBadges?: Map<string, string>;
+  /** The card whose effect the current decision belongs to (resolving / newest chain link). */
+  source?: { uid: string; code: number } | null;
+}
+
+/** A decision in progress, with a way to step back and look at the board and a way back to it. */
+export interface Decision {
+  /** Looking at the board: the dock is minimized or the card picker was closed. */
+  peeking: boolean;
+  peek(): void;
+  restore(): void;
 }
 
 export interface PhaseActions { battle?: () => void; main2?: () => void; end?: () => void; shuffle?: () => void }
 
 export interface EngineBoard {
+  /** Hover action buttons for a card (Main / Battle Phase). */
+  quick(uid: string): { label: string; run(): void }[];
   marks: BoardMarks;
   /** Handle a click on a board card (always handled in engine mode). */
   onCard(card: CardInstance, at: ZoneRef, e: MouseEvent): void;
@@ -47,6 +60,8 @@ export interface EngineBoard {
   status: string | null;
   /** The engine is waiting for you. */
   yourMove: boolean;
+  /** The current decision (not Main / Battle Phase actions), if any. */
+  decision: Decision | null;
   /** Floating bar / dialogs / pile picker, rendered by the page. */
   overlay: ReactNode;
 }
@@ -55,6 +70,10 @@ const CARD_PROMPTS = new Set(["idle", "battle", "selectChain", "selectCard", "se
 const POS_LABEL: Record<Position, string> = { atk: "Attack", def: "Defense", faceDownDef: "Set (face-down Defense)", faceDown: "Face-down Attack" };
 const PILE_TITLE: Record<string, string> = { deck: "Deck", gy: "GY", banished: "banished cards", extra: "Extra Deck", hand: "hand" };
 
+/** Picker key: every pile with choices at once. */
+const ALL_PILES = "*all";
+/** A decision put to you (not your Main / Battle Phase actions or a position pop-up). */
+const isDecisionKind = (p: EnginePrompt) => p.kind !== "idle" && p.kind !== "battle";
 const sameZone = (a: EnginePlace, b: EnginePlace) => a.controller === b.controller && a.location === b.location && a.sequence === b.sequence;
 
 export function useEngineBoard(o: EngineBoardOpts): EngineBoard {
@@ -63,10 +82,19 @@ export function useEngineBoard(o: EngineBoardOpts): EngineBoard {
   const [counts, setCounts] = useState<number[]>([]);
   const [places, setPlaces] = useState<EnginePlace[]>([]);
   const [showList, setShowList] = useState(false);
+  // the decision dock can be minimized to look at the board (a pill brings it back); a new decision reopens it
+  const [minimized, setMinimized] = useState(false);
+  const promptId = prompt?.id;
+  useEffect(() => { setMinimized(false); }, [promptId]);
   const [pile, setPile] = useState<string | null>(null);
+  /** The picker this decision opened last: "Back to it" reopens it. */
+  const [lastPile, setLastPile] = useState<string | null>(null);
   const point = useRef<{ x: number; y: number } | null>(null);
   /** Zone a hand card was dragged onto: answers the select-place prompt that usually follows. */
   const dropPlace = useRef<{ key: string; ttl: number } | null>(null);
+  /** Monster a card was dragged onto in the Battle Phase: answers the attack-target prompt that follows. */
+  const dropTarget = useRef<{ uid: string; ttl: number } | null>(null);
+  const settings = useDuelSettings();
 
   const mine = prompt && prompt.player === you ? prompt : null;
   const send = (body: EngineResponseBody) => {
@@ -108,9 +136,29 @@ export function useEngineBoard(o: EngineBoardOpts): EngineBoard {
       }
       if (d.ttl <= 0) dropPlace.current = null;
     }
+    const t = dropTarget.current;
+    if (t) {
+      t.ttl--;
+      if (mine.kind === "selectCard") {
+        const it = selectItems(mine).find((x) => x.uid === t.uid);
+        if (it) { dropTarget.current = null; o.respond({ kind: "selectCard", indices: [it.index], promptId: mine.id }); return; }
+      }
+      if (t.ttl <= 0) dropTarget.current = null;
+    }
+    // a zone choice for your own card on your own side: take the Extra Monster Zone, else the middle-most zone
+    if (mine.kind === "selectPlace" && settings.autoPlace && !mine.disabling && mine.places.length >= mine.count && mine.places.every((x) => x.controller === you)) {
+      const first = engineFirst(board);
+      const rank = (x: EnginePlace) => (placeZone(x, first).zone === "extraMonster" ? -1 : Math.abs(x.sequence - 2));
+      const best = [...mine.places].sort((a, b) => rank(a) - rank(b)).slice(0, mine.count);
+      o.respond({ kind: "selectPlace", places: best, promptId: mine.id });
+      return;
+    }
     // everything to pick is in one pile (deck search, GY target, materials...): open it
+    // ...or spread over several piles (Deck or GY, hand or Deck materials): open one picker with all of them
     const selecting = isSelectPrompt(mine) || mine.kind === "selectChain";
-    setPile(selecting && layout.onBoard.size === 0 && layout.piles.size === 1 ? [...layout.piles.keys()][0] : null);
+    const auto = selecting && layout.onBoard.size === 0 && layout.piles.size >= 1 ? (layout.piles.size === 1 ? [...layout.piles.keys()][0] : ALL_PILES) : null;
+    setPile(auto);
+    setLastPile(auto);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mine?.id]);
 
@@ -120,6 +168,8 @@ export function useEngineBoard(o: EngineBoardOpts): EngineBoard {
     for (const [uid, link] of o.chainBadges ?? []) m.badges.set(uid, String(link));
     if (!mine) return m;
     if (mine.kind === "idle" || mine.kind === "battle") for (const uid of actions.keys()) m.actionable.add(uid);
+    if (mine.kind === "battle" && settings.dragAttack) m.drag = new Set(mine.attacks.map((r) => refUid(r)));
+    if (isDecisionKind(mine) && o.source && index.get(o.source.uid)?.card.code === o.source.code) m.source = o.source.uid;
     if (mine.kind === "selectChain") for (const uid of actions.keys()) m.selectable.add(uid);
     if (mine.kind === "effectYesNo") m.selectable.add(refUid(mine.card));
     for (const it of items) {
@@ -131,7 +181,13 @@ export function useEngineBoard(o: EngineBoardOpts): EngineBoard {
     for (const [k, list] of layout.piles) m.piles.set(k, list.length);
     return m;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mine, actions, items, picked, counts, places, placeMap, layout, o.chainBadges]);
+  }, [mine, actions, items, picked, counts, places, placeMap, layout, o.chainBadges, settings.dragAttack, o.source, index]);
+
+  // ---------- look at the board mid-decision, then come back ----------
+  const isDecision = !!mine && isDecisionKind(mine);
+  const peeking = isDecision && (minimized || (!!lastPile && !pile));
+  const peek = () => { setPile(null); setMinimized(true); };
+  const restore = () => { setMinimized(false); if (lastPile && (lastPile === ALL_PILES || layout.piles.has(lastPile))) setPile(lastPile); };
 
   // ---------- clicks ----------
 
@@ -158,6 +214,7 @@ export function useEngineBoard(o: EngineBoardOpts): EngineBoard {
 
   const onCard = (card: CardInstance, at: ZoneRef, e: MouseEvent) => {
     point.current = { x: e.clientX, y: e.clientY };
+    if (peeking && marks.source === card.uid) { restore(); return; }
     if (mine?.kind === "selectPlace") {
       const k = zoneKey(at);
       if (placeMap.has(k)) return choosePlace(placeMap.get(k)!);
@@ -183,13 +240,23 @@ export function useEngineBoard(o: EngineBoardOpts): EngineBoard {
     point.current = { x: e.clientX, y: e.clientY };
     const k = zoneKey(at);
     if (mine?.kind === "selectPlace" && placeMap.has(k)) { choosePlace(placeMap.get(k)!); return true; }
-    if (layout.piles.has(k)) { setPile(k); return true; }
+    if (layout.piles.has(k)) { setPile(k); setLastPile(k); return true; }
     // a pile click opens its viewer (GY / banished / Extra); nothing else on the board does anything by itself
     return !(at.zone === "gy" || at.zone === "banished" || at.zone === "extra");
   };
 
   const onDrop = (at: ZoneRef, uid: string, e: DragEvent) => {
     point.current = { x: e.clientX, y: e.clientY };
+    // drag-to-attack: your monster dropped on the opponent's side declares the attack (on that monster, if any)
+    if (mine?.kind === "battle") {
+      const atk = actions.get(uid)?.find((a) => a.response.kind === "battle" && a.response.action === "attack");
+      const k = zoneKey(at);
+      const target = [...index.values()].find((l) => !l.host && zoneKey(l.at) === k && (l.at.zone === "monster" || l.at.zone === "extraMonster"))?.card;
+      const theirs = target ? (target.controller ?? target.owner) !== you : at.zone !== "extraMonster" && at.player !== you;
+      if (!atk || !theirs) { if (atk) o.toast("Drop it on an opponent's monster (or their side) to attack."); return; }
+      dropTarget.current = target ? { uid: target.uid, ttl: 3 } : null;
+      return send(atk.response);
+    }
     const choices = dropChoices(actions.get(uid), at.zone);
     if (!choices.length) { if (actions.get(uid)) o.toast("That card can't be played there."); return; }
     dropPlace.current = { key: zoneKey(at), ttl: 3 };
@@ -233,6 +300,9 @@ export function useEngineBoard(o: EngineBoardOpts): EngineBoard {
       else if (mine.kind === "selectUnselect" && mine.canCancel && !mine.canFinish) r = { kind: "selectUnselect", index: null };
       else if (mine.kind === "selectChain" && !mine.forced) r = { kind: "selectChain", index: null };
       else if (picked.length || places.length) { setPicked([]); setPlaces([]); return; }
+    } else if (e.key === "m" || e.key === "M") {
+      if (mine.kind !== "idle" && mine.kind !== "battle") { e.preventDefault(); if (peeking) restore(); else peek(); }
+      return;
     } else if (e.key === " ") {
       if (t.closest?.("button")) return;
       if (mine.kind === "selectChain" && !mine.forced) r = { kind: "selectChain", index: null };
@@ -261,7 +331,10 @@ export function useEngineBoard(o: EngineBoardOpts): EngineBoard {
     } else if (mine.kind === "selectPosition") {
       overlay = <PositionChooser prompt={mine} at={point.current} name={o.cardName(mine.code)} onPick={(position) => send({ kind: "selectPosition", position })} />;
     } else if (mine.kind !== "idle" && mine.kind !== "battle") {
-      overlay = <PromptBar prompt={mine} picked={picked} counts={counts} places={places} send={send} onList={() => setShowList(true)} cardName={o.cardName} onHover={o.onHover} />;
+      const hintText = mine.hint ?? title(mine);
+      overlay = minimized
+        ? <button className="duel-decision-pill" onClick={restore} title="Back to the current decision (M)">▸ Back to: {o.source ? `${o.cardName(o.source.code) ?? "the effect"} · ` : ""}{hintText} <kbd>M</kbd></button>
+        : <PromptBar prompt={mine} picked={picked} counts={counts} places={places} send={send} onList={() => setShowList(true)} cardName={o.cardName} onHover={o.onHover} onMinimize={() => setMinimized(true)} />;
     }
     const pv = pile ? pileView(pile) : null;
     if (pv) {
@@ -270,17 +343,22 @@ export function useEngineBoard(o: EngineBoardOpts): EngineBoard {
           {overlay}
           <Modal title={pv.title} onClose={() => setPile(null)} wide>
             <p className="muted duel-engine-pilehint">{mine.hint ?? title(mine)}</p>
-            <div className="duel-viewer-grid">
-              {pv.cards.map(({ card, at }) => {
-                const mark = marks.picked.has(card.uid) ? "picked" : marks.selectable.has(card.uid) ? "selectable" : marks.actionable.has(card.uid) ? "actionable" : undefined;
-                return (
-                  <CardView key={card.uid} card={{ ...card, faceUp: card.faceUp || card.code > 0 }} mark={mark} badge={marks.badges.get(card.uid)}
-                    onHover={o.onHover} onClick={(e) => onCard(card, at, e)} />
-                );
-              })}
-            </div>
+            {pv.sections.map((sec) => (
+              <div key={sec.label || "pile"} className="duel-picker-section">
+                {sec.label && <h4 className="duel-picker-label">{sec.label}</h4>}
+                <div className="duel-viewer-grid">
+                  {sec.cards.map(({ card, at }) => {
+                    const mark = marks.picked.has(card.uid) ? "picked" : marks.selectable.has(card.uid) ? "selectable" : marks.actionable.has(card.uid) ? "actionable" : undefined;
+                    return (
+                      <CardView key={card.uid} card={{ ...card, faceUp: card.faceUp || card.code > 0 }} mark={mark} badge={marks.badges.get(card.uid)}
+                        onHover={o.onHover} onClick={(e) => onCard(card, at, e)} />
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
             <div className="duel-modal-actions">
-              {isSelectPrompt(mine) && !answersOnClick(mine) && <button onClick={() => setPile(null)}>Back to the board</button>}
+              <button onClick={peek} title="Hide this to look at the board; the glowing card (or the pill) brings it back (M)">👁 View board</button>
               <button onClick={() => setPile(null)}>Close</button>
             </div>
           </Modal>
@@ -290,7 +368,21 @@ export function useEngineBoard(o: EngineBoardOpts): EngineBoard {
   }
 
   /** Cards to show for a pile: the whole public pile, or only the prompt's cards where the pile is hidden. */
-  function pileView(key: string): { title: string; cards: { card: CardInstance; at: ZoneRef }[] } | null {
+  function pileView(key: string): { title: string; sections: { label: string; cards: { card: CardInstance; at: ZoneRef }[] }[] } | null {
+    if (key === ALL_PILES) {
+      // every pile with choices, only the cards you can pick
+      const sections = [...layout.piles.keys()].map((k) => {
+        const v = onePile(k);
+        const cards = (v?.cards ?? []).filter(({ card }) => marks.selectable.has(card.uid) || marks.picked.has(card.uid) || marks.actionable.has(card.uid));
+        return { label: v?.title ?? k, cards };
+      }).filter((s) => s.cards.length);
+      const n = sections.reduce((t, s) => t + s.cards.length, 0);
+      return { title: `${n} to choose from`, sections };
+    }
+    const v = onePile(key);
+    return v && { title: v.title, sections: [{ label: "", cards: v.cards }] };
+  }
+  function onePile(key: string): { title: string; cards: { card: CardInstance; at: ZoneRef }[] } | null {
     const list = layout.piles.get(key);
     if (!list) return null;
     const r0 = list[0];
@@ -312,7 +404,9 @@ export function useEngineBoard(o: EngineBoardOpts): EngineBoard {
     return { title: `${whose} ${PILE_TITLE[zone]}: ${list.length} to choose from`, cards };
   }
 
-  return { marks, onCard, onZone, onDrop, phase, status, overlay, yourMove: !!mine };
+  /** Hover buttons: a card's Main / Battle Phase actions, one click each (no menu). */
+  const quick = (uid: string) => (mine && (mine.kind === "idle" || mine.kind === "battle") ? (actions.get(uid) ?? []).map((a) => ({ label: a.label, run: () => send(a.response) })) : []);
+  return { marks, onCard, onZone, onDrop, phase, status, overlay, yourMove: !!mine, quick, decision: isDecision ? { peeking, peek, restore } : null };
 }
 
 // ---------------------------------------------------------------------------------------
@@ -320,9 +414,9 @@ export function useEngineBoard(o: EngineBoardOpts): EngineBoard {
 type BarPrompt = Exclude<EnginePrompt, { kind: "idle" | "battle" | "selectPosition" }>;
 
 /** The compact floating bar for selections: what to pick, progress, Confirm / Cancel / Don't chain. */
-function PromptBar({ prompt: p, picked, counts, places, send, onList, cardName, onHover }: {
+function PromptBar({ prompt: p, picked, counts, places, send, onList, cardName, onHover, onMinimize }: {
   prompt: BarPrompt; picked: number[]; counts: number[]; places: EnginePlace[];
-  send(r: EngineResponseBody): void; onList(): void; cardName(code: number): string | undefined; onHover(code: number | null): void;
+  send(r: EngineResponseBody): void; onList(): void; cardName(code: number): string | undefined; onHover(code: number | null): void; onMinimize(): void;
 }) {
   const hint = p.hint ?? title(p);
   let progress: string | null = null;
@@ -345,11 +439,17 @@ function PromptBar({ prompt: p, picked, counts, places, send, onList, cardName, 
   } else if (p.kind === "selectPlace") {
     progress = p.count > 1 ? `${places.length}/${p.count}` : null;
   }
+  const canBack = (p.kind === "selectChain" && !p.forced)
+    || ((p.kind === "selectCard" || p.kind === "selectTribute") && p.canCancel)
+    || (p.kind === "selectUnselect" && (p.canCancel || p.canFinish));
   // the chain pop-up: every card you could chain, with the effect it would activate; one click chains it
   const chainOptions = p.kind === "selectChain" ? p.cards : [];
   return (
     <div className={`duel-engine-bar ${p.kind === "selectChain" ? "is-chain" : ""}`} role="status" aria-live="polite">
-      <span className="duel-engine-bar-kicker">{p.kind === "selectChain" ? (p.forced ? "Activate an effect" : "Your chance to respond") : "Your decision"}</span>
+      <span className="duel-engine-bar-top">
+        <span className="duel-engine-bar-kicker">{p.kind === "selectChain" ? (p.forced ? "Activate an effect" : "Your chance to respond") : "Your decision"}</span>
+        <button className="duel-engine-bar-min" onClick={onMinimize} title="Minimize to look at the board (M)" aria-label="Minimize">–</button>
+      </span>
       <span className="duel-engine-bar-hint">{p.kind === "selectChain" ? `${hint}` : p.kind === "selectPlace" ? (p.hint && !/^Select/.test(p.hint) ? `${p.hint}: choose a zone on the board.` : `${hint}. Click a highlighted zone.`) : hint}</span>
       {progress && <span className="duel-engine-bar-count">{progress}</span>}
       {chainOptions.length > 0 && (
@@ -368,6 +468,7 @@ function PromptBar({ prompt: p, picked, counts, places, send, onList, cardName, 
       )}
       <span className="duel-engine-bar-buttons">
         {buttons}
+        {!canBack && <small className="duel-engine-bar-noback" title="The rules engine needs this choice to continue">This step can't be undone: finish it on the board.</small>}
         <button className="duel-engine-bar-list" onClick={onList} title="Show this choice as a list">List</button>
       </span>
     </div>

@@ -20,9 +20,12 @@ export function TurnTimer({ timer, seat, label }: { timer: TurnClock; seat: 0 | 
   const left = timer.remaining[seat] - (running ? (timer.serverNow - timer.since) + (Date.now() - receivedAt) : 0);
   const low = left <= 30_000;
   return (
-    <span className={`turn-timer${running ? " is-running" : ""}${low ? " is-low" : ""}`} title={`${label ?? "Time"} left this turn (${timer.limitSec / 60} min per turn)`}
+    <span className={`turn-timer${running ? " is-running" : ""}${low ? " is-low" : ""}`}
+      title={timer.mode === "chess"
+        ? `${label ?? "Time"} left in the duel (${timer.limitSec / 60} min, +${timer.incrementSec}s after each decision). The clock only runs while you're deciding.`
+        : `${label ?? "Time"} left this turn (${timer.limitSec / 60} min per turn). The clock only runs while you're deciding.`}
       role="timer" aria-live={running && low ? "polite" : "off"}>
-      <span aria-hidden="true">⏱</span> {fmt(left)}
+      <span aria-hidden="true">⏱</span> {fmt(left)}{timer.mode === "chess" && timer.incrementSec ? <small className="turn-timer-inc">+{timer.incrementSec}</small> : null}
     </span>
   );
 }

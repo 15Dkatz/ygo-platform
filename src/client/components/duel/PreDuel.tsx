@@ -28,7 +28,7 @@ export function PreDuel({ session, you, hasIdentity, decks, deckId, setDeckId, d
   const { stage, seats } = session;
   const seated = you !== null;
   const freeSeat = seats.some((s) => s === null);
-  const sendDeck = () => deck && send({ t: "join", deckId: deck.id, main: deck.main, extra: deck.extra, side: deck.side });
+  const sendDeck = () => deck && send({ t: "join", deckId: deck.id, main: deck.main, extra: deck.extra, side: deck.side, rarity: deck.rarity });
   const opp = you === null ? null : seats[you === 0 ? 1 : 0];
   // bot opponent (rules-enforced rooms): only the host (seat 0) can seat or remove it
   const [botDeckId, setBotDeckId] = useState("");
@@ -103,7 +103,7 @@ export function PreDuel({ session, you, hasIdentity, decks, deckId, setDeckId, d
               <b>No opponent yet?</b> <span className="muted">Play against a bot (it plays random legal moves). Its deck:</span>
               <div className="duel-deckrow">
                 <DeckSelect decks={decks} deckId={botDeckId || deckId} onChange={setBotDeckId} />
-                <button disabled={!botDeck || botSkills.length > 0} onClick={() => botDeck && send({ t: "addBot", deckId: botDeck.id, main: botDeck.main, extra: botDeck.extra, side: botDeck.side })}>
+                <button disabled={!botDeck || botSkills.length > 0} onClick={() => botDeck && send({ t: "addBot", deckId: botDeck.id, main: botDeck.main, extra: botDeck.extra, side: botDeck.side, rarity: botDeck.rarity })}>
                   Play against a bot
                 </button>
                 {botDeck && botSkills.length > 0 && <EngineSupportNote ids={[...botDeck.main, ...botDeck.extra, ...botDeck.side]} label="the bot's deck" />}

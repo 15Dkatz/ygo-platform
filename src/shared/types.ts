@@ -46,6 +46,8 @@ export interface Deck {
   /** .ydk file dates, when imported from a file (YYYY-MM-DD). */
   file_modified?: string | null;
   file_created?: string | null;
+  /** Foil rarity per card id (deck builder); missing = Common. */
+  rarity?: Record<string, import("./rarity.ts").Rarity>;
   created_at: string;    // ISO timestamp
   updated_at: string;
 }

@@ -118,6 +118,7 @@ export function visibleCode(r: EngineCardRef, viewer: Seat, board?: BoardState, 
       if (onBoard) return onBoard.code;
       return r.position === "faceDown" || r.position === "faceDownDef" ? 0 : r.location === "banished" ? 0 : r.code;
     }
-    default: return 0;   // opponent's hand / deck / Extra Deck
+    // opponent's hand / Deck / Extra Deck: hidden, unless the server showed it (revealed to you, or a pick from their Deck)
+    default: return r.code > 0 ? r.code : 0;
   }
 }

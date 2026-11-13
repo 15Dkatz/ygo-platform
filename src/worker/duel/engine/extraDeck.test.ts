@@ -195,7 +195,8 @@ describe.skipIf(!engineDataAvailable)("duel log", () => {
       for (let steps = 0; !duel.finished && steps < 3000; steps++) {
         const p = duel.prompt!;
         const evs = await duel.respond(p.player, botResponse(p, rng));
-        for (const ev of evs) if (ev.e === "attack") lines.push(describeEvent(ev, ["Alice", "Bob"], (c) => duel.cardName(c))!);
+        // the log carries [[code]] tokens (the client shows hoverable names): expand them to check the text
+        for (const ev of evs) if (ev.e === "attack") lines.push(describeEvent(ev, ["Alice", "Bob"], (c) => duel.cardName(c))!.replace(/\[\[(\d+)\]\]/g, (_m, c) => duel.cardName(Number(c)) ?? "?"));
       }
     }
     if (process.env.EXTRA_DEBUG) console.log("ATTACKLOG", JSON.stringify(lines.slice(0, 8)));

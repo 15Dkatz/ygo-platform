@@ -1,14 +1,14 @@
 // PHASE 3 owns this page (duel board). PHASE 4 adds engine-mode prompts.
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import type { BoardState, CardInstance, TurnClock } from "../../shared/duel.ts";
-import type { EngineCardRef, EngineResponse } from "../../shared/enginePrompts.ts";
+import type { EngineCardRef, EngineEvent, EnginePrompt, EngineResponse } from "../../shared/enginePrompts.ts";
 import { enginePhaseControls, enginePhaseResponse, manualPhaseControls, type PhaseControls } from "../../shared/phases.ts";
 import { PHASE_LABEL, type DuelAction, type Phase, type Seat } from "../../shared/duelActions.ts";
 import { Board, PendulumStrip, type BoardUI, type Matchup, type ZoneRef } from "../components/duel/Board.tsx";
 import { indexBoard, refUid } from "../components/engine/boardRefs.ts";
 import { attackOutcome } from "../../shared/matchup.ts";
-import { CardView } from "../components/duel/CardView.tsx";
+import { CardFace, CardView } from "../components/duel/CardView.tsx";
 import { useDecks } from "../components/duel/DeckPicker.tsx";
 import { buildMenu, dropAction, locate, occupantAt, pileMenu, type MenuItem, type Pending } from "../components/duel/menus.ts";
 import { ContextMenu, Modal, Toasts } from "../components/duel/Overlays.tsx";
@@ -19,7 +19,7 @@ import { AnimatedLp } from "../components/duel/anim/AnimatedLp.tsx";
 import { useBoardAnimations } from "../components/duel/anim/useBoardAnimations.ts";
 import { play as sfx } from "../components/duel/anim/sfx.ts";
 import { EndOverlay, MuteToggle, ReconnectOverlay, TurnBanner } from "../components/duel/DuelFx.tsx";
-import { useEngineBoard } from "../components/engine/EngineBoard.tsx";
+import { useEngineBoard, type Decision } from "../components/engine/EngineBoard.tsx";
 import { TurnTimer } from "../components/duel/TurnTimer.tsx";
 import { SkinPicker } from "../components/SkinPicker.tsx";
 import { DuelSettingsButton } from "../components/duel/DuelSettingsPanel.tsx";
@@ -33,6 +33,9 @@ import { nothingLeftToDo } from "../../shared/turnFlow.ts";
 import "../components/duel/duel.css";
 import "./DuelPage.css";
 import "../components/duel/duel-scene.css";
+import { ShortcutSheet, ShortcutsButton, useKeyboardCursor } from "../components/duel/Shortcuts.tsx";
+import { RarityContext, rarityLookup, useFoilPointer } from "../components/cards/Rarity.tsx";
+import { RevealStrip, useReveals } from "../components/duel/RevealStrip.tsx";
 
 type Viewer =
   | { kind: "pile"; player: Seat; zone: "gy" | "banished" | "extra" }
@@ -48,7 +51,10 @@ export function DuelPage() {
   const { roomId = "" } = useParams();
   const [params] = useSearchParams();
   const anim = useBoardAnimations();
-  const { conn, send, toast, clearPeek, promptEvents, chain } = useDuelSocket(roomId, { beforeState: anim.beforeState });
+  const revealFeed = useRef<((events: EngineEvent[] | null) => void) | null>(null);
+  const { conn, send, toast, clearPeek, promptEvents, chain } = useDuelSocket(roomId, {
+    beforeState: (prev, next, events) => { anim.beforeState(prev, next, events); revealFeed.current?.(events); },
+  });
   const { identity } = useDuelIdentity();
   const { decks, deck, deckId, setDeckId } = useDecks();
   const { board, session, room, you } = conn;
@@ -127,8 +133,8 @@ export function DuelPage() {
     if (autoJoined.current || params.get("join") !== "1" || !session || !identity || !deck || conn.status !== "open") return;
     if (you === null && session.stage === "lobby" && session.seats.some((s) => s === null)) {
       autoJoined.current = true;
-      const d = params.get("demo") === "1" ? demoDeck("synchro") : deck;   // demo rooms: the Synchro combo deck
-      send({ t: "join", deckId: d.id, main: d.main, extra: d.extra, side: d.side });
+      const d = params.get("demo") === "1" ? demoDeck("kewl") : deck;   // demo rooms: Kewl Tune (vs the bot's Branded Despia)
+      send({ t: "join", deckId: d.id, main: d.main, extra: d.extra, side: d.side, rarity: d.rarity });
     } else if (you !== null) autoJoined.current = true;
   }, [params, session, identity, deck, you, conn.status, send]);
 
@@ -153,7 +159,14 @@ export function DuelPage() {
   const setAutoPass = (m: AutoPassMode) => { setAutoPassState(m); try { localStorage.setItem("ygo.autoPass", m); } catch { /* storage blocked */ } };
   // auto-chaining: pass when nothing calls for a response, activate a lone mandatory effect, default chain order
   const isMonsterCode = (code: number) => { const t = getCard(code)?.type; return t ? /Monster/.test(t) : true; };
-  const auto2 = !auto.on && session?.stage === "duel" ? autoAnswer(conn.prompt, you, promptEvents.current, autoPass, isMonsterCode) : null;
+  // cards offered at your previous chance to chain (and passed on): quick effects repeating every phase
+  const chainSeen = useRef<{ id: number; codes: Set<number> }>({ id: -1, codes: new Set() });
+  const lastChainPrompt = useRef<{ id: number; codes: Set<number> } | null>(null);
+  if (conn.prompt?.kind === "selectChain" && conn.prompt.player === you && lastChainPrompt.current?.id !== conn.prompt.id) {
+    if (lastChainPrompt.current) chainSeen.current = lastChainPrompt.current;   // the previous chance becomes "seen"
+    lastChainPrompt.current = { id: conn.prompt.id, codes: new Set(conn.prompt.cards.map((c) => c.code)) };
+  }
+  const auto2 = !auto.on && session?.stage === "duel" ? autoAnswer(conn.prompt, you, promptEvents.current, autoPass, isMonsterCode, chainSeen.current.codes) : null;
   const autoKey = auto2 && conn.prompt ? `${conn.prompt.id}:${JSON.stringify(auto2)}` : null;
   useEffect(() => {
     if (!auto2 || !conn.prompt) return;
@@ -162,7 +175,8 @@ export function DuelPage() {
       const { passed, ...body } = auto2 as typeof auto2 & { passed?: boolean };
       send({ t: "respond", response: { promptId: p.id, ...body } as EngineResponse });
       // say so when it passed up something you could have chained
-      if (passed && p.kind === "selectChain" && p.cards.length) {
+      // (only the first time: a quick effect skipped again at every phase change isn't news)
+      if (passed && p.kind === "selectChain" && p.cards.length && !p.cards.every((c) => chainSeen.current.codes.has(c.code))) {
         const names = [...new Set(p.cards.map((c) => getCard(c.code)?.name).filter(Boolean))].slice(0, 2).join(", ");
         toast({ text: `Auto-passed${names ? `: you could have chained ${names}` : ""}. (⚙ Chain prompts)` }, 2600);
       }
@@ -170,6 +184,26 @@ export function DuelPage() {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoKey]);
+
+  // "Your move" callout: a decision lands on you outside your own Main / Battle Phase flow (mostly a chance to chain)
+  const [callout, setCallout] = useState<{ key: number; text: string; sub?: string; tone: "chain" | "move" } | null>(null);
+  const calloutFor = conn.prompt && conn.prompt.player === you && !auto.on && !auto2 && session?.stage === "duel" ? conn.prompt : null;
+  useEffect(() => {
+    const p = calloutFor;
+    if (!p || !board) return;
+    const theirTurn = board.turnPlayer !== you;
+    if (p.kind === "selectChain") {
+      const names = [...new Set(p.cards.map((c) => getCard(c.code)?.name).filter(Boolean))].slice(0, 2).join(" · ");
+      setCallout({ key: p.id, text: p.forced ? "Activate?" : "Chain?", sub: names || undefined, tone: "chain" });
+      sfx("chain");
+    } else if (theirTurn && p.kind !== "idle" && p.kind !== "battle") {
+      setCallout({ key: p.id, text: "Your move", sub: p.hint, tone: "move" });
+      sfx("turn");
+    } else return;
+    const t = setTimeout(() => setCallout(null), 1500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calloutFor?.id]);
 
   // ...and the pre-duel steps: toss the coin, go first
   useEffect(() => {
@@ -199,6 +233,30 @@ export function DuelPage() {
   if (drawer) seenLines.current = lineCount;
   const unread = Math.max(0, lineCount - seenLines.current);
 
+  // while you point at a card, the mouse wheel scrolls its text in the preview (no need to move over there)
+  useEffect(() => {
+    const onWheel = (e: WheelEvent) => {
+      if (!hoveringRef.current || e.ctrlKey) return;
+      // only while pointing at a card on the board / in a hand: anywhere that scrolls itself (the log,
+      // the dock's chain list, a picker, the settings) keeps the wheel for its own scrolling
+      const target = e.target as HTMLElement;
+      if (!target.closest?.(".duel-board-wrap .duel-card, .duel-hand .duel-card")) return;
+      if (scrollableAncestor(target)) return;
+      const el = document.querySelector<HTMLElement>(".duel-floatpreview.is-shown .duel-preview-text");
+      if (!el || el.scrollHeight <= el.clientHeight + 2 || el.contains(target)) return;
+      el.scrollTop += e.deltaY;
+      e.preventDefault();
+    };
+    // the fade at the bottom of the text goes away once you've reached the end
+    const onScroll = (e: Event) => {
+      const el = e.target as HTMLElement;
+      if (el.classList?.contains("duel-preview-text")) el.classList.toggle("is-end", el.scrollTop + el.clientHeight >= el.scrollHeight - 2);
+    };
+    addEventListener("wheel", onWheel, { passive: false });
+    addEventListener("scroll", onScroll, true);
+    return () => { removeEventListener("wheel", onWheel); removeEventListener("scroll", onScroll, true); };
+  }, []);
+
   // long-press on a card (touch) opens the big preview
   useEffect(() => {
     const onInspect = (e: Event) => { const code = (e as CustomEvent<number>).detail; if (code > 0) { setPreview(code); setZoomCard(code); } };
@@ -207,9 +265,13 @@ export function DuelPage() {
   }, []);
 
   // LP: shake + sound on damage, chime on gain
-  const onLpChange = useCallback((delta: number) => {
+  // ...and a big number over that player's half of the field, with a red / green flash at the screen edge
+  const [lpHit, setLpHit] = useState<{ delta: number; side: "top" | "bottom"; key: number } | null>(null);
+  const onLpChange = useCallback((delta: number, side: "top" | "bottom" = "bottom") => {
     if (delta < 0) { sfx("damage"); anim.animator.shake(); } else if (delta > 0) sfx("gain");
+    if (delta) setLpHit({ delta, side, key: Date.now() });
   }, [anim.animator]);
+  useEffect(() => { if (!lpHit) return; const t = setTimeout(() => setLpHit(null), 1500); return () => clearTimeout(t); }, [lpHit]);
 
   // open the deck viewer whenever a private peek arrives
   useEffect(() => { if (conn.peek) setViewer({ kind: "peek" }); }, [conn.peek]);
@@ -270,6 +332,8 @@ export function DuelPage() {
     showMaterials: (uid) => setViewer({ kind: "materials", uid }),
     toast: (text) => toast({ text, error: true }),
     chainBadges: anim.chainBadges,
+    // the effect the current decision is for: the resolving link, else the newest one
+    source: (() => { const l = chain.find((x) => x.resolving) ?? chain[chain.length - 1]; return l?.uid && l.code ? { uid: l.uid, code: l.code } : null; })(),
   });
   const engineUi = engineMode && board;
 
@@ -315,6 +379,7 @@ export function DuelPage() {
 
   const ui: BoardUI = {
     me, you, pending: !!pending, flash, selectedUid: pending?.uid ?? null, handOrder, matchup, hideStats: !ds.stats,
+    quick: engineUi && !auto.on ? engineBoard.quick : undefined,
     marks: engineUi ? engineBoard.marks : undefined,
     onHover: onHoverCard,
     onCard: (card, at, e) => {
@@ -372,6 +437,9 @@ export function DuelPage() {
     else act({ type: "phase", phase: target });
   }, [engineMode, myPrompt, send, act]);
 
+  // keyboard-only play: a cursor over the highlighted cards / zones (arrows, Enter, 1-9)
+  useKeyboardCursor(!!live && engineMode && !auto.on);
+
   // keyboard shortcuts
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -379,12 +447,14 @@ export function DuelPage() {
       if (t.closest("input, textarea, select") || e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key === "Escape") { setPending(null); return; }
       if (e.key === "?") { setHelp((h) => !h); return; }
+      if (e.key.toLowerCase() === "l" && live) { setDrawer((d) => !d); e.preventDefault(); return; }
       if (e.key.toLowerCase() === "z" && hoveringRef.current && previewRef.current) { setZoomCard(previewRef.current); e.preventDefault(); return; }
       if (!playing || !board || menu) return;
       const k = e.key.toLowerCase();
       if (k === "d" && !engineMode) act({ type: "draw" });
       else if (k === "h" && !engineMode) act({ type: "shuffle" });
       else if (k === "n" && phaseCtl?.next) goPhase(phaseCtl.next);
+      else if (k === "b" && phaseCtl?.phases.some((p) => p.phase === "battle" && p.enabled)) goPhase("battle");
       else if (k === "e" && phaseCtl?.endTurn.enabled) goPhase("endTurn");
       else return;
       e.preventDefault();
@@ -400,6 +470,15 @@ export function DuelPage() {
   };
 
   const names: [string, string] = [board?.players[0].name ?? session?.seats[0]?.name ?? "Player 1", board?.players[1].name ?? session?.seats[1]?.name ?? "Player 2"];
+
+  // excavated / revealed cards, shown to both players until they've gone where they're going
+  const reveals = useReveals(names, you);
+  revealFeed.current = reveals.onEvents;
+
+  // card rarities (foils) of both decks, for every card drawn on this page
+  const rar0 = session?.seats[0]?.rarity, rar1 = session?.seats[1]?.rarity;
+  const rarityFn = useMemo(() => rarityLookup([rar0, rar1]), [rar0, rar1]);
+  useFoilPointer();
 
   // ---------- render ----------
 
@@ -458,8 +537,16 @@ export function DuelPage() {
   };
 
   return (
-    <section className={`duel-page ${live ? "is-live" : ""} ${drawer ? "is-drawer-open" : ""} ${tilt ? "is-tilt" : ""} ${nothingToDo ? "is-nothing-to-do" : ""}`} ref={anim.rootRef}
-      style={{ ["--tilt" as string]: `${ds.tilt}deg` }}
+    <RarityContext.Provider value={rarityFn}>
+    <section className={`duel-page ${live ? "is-live" : ""} ${drawer ? "is-drawer-open" : ""} ${tilt ? "is-tilt" : ""} ${nothingToDo ? "is-nothing-to-do" : ""} ${ds.calmPanels ? "is-calm" : ""} ${ds.edgeFlash ? "" : "no-edge"} ${ds.labelShimmer ? "" : "no-shimmer"} ${ds.heartbeat ? "" : "no-heartbeat"}`}
+      data-resolve={ds.resolveFx} data-resolve-color={ds.resolveColor} ref={anim.rootRef}
+      style={{
+        ["--tilt" as string]: `${ds.tilt}deg`, ["--field-scale" as string]: ds.fieldScale, ["--hand-scale" as string]: ds.handScale,
+        // how much the tilt squashes the field's height on screen (measured: 0.77 at 20deg, 0.54 at 40deg)
+        ["--proj" as string]: Math.max(0.3, 1 - 0.0115 * ds.tilt),
+        ["--field-y" as string]: ds.fieldY, ["--persp" as string]: `${ds.camera}px`, ["--persp-y" as string]: `${ds.cameraY}%`,
+        ["--hand-drop" as string]: `${ds.handDrop}%`, ["--opp-hand-drop" as string]: `-${ds.oppHandDrop}%`, ["--opp-hand-scale" as string]: ds.oppHandScale, ["--preview-scale" as string]: ds.previewScale,
+      }}
       data-phase={live && board ? board.phase : undefined}>
       <div className="duel-topline">
         <Link to="/lobby" className="duel-back">‹ Lobby</Link>
@@ -492,6 +579,7 @@ export function DuelPage() {
         )}
         <SkinPicker />
         <MuteToggle />
+        <ShortcutsButton />
         <DuelSettingsButton autoPass={autoPass} setAutoPass={setAutoPass} engine={room?.mode === "engine"} />
         <button className="duel-help-btn" onClick={() => setHelp(true)} aria-label="Help and shortcuts">?</button>
       </div>
@@ -509,36 +597,17 @@ export function DuelPage() {
           <div className="duel-main">
             <PendulumStrip board={board!} player={other(me)} ui={ui} />
             <Board board={board!} ui={ui}
-              top={<PlayerBar board={board!} player={other(me)} you={you} onLp={engineMode ? undefined : setLpFor} onLpChange={onLpChange} connected={session.seats[other(me)]?.connected} timer={session.timer} startLp={session.settings?.startingLP} duelNo={duelNo} />}
+              top={<PlayerBar board={board!} player={other(me)} you={you} onLp={engineMode ? undefined : setLpFor} connected={session.seats[other(me)]?.connected} timer={session.timer} startLp={session.settings?.startingLP} duelNo={duelNo} onLpChange={(d) => onLpChange(d, "top")} />}
               bottom={<PlayerBar board={board!} player={me} you={you} onLp={engineMode ? undefined : setLpFor} onLpChange={onLpChange} connected={session.seats[me]?.connected} timer={session.timer} startLp={session.settings?.startingLP} duelNo={duelNo} />}
+              gaps={phaseCtl ? [
+                <PhaseCell key="a" controls={phaseCtl} go={goPhase} phases={["draw", "standby"]} />,
+                <PhaseCell key="b" controls={phaseCtl} go={goPhase} phases={["main1", "battle", "main2"]} />,
+                <PhaseCell key="c" controls={phaseCtl} go={goPhase} phases={["end"]} />,
+              ] : undefined}
               rail={phaseCtl && <>
-                <PhaseTrack board={board!} controls={phaseCtl} go={goPhase} />
-                {you !== null && <NextPhaseButton controls={phaseCtl} go={goPhase} />}
-                <RecentFeed log={board!.log} onHover={onHoverCard} onOpen={() => setDrawer(true)} />
-              </>}
-              status={<>
-                {engineMode && <ChainStack chain={chain} you={you} names={[board!.players[0].name, board!.players[1].name]} />}
-                {nothingToDo && !auto.on && (
-                  <p className="duel-nothing" role="status">Nothing left to play. Move on: <b>Next phase</b> <kbd>N</kbd> or <b>End turn</b> <kbd>E</kbd></p>
-                )}
-                {phaseCtl && session.stage === "duel" && (
-                  <MoveStatus board={board!} you={you}
-                    move={engineMode
-                      ? (you === null ? null : engineBoard.yourMove ? { mine: true, text: "Your move" } : { mine: false, text: `Waiting for ${waitingName}…` })
-                      : (board!.turnPlayer === you ? { mine: true, text: "Your turn" } : null)} />
-                )}
-                {playing && engineMode && (
-                  <div className="duel-engine">
-                    {conn.hostStatus && <p className="duel-engine-wait" role="status">{conn.hostStatus}</p>}
-                    {session.engineHost !== undefined && session.engineHost !== you && !session.seats[session.engineHost]?.connected && (
-                      <p className="duel-engine-wait" role="status">{session.seats[session.engineHost]?.name ?? "The host"} is disconnected. Their browser runs the rules, so the duel continues when they're back.</p>
-                    )}
-                    {conn.prompt && engineBoard.status && <p className={`duel-engine-status ${conn.prompt.hint ? "is-hint" : ""}`} role="status">{engineBoard.status}</p>}
-                  </div>
-                )}
-              </>}
-              corner={playing && <>
-                <div className="duel-tools">
+                <RecentFeed log={board!.log} onHover={onHoverCard} onZoom={(c) => setZoomCard(c)} onOpen={() => setDrawer(true)} />
+                {playing && <>
+                <MorePopover>
                   {!engineMode && <>
                     <button onClick={() => act({ type: "draw" })} title="Draw (D)">Draw</button>
                     <button onClick={() => act({ type: "dice" })}>Die</button>
@@ -557,10 +626,57 @@ export function DuelPage() {
                   )}
                   {/* narrow screens: concede lives here (the top bar holds it on PC) */}
                   <button className="is-danger duel-concede-narrow" onClick={() => { if (confirm("Concede this duel?")) send({ t: "concede" }); }}>Concede</button>
-                </div>
-                {phaseCtl && <EndTurnButton controls={phaseCtl} go={goPhase} />}
-              </>} />
+                </MorePopover>
+                </>}
+              </>}
+              right={session.stage === "duel" && <div className="duel-turnno" aria-label={`Turn ${board!.turn}`}><small>Turn</small><b>{board!.turn}</b></div>}
+              corner={phaseCtl && session.stage === "duel" && <>
+                {playing && (
+                  <div className="duel-turnbtns">
+                    <button className="duel-next-phase duel-quicknext" disabled={!phaseCtl.next} onClick={() => phaseCtl.next && goPhase(phaseCtl.next)}
+                      title={phaseCtl.next ? `Next phase: ${PHASE_LABEL[phaseCtl.next]} (N)` : "No next phase right now"}>Next ›<kbd>N</kbd></button>
+                    <button className="primary duel-end-turn" disabled={!phaseCtl.endTurn.enabled} onClick={() => goPhase("endTurn")} title={`${phaseCtl.endTurn.hint} (E)`}>End turn<kbd>E</kbd></button>
+                  </div>
+                )}
+                <TurnSign board={board!} you={you} names={names}
+                acting={engineMode ? engineBoard.yourMove : board!.turnPlayer === you} waiting={engineMode && you !== null && !engineBoard.yourMove ? waitingName : null} />
+              </>}
+              status={<>
+                {engineMode && engineBoard.decision && !auto.on && (
+                  <NowPanel decision={engineBoard.decision} prompt={myPrompt} source={chain.find((x) => x.resolving) ?? chain[chain.length - 1] ?? null} onHover={onHoverCard} />
+                )}
+                {engineMode && <ChainStack chain={chain} you={you} names={[board!.players[0].name, board!.players[1].name]} onHover={onHoverCard} onZoom={(c) => setZoomCard(c)} />}
+                {/* only what the board doesn't already show: who we're waiting for (your own move is the pulsing cards / dock) */}
+                {phaseCtl && session.stage === "duel" && (engineMode ? you !== null && !engineBoard.yourMove : board!.turnPlayer !== you) && (
+                  <MoveStatus board={board!} you={you} move={engineMode ? { mine: false, text: decidingText(session.deciding, names, waitingName) } : null} />
+                )}
+                {playing && engineMode && (
+                  <div className="duel-engine">
+                    {conn.hostStatus && <p className="duel-engine-wait" role="status">{conn.hostStatus}</p>}
+                    {session.engineHost !== undefined && session.engineHost !== you && !session.seats[session.engineHost]?.connected && (
+                      <p className="duel-engine-wait" role="status">{session.seats[session.engineHost]?.name ?? "The host"} is disconnected. Their browser runs the rules, so the duel continues when they're back.</p>
+                    )}
+                    {/* the engine's own hint for this step (the generic "click a highlighted card" text is what the highlights already say) */}
+                    {conn.prompt?.hint && engineBoard.status && <p className="duel-engine-status is-hint" role="status">{engineBoard.status}</p>}
+                  </div>
+                )}
+              </>}
+
+              />
             <PendulumStrip board={board!} player={me} ui={ui} />
+            {reveals.reveal && engineMode && (
+              <RevealStrip reveal={reveals.reveal} onHover={onHoverCard} onZoom={(c) => setZoomCard(c)} onClose={reveals.dismiss} />
+            )}
+            {callout && ds.callouts && (
+              <div key={callout.key} className={`duel-callout is-${callout.tone}`} aria-hidden="true">
+                <b>{callout.text}</b>{callout.sub && <small>{callout.sub}</small>}
+              </div>
+            )}
+            {lpHit && (
+              <div key={lpHit.key} className={`duel-lp-hit is-${lpHit.side} ${lpHit.delta < 0 ? "is-down" : "is-up"}`} aria-hidden="true">
+                <b>{lpHit.delta > 0 ? "+" : "−"}{Math.abs(lpHit.delta)}</b>
+              </div>
+            )}
             {session.stage === "finished" && (
               <div className="duel-finished">
                 <PreDuel session={session} you={you} hasIdentity={!!identity} decks={decks} deckId={deckId} setDeckId={setDeckId} deck={deck} send={send} />
@@ -622,7 +738,7 @@ export function DuelPage() {
               <li>Move to the Battle Phase, Main Phase 2 or end your turn with the phase bar under the board.</li>
               <li>When the rules ask you to choose (targets, Tributes, zones, chains), the choices light up on the board and a bar at the bottom shows what to pick. Glowing piles (GY, Deck…) open to show their choices. "List" shows the same choice as a list.</li>
               <li>The rules engine enforces everything; both players can agree to switch the duel to manual mode.</li>
-              <li>Shortcuts: <kbd>Z</kbd> zoom the card you're hovering, <kbd>Enter</kbd> confirm a selection, <kbd>Esc</kbd> cancel / don't chain / close, <kbd>Space</kbd> end your turn (or pass on a chain), <kbd>?</kbd> this help. Hover a card (long-press on touch) to read it; click the big preview to zoom.</li>
+              <li>Hover a card (long-press on touch) to read it; the mouse wheel scrolls long text. Click the big preview to zoom.</li>
             </ul>
           ) : (
           <ul className="duel-help">
@@ -633,6 +749,7 @@ export function DuelPage() {
             <li>Shortcuts: <kbd>Z</kbd> zoom the hovered card, <kbd>D</kbd> draw, <kbd>H</kbd> shuffle, <kbd>N</kbd> next phase, <kbd>E</kbd> end turn, <kbd>Esc</kbd> cancel, <kbd>?</kbd> this help.</li>
           </ul>
           )}
+          {engineMode && <><h3 className="duel-help-kbd">Keyboard</h3><ShortcutSheet /></>}
         </Modal>
       )}
 
@@ -644,6 +761,7 @@ export function DuelPage() {
       {menu && <ContextMenu {...menu} onClose={() => setMenu(null)} />}
       <Toasts toasts={conn.toasts} names={names} describe={describe} />
     </section>
+    </RarityContext.Provider>
   );
 }
 
@@ -686,32 +804,145 @@ function PlayerBar({ board, player, you, onLp, onLpChange, connected, timer, sta
 
 const PHASE_SHORT_LABEL = PHASE_SHORT;
 
-/** The DP·SP·M1·BP·M2·EP track, drawn on the board between the two Extra Monster Zones. */
-function PhaseTrack({ board, controls, go }: { board: BoardState; controls: PhaseControls; go(target: Phase | "endTurn"): void }) {
+/** Some of the phases, as big buttons in an empty cell of the middle row (DP SP | M1 BP M2 | EP + End turn). */
+function PhaseCell({ controls, go, phases, endTurn }: { controls: PhaseControls; go(target: Phase | "endTurn"): void; phases: Phase[]; endTurn?: boolean }) {
   return (
-    <div className="duel-phasetrack" role="group" aria-label={`Turn ${board.turn}, ${PHASE_LABEL[board.phase]}`}>
-      <span className="duel-phasetrack-turn" title={`Turn ${board.turn}`}>T{board.turn}</span>
-      {controls.phases.map((p) => (
-        <button key={p.phase} className={`${p.current ? "is-active" : ""} ${p.past ? "is-past" : ""} ${p.enabled ? "is-next" : ""}`}
-          disabled={!p.enabled} title={`${PHASE_LABEL[p.phase]}: ${p.hint}`} onClick={() => go(p.phase)}>
+    <div className="duel-phasecell" role="group">
+      {controls.phases.filter((p) => phases.includes(p.phase)).map((p) => (
+        <button key={p.phase} className={`duel-phasebtn ${p.current ? "is-active" : ""} ${p.past ? "is-past" : ""} ${p.enabled ? "is-next" : ""} ${controls.next === p.phase ? "duel-next-phase" : ""}`}
+          disabled={!p.enabled} title={`${PHASE_LABEL[p.phase]}: ${p.hint}${controls.next === p.phase ? " (N)" : ""}`} onClick={() => go(p.phase)}>
           {PHASE_SHORT_LABEL[p.phase]}
         </button>
       ))}
+      {endTurn && (
+        <button className="primary duel-end-turn duel-phasecell-end" disabled={!controls.endTurn.enabled} onClick={() => go("endTurn")} title={`${controls.endTurn.hint} (E)`}>End turn</button>
+      )}
     </div>
   );
 }
 
-/** What just happened: the last few log lines, on the board (the full log is in the drawer). */
-function RecentFeed({ log, onHover, onOpen }: { log: string[]; onHover(code: number | null): void; onOpen(): void }) {
+/** The sign beats hard for a few seconds when your turn / move starts, and again after a while with no input;
+ *  while you're busy (moving the mouse, clicking, typing) it only breathes. `key` restarts it. */
+function useRelaxed(key: string): boolean {
+  const [relaxed, setRelaxed] = useState(false);
+  useEffect(() => {
+    setRelaxed(false);
+    let idle: ReturnType<typeof setTimeout> | undefined;
+    const start = setTimeout(() => setRelaxed(true), 3000);
+    let last = 0;
+    const onActive = () => {
+      const now = Date.now();
+      if (now - last < 250) return;
+      last = now;
+      if (now - startedAt > 3000) setRelaxed(true);
+      clearTimeout(idle);
+      idle = setTimeout(() => setRelaxed(false), 12000);   // gone quiet: ask again
+    };
+    const startedAt = Date.now();
+    idle = setTimeout(() => setRelaxed(false), 15000);
+    const evs = ["pointermove", "pointerdown", "keydown", "wheel"] as const;
+    evs.forEach((e) => addEventListener(e, onActive, { passive: true }));
+    return () => { clearTimeout(start); clearTimeout(idle); evs.forEach((e) => removeEventListener(e, onActive)); };
+  }, [key]);
+  return relaxed;
+}
+
+/** The nearest element between `el` and the board that scrolls on its own (has overflow to scroll). */
+function scrollableAncestor(el: HTMLElement | null): HTMLElement | null {
+  for (let n = el; n && !n.classList.contains("duel-board-wrap") && n !== document.body; n = n.parentElement) {
+    const o = getComputedStyle(n).overflowY;
+    if ((o === "auto" || o === "scroll") && n.scrollHeight > n.clientHeight + 2) return n;
+  }
+  return null;
+}
+
+/** "Bot is choosing: Select the card(s) to add to your hand" (or deciding whether to chain). */
+function decidingText(d: { seat: 0 | 1; kind: string; hint?: string } | undefined, names: [string, string], fallback: string): string {
+  if (!d) return `Waiting for ${fallback}…`;
+  const who = names[d.seat];
+  if (d.kind === "selectChain") return `${who} may respond (chain)…`;
+  if (d.kind === "idle") return `${who} is in their Main Phase…`;
+  if (d.kind === "battle") return `${who} is in their Battle Phase…`;
+  return d.hint ? `${who} is choosing: ${d.hint}` : `${who} is deciding…`;
+}
+
+/** Bottom right: whose turn it is, beating like a heart when it's yours (or when it's your move on their turn). */
+function TurnSign({ board, you, names, acting, waiting }: { board: BoardState; you: Seat | null; names: [string, string]; acting: boolean; waiting: string | null }) {
+  const mine = board.turnPlayer === you;
+  const theirMove = acting && !mine;
+  const cls = theirMove ? "is-acting" : mine ? (acting ? "is-mine" : "is-mine is-waiting") : "is-theirs";
+  const relaxed = useRelaxed(`${board.turn}:${theirMove}:${mine}`);
+  return (
+    <div className={`duel-turnsign ${cls} ${relaxed ? "is-relaxed" : ""}`} role="status" aria-live="polite">
+      <b>{theirMove ? "Your move" : mine ? "Your turn" : `${names[board.turnPlayer]}'s turn`}</b>
+      {waiting && mine && <small>waiting for {waiting}</small>}
+    </div>
+  );
+}
+
+/** What you're deciding right now, and for which card: step back to look at the board, then return. */
+function NowPanel({ decision, prompt, source, onHover }: { decision: Decision; prompt: EnginePrompt | null; source: { code: number; desc: string } | null; onHover(code: number | null): void }) {
+  if (!prompt) return null;
+  const name = source?.code ? getCard(source.code)?.name : null;
+  return (
+    <div className={`duel-now ${decision.peeking ? "is-peeking" : ""}`} onMouseEnter={() => source?.code && onHover(source.code)} onMouseLeave={() => onHover(null)}>
+      {source?.code ? <span className="duel-card duel-now-thumb"><span className="duel-card-inner"><CardFace code={source.code} /></span></span> : null}
+      <span className="duel-now-text">
+        <small>{prompt.kind === "selectChain" ? "Your chance to respond" : name ? "Resolving" : "Your decision"}</small>
+        {name && <b>{name}</b>}
+        <span>{prompt.hint ?? (prompt.kind === "selectChain" ? "Chain a card or effect?" : "Choose on the board")}</span>
+      </span>
+      {decision.peeking
+        ? <button className="primary duel-now-btn" onClick={decision.restore} title="Back to the decision (M)">Back to it <kbd>M</kbd></button>
+        : <button className="duel-now-btn" onClick={decision.peek} title="Hide the decision to look at the board (M)">👁 View board</button>}
+    </div>
+  );
+}
+
+/** The less common tools (Shuffle hand, manual-mode Draw / Coin / ..., Concede on phones), in a pop-up. */
+function MorePopover({ children }: { children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent ? e.key === "Escape" : !ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    window.addEventListener("mousedown", close as EventListener);
+    window.addEventListener("keydown", close as EventListener);
+    return () => { window.removeEventListener("mousedown", close as EventListener); window.removeEventListener("keydown", close as EventListener); };
+  }, [open]);
+  return (
+    <div className="duel-more" ref={ref}>
+      <button className="duel-more-btn" onClick={() => setOpen((o) => !o)} aria-expanded={open}>⋯ More</button>
+      {open && <div className="duel-tools duel-more-panel" onClick={(e) => { if ((e.target as HTMLElement).closest("button")) setOpen(false); }}>{children}</div>}
+    </div>
+  );
+}
+
+/** What just happened: the last few log lines, on the board (the full log is in the drawer). Folds away. */
+function RecentFeed({ log, onHover, onZoom, onOpen }: { log: string[]; onHover(code: number | null): void; onZoom(code: number): void; onOpen(): void }) {
+  const [open, setOpenState] = useState(() => { try { return localStorage.getItem("ygo.recentOpen") !== "0"; } catch { return true; } });
+  const setOpen = (v: boolean) => { setOpenState(v); try { localStorage.setItem("ygo.recentOpen", v ? "1" : "0"); } catch { /* storage blocked */ } };
   // skip phase-step noise so the feed shows actions
-  const lines = log.filter((l) => !/^(Draw|Standby|Main|Battle|End) Phase( \d)?$/.test(l)).slice(-4);
+  const lines = log.filter((l) => !/^(Draw|Standby|Main|Battle|End) Phase( \d)?$/.test(l)).slice(-8);
   if (!lines.length) return null;
   return (
-    <div className="duel-recent" role="log" aria-label="Recent actions">
-      <button className="duel-recent-title" onClick={onOpen} title="Open the full duel log">Recent ›</button>
-      <ol>
-        {lines.map((l, i) => <li key={`${log.length}-${i}`} className={i === lines.length - 1 ? "is-new" : ""} style={{ opacity: 0.45 + (0.55 * (i + 1)) / lines.length }}><LogText text={l} onHover={onHover} /></li>)}
-      </ol>
+    <div className={`duel-recent ${open ? "" : "is-folded"}`} role="log" aria-label="Recent actions">
+      <span className="duel-recent-head">
+        <button className="duel-recent-title" onClick={() => setOpen(!open)} aria-expanded={open} title={open ? "Fold away" : "Show recent actions"}>{open ? "▾" : "▸"} Recent</button>
+        <button className="duel-recent-log" onClick={onOpen} title="Open the full duel log">Log ›</button>
+      </span>
+      {open && <ol>
+        {lines.map((l, i) => {
+          const last = i === lines.length - 1;
+          return (
+            <li key={`${log.length}-${i}`} className={last ? "is-new" : ""} style={{ opacity: 0.45 + (0.55 * (i + 1)) / lines.length }}>
+              {last && <span className="duel-recent-now">now</span>}<LogText text={l} onHover={onHover} onZoom={onZoom} />
+            </li>
+          );
+        })}
+      </ol>}
     </div>
   );
 }
@@ -721,21 +952,6 @@ function MoveStatus({ board, you, move }: { board: BoardState; you: Seat | null;
   const mine = board.turnPlayer === you;
   return move ? <span className={`duel-move ${move.mine ? "is-mine" : "is-wait"}`} role="status">{move.text}</span>
     : <span className="duel-move is-wait">{mine ? "Your turn" : `${board.players[board.turnPlayer].name}'s turn`}</span>;
-}
-
-/** Next phase, right of the phase track (away from End turn). */
-function NextPhaseButton({ controls, go }: { controls: PhaseControls; go(target: Phase | "endTurn"): void }) {
-  return (
-    <button className="duel-next-phase" disabled={!controls.next} onClick={() => controls.next && go(controls.next)}
-      title={controls.next ? `Next phase: ${PHASE_LABEL[controls.next]} (N)` : "No next phase right now"}>
-      Next phase{controls.next ? <small>{PHASE_LABEL[controls.next]}</small> : null}
-    </button>
-  );
-}
-
-/** End turn, in your corner of the board. */
-function EndTurnButton({ controls, go }: { controls: PhaseControls; go(target: Phase | "endTurn"): void }) {
-  return <button className="primary duel-end-turn" disabled={!controls.endTurn.enabled} onClick={() => go("endTurn")} title={`${controls.endTurn.hint} (E)`}>End turn</button>;
 }
 
 function LpDialog({ board, initial, you, onClose, act }: { board: NonNullable<ReturnType<typeof useDuelSocket>["conn"]["board"]>; initial: Seat; you: Seat | null; onClose(): void; act(a: DuelAction): void }) {

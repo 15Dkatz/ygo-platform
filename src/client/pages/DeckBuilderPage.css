@@ -65,3 +65,17 @@
   .db-grid, .db-grid.dense { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .db-name { font-size: 16px; }
 }
+
+/* rarity: foil over the card + picker in the card menu */
+.db-card { position: relative; overflow: hidden; }
+.db-menu-rarity { display: grid; gap: 4px; padding: 6px 8px 4px; border-top: 1px solid var(--border); margin-top: 2px; }
+.db-menu-rarity > span { font-size: 11px; }
+.db-menu-rarity > div { display: flex; gap: 4px; flex-wrap: wrap; }
+.rarity-pick { padding: 2px 6px !important; font-size: 11px; font-weight: 800; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-2); color: var(--fg); }
+.rarity-pick.is-on { outline: 2px solid var(--accent); outline-offset: 1px; }
+.rarity-pick.r-rare { background: linear-gradient(135deg, #f4f6fa, #aab4c4); color: #111; }
+.rarity-pick.r-super { background: linear-gradient(135deg, #8ae0ff, #c98aff); color: #111; }
+.rarity-pick.r-ultra { background: linear-gradient(135deg, #fff1a8, #d9a432); color: #111; }
+.rarity-pick.r-secret { background: linear-gradient(135deg, #ff8a8a, #ffe48a, #8affb0, #8ae0ff); color: #111; }
+.rarity-pick.r-starlight { background: linear-gradient(135deg, #ffffff, #ffd6f5, #c9e7ff); color: #111; box-shadow: 0 0 6px #fff8; }
+.db-menu .rarity-pick { width: auto; display: inline-block; text-align: center; }
