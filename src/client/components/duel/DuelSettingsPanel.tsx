@@ -58,8 +58,7 @@ export function DuelSettingsButton({ autoPass, setAutoPass, engine }: { autoPass
 
           <Section title="Layout" id="layout" defaultOpen>
             {SLIDERS.map((g) => (
-              <div key={g.group} className="duel-setting-group">
-                <span className="duel-setting-grouptitle">{g.group}</span>
+              <Section key={g.group} title={g.group} id={`layout-${g.group}`} defaultOpen={g.group === "Table"} sub>
                 {g.items.map((x) => (
                   <label key={x.key} className="duel-setting">
                     <span>{x.label} <b>{x.show(s[x.key])}</b></span>
@@ -67,7 +66,7 @@ export function DuelSettingsButton({ autoPass, setAutoPass, engine }: { autoPass
                       onChange={(e) => setDuelSetting(x.key, Number(e.target.value))} onDoubleClick={() => setDuelSetting(x.key, x.def)} />
                   </label>
                 ))}
-              </div>
+              </Section>
             ))}
             <span className="duel-setting-row">
               <button className="duel-setting-reset" disabled={!changed} onClick={resetLayout} title="Back to the default layout">Reset layout</button>
@@ -94,7 +93,7 @@ export function DuelSettingsButton({ autoPass, setAutoPass, engine }: { autoPass
             </div>
             <Toggle label={'"Chain?" / "Your move" callouts'} on={s.callouts} set={(v) => setDuelSetting("callouts", v)} />
             <Toggle label="Screen-edge flashes (damage, heals, callouts)" on={s.edgeFlash} set={(v) => setDuelSetting("edgeFlash", v)} />
-            <Toggle label="Turn sign heartbeat" on={s.heartbeat} set={(v) => setDuelSetting("heartbeat", v)} />
+            <Toggle label="Turn sign glow" on={s.heartbeat} set={(v) => setDuelSetting("heartbeat", v)} />
             <Toggle label="Shimmer on the zone labels" on={s.labelShimmer} set={(v) => setDuelSetting("labelShimmer", v)} />
           </Section>
 
@@ -136,11 +135,11 @@ export function DuelSettingsButton({ autoPass, setAutoPass, engine }: { autoPass
 }
 
 /** A collapsible group; remembers whether it's open in this browser. */
-function Section({ title, id, defaultOpen = false, children }: { title: string; id: string; defaultOpen?: boolean; children: ReactNode }) {
+function Section({ title, id, defaultOpen = false, sub = false, children }: { title: string; id: string; defaultOpen?: boolean; sub?: boolean; children: ReactNode }) {
   const key = `ygo.settingsOpen.${id}`;
   const [open, setOpen] = useState(() => { try { const v = localStorage.getItem(key); return v === null ? defaultOpen : v === "1"; } catch { return defaultOpen; } });
   return (
-    <details className="duel-setting-section" open={open}
+    <details className={`duel-setting-section ${sub ? "is-sub" : ""}`} open={open}
       onToggle={(e) => { const o = (e.currentTarget as HTMLDetailsElement).open; setOpen(o); try { localStorage.setItem(key, o ? "1" : "0"); } catch { /* storage blocked */ } }}>
       <summary>{title}</summary>
       <div className="duel-setting-section-body">{children}</div>

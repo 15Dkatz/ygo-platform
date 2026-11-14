@@ -21,7 +21,10 @@ export interface EngineCardRef {
 }
 
 /** A card that offers an effect; `desc` is the effect text resolved from the card's strings. */
-export interface EngineEffectRef extends EngineCardRef { desc: string }
+/** A card that offers an effect; `desc` is the effect text resolved from the card's strings. `from` = the
+ *  card the effect text belongs to, when it isn't this card: an effect granted by another card (JJ "Kewl
+ *  Tune", an Xyz material, an Equip...), shown as "from X". */
+export interface EngineEffectRef extends EngineCardRef { desc: string; from?: number }
 
 /** A zone the player may pick in a select-place prompt. */
 export interface EnginePlace { controller: Seat; location: "monster" | "spelltrap" | "field" | "pendulum"; sequence: number }
@@ -117,7 +120,7 @@ export type EngineEvent =
   | { e: "summon"; how: "normal" | "special" | "flip"; card: EngineCardRef }
   | { e: "set"; card: EngineCardRef }
   | { e: "reposition"; card: EngineCardRef }
-  | { e: "chain"; link: number; card: EngineCardRef; desc: string }
+  | { e: "chain"; link: number; card: EngineCardRef; desc: string; from?: number }
   | { e: "chainSolving" | "chainSolved" | "chainNegated" | "chainDisabled"; link: number }
   | { e: "chainEnd" }
   | { e: "lp"; player: Seat; lp: number; delta: number; cause: "damage" | "recover" | "cost" | "set" }

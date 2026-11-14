@@ -1,31 +1,128 @@
-import { useEffect, useMemo, useState } from "react";
+// Duel clocks. The server keeps time (and decides time-outs); these tick locally between its updates.
+//  - TurnTimer: the small m:ss next to a player's name
+//  - SecondBar: the bar under a player's LP, draining from full to empty every second while their clock runs
+//  - ClockFace: the big clock beside the turn sign: whoever is deciding, a ring sweeping each second,
+//    an arc for the time left, a flip when the clock passes to the other player, "+3s" on an increment
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { TurnClock } from "../../../shared/duel.ts";
+import { play as sfx } from "./anim/sfx.ts";
 
 const fmt = (ms: number) => {
   const s = Math.max(0, Math.ceil(ms / 1000));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 };
 
-/** One player's turn clock. Ticks locally between server updates; the server decides time-outs. */
-export function TurnTimer({ timer, seat, label }: { timer: TurnClock; seat: 0 | 1; label?: string }) {
-  // when this snapshot arrived, so local ticking needs no clock sync with the server
+/** Re-render every animation frame while `on` (for smooth second sweeps). */
+function useFrame(on: boolean) {
+  const [, set] = useState(0);
+  useEffect(() => {
+    if (!on) return;
+    let id = 0;
+    const loop = () => { set((n) => (n + 1) % 1e9); id = requestAnimationFrame(loop); };
+    id = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(id);
+  }, [on]);
+}
+
+/** A seat's time left right now (ms), whether its clock runs, and how far into the current second it is. */
+export function useClockLeft(timer: TurnClock, seat: 0 | 1, smooth = false) {
   const receivedAt = useMemo(() => Date.now(), [timer]);
   const running = timer.running === seat;
+  useFrame(smooth && running);
   const [, tick] = useState(0);
   useEffect(() => {
-    if (!running) return;
+    if (!running || smooth) return;
     const t = setInterval(() => tick((n) => n + 1), 250);
     return () => clearInterval(t);
-  }, [running]);
-  const left = timer.remaining[seat] - (running ? (timer.serverNow - timer.since) + (Date.now() - receivedAt) : 0);
-  const low = left <= 30_000;
+  }, [running, smooth]);
+  const left = Math.max(0, timer.remaining[seat] - (running ? (timer.serverNow - timer.since) + (Date.now() - receivedAt) : 0));
+  /** 1 at the start of a second, 0 at its end */
+  const secondFrac = running ? (left % 1000) / 1000 : 1;
+  return { left, running, secondFrac };
+}
+
+const urgency = (left: number) => (left <= 10_000 ? "is-critical" : left <= 30_000 ? "is-low" : "");
+
+/** One player's clock, small (next to their name). */
+/** "+3s" when a seat's bank gets the chess increment. The server charges the time spent first and then
+ *  adds the increment, so the bonus is what was added beyond the time charged:
+ *  new remaining - (old remaining - time the clock ran in between). */
+export function useIncrementPop(timer: TurnClock, seat: 0 | 1) {
+  const prev = useRef(timer);
+  const [bonus, setBonus] = useState<{ key: number; sec: number } | null>(null);
+  useEffect(() => {
+    const p = prev.current;
+    prev.current = timer;
+    if (timer.mode !== "chess" || !timer.incrementSec || p === timer) return;
+    const charged = p.running === seat ? Math.max(0, timer.since - p.since) : 0;
+    const gain = timer.remaining[seat] - (p.remaining[seat] - charged);
+    if (gain >= 900) setBonus({ key: Date.now(), sec: Math.round(gain / 1000) });
+  }, [timer, seat]);
+  useEffect(() => { if (!bonus) return; const t = setTimeout(() => setBonus(null), 1400); return () => clearTimeout(t); }, [bonus]);
+  return bonus;
+}
+
+export function TurnTimer({ timer, seat, label }: { timer: TurnClock; seat: 0 | 1; label?: string }) {
+  const { left, running } = useClockLeft(timer, seat);
+  const bonus = useIncrementPop(timer, seat);
   return (
-    <span className={`turn-timer${running ? " is-running" : ""}${low ? " is-low" : ""}`}
+    <span className={`turn-timer${running ? " is-running" : ""} ${urgency(left)}`}
       title={timer.mode === "chess"
         ? `${label ?? "Time"} left in the duel (${timer.limitSec / 60} min, +${timer.incrementSec}s after each decision). The clock only runs while you're deciding.`
         : `${label ?? "Time"} left this turn (${timer.limitSec / 60} min per turn). The clock only runs while you're deciding.`}
-      role="timer" aria-live={running && low ? "polite" : "off"}>
+      role="timer" aria-live={running && left <= 30_000 ? "polite" : "off"}>
       <span aria-hidden="true">⏱</span> {fmt(left)}{timer.mode === "chess" && timer.incrementSec ? <small className="turn-timer-inc">+{timer.incrementSec}</small> : null}
+      {bonus && <span key={bonus.key} className="duel-clock-bonus is-small">+{bonus.sec}s</span>}
     </span>
+  );
+}
+
+/** The bar under a player's LP: drains from full to empty every second while their clock runs. */
+export function SecondBar({ timer, seat }: { timer: TurnClock; seat: 0 | 1 }) {
+  const { left, running, secondFrac } = useClockLeft(timer, seat, true);
+  return (
+    <span className={`duel-secbar ${running ? "is-running" : ""} ${urgency(left)}`} aria-hidden="true">
+      <i style={{ transform: `scaleX(${running ? secondFrac : 1})` }} />
+    </span>
+  );
+}
+
+/** The big clock beside the turn sign: the time of whoever the duel is waiting on. */
+export function ClockFace({ timer, seat, label, mine }: { timer: TurnClock; seat: 0 | 1; label: string; mine: boolean }) {
+  const { left, running, secondFrac } = useClockLeft(timer, seat, true);
+  const bonus = useIncrementPop(timer, seat);
+  // a soft tick each second in your last ten
+  const lastSec = useRef(-1);
+  const sec = Math.ceil(left / 1000);
+  useEffect(() => {
+    if (!mine || !running || sec > 10 || sec <= 0 || sec === lastSec.current) return;
+    lastSec.current = sec;
+    sfx("pick");
+  }, [sec, mine, running]);
+
+  const total = Math.max(1, timer.limitSec * 1000);
+  const bank = Math.min(1, left / total);
+  return (
+    <div key={seat} className={`duel-clockface ${mine ? "is-mine" : "is-theirs"} ${running ? "is-running" : "is-paused"} ${urgency(left)}`}
+      role="timer" aria-label={`${label}: ${fmt(left)}`} style={{ ["--sec" as string]: secondFrac, ["--bank" as string]: bank }}>
+      <span className="duel-clock-dial" aria-hidden="true">
+        <span className="duel-clock-bank" />
+        <span className="duel-clock-sweep" />
+        <b className="duel-clock-digits">{fmt(left)}</b>
+      </span>
+      <small className="duel-clock-label">{label}</small>
+      {bonus && <span key={bonus.key} className="duel-clock-bonus">+{bonus.sec}s</span>}
+    </div>
+  );
+}
+
+/** Text that is its own seconds bar: the bright fill drains across the letters every second while the
+ *  clock runs (the turn sign uses it). */
+export function SecondsText({ timer, seat, children }: { timer: TurnClock; seat: 0 | 1; children: string }) {
+  const { left, running, secondFrac } = useClockLeft(timer, seat, true);
+  return (
+    <b className={`duel-sectext ${running ? "is-running" : ""} ${urgency(left)}`} style={{ ["--sec" as string]: running ? secondFrac : 1 }} data-text={children}>
+      {children}
+    </b>
   );
 }

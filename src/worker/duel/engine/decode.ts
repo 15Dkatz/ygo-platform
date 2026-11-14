@@ -63,7 +63,16 @@ export function ref(ctx: DecodeCtx, c: AnyLoc, code = c.code ?? 0): EngineCardRe
   return r;
 }
 function effRef(ctx: DecodeCtx, c: AnyLoc & { description: bigint }): EngineEffectRef {
-  return { ...ref(ctx, c), desc: ctx.desc(c.description) };
+  const r: EngineEffectRef = { ...ref(ctx, c), desc: ctx.desc(c.description) };
+  const from = grantedFrom(c.description, r.code);
+  if (from) r.from = from;
+  return r;
+}
+
+/** The card an effect description belongs to, when it's another card than `code` (a granted effect). */
+export function grantedFrom(description: bigint | number, code: number): number | undefined {
+  const owner = Number(BigInt(description) >> 20n);
+  return owner >= 10_000 && code > 0 && owner !== code ? owner : undefined;
 }
 
 /** Decode a SELECT_PLACE field mask (set bits = unavailable), from `team`'s point of view. */
@@ -139,7 +148,7 @@ export function decodePrompt(ctx: DecodeCtx, m: OcgMessage): PromptBody | null {
     case OcgMessageType.SELECT_YESNO:
       return { kind: "yesNo", desc: ctx.desc(m.description) };
     case OcgMessageType.SELECT_OPTION:
-      return { kind: "option", options: m.options.map((o) => ctx.desc(o)) };
+      return summonChoice(m.options.map((o) => ({ raw: o, text: ctx.desc(o) })));
     case OcgMessageType.SELECT_CARD:
       return { kind: "selectCard", min: m.min, max: m.max, canCancel: m.can_cancel, cards: m.selects.map(r) };
     case OcgMessageType.SELECT_UNSELECT_CARD:
@@ -322,7 +331,10 @@ export function decodeEvents(ctx: DecodeCtx, m: OcgMessage): EngineEvent[] {
     case OcgMessageType.FLIPSUMMONING: return [{ e: "summon", how: "flip", card: r(m) }];
     case OcgMessageType.SET: return [{ e: "set", card: r(m) }];
     case OcgMessageType.POS_CHANGE: return [{ e: "reposition", card: r(m) }];
-    case OcgMessageType.CHAINING: return [{ e: "chain", link: m.chain_size, card: r(m), desc: ctx.desc(m.description) }];
+    case OcgMessageType.CHAINING: {
+      const card = r(m), from = grantedFrom(m.description, card.code);
+      return [{ e: "chain", link: m.chain_size, card, desc: ctx.desc(m.description), ...(from ? { from } : {}) }];
+    }
     case OcgMessageType.CHAIN_SOLVING: return [{ e: "chainSolving", link: m.chain_size }];
     case OcgMessageType.CHAIN_SOLVED: return [{ e: "chainSolved", link: m.chain_size }];
     case OcgMessageType.CHAIN_NEGATED: return [{ e: "chainNegated", link: m.chain_size }];
@@ -352,4 +364,18 @@ export function decodeEvents(ctx: DecodeCtx, m: OcgMessage): EngineEvent[] {
     case OcgMessageType.BECOME_TARGET: return [{ e: "target", cards: m.cards.map((c) => r(c)) }];
     default: return [];
   }
+}
+
+/** An option prompt. When it's "which summon do you use?" (the regular Normal Summon, system string 1,
+ *  next to extra ones granted by cards: 'Normal Summon ("JJ "Kewl Tune"")'), say so in plain words. */
+export function summonChoice(opts: { raw: bigint | number; text: string }[]): { kind: "option"; options: string[]; hint?: string } {
+  const extra = /^(Normal Summon|Tribute Summon|Set|Flip Summon)\s*\((.+)\)$/;
+  const isSummonChoice = opts.some((o) => BigInt(o.raw) === 1n) && opts.some((o) => extra.test(o.text));
+  if (!isSummonChoice) return { kind: "option", options: opts.map((o) => o.text) };
+  const options = opts.map((o) => {
+    if (BigInt(o.raw) === 1n) return "Use your regular Normal Summon";
+    const m = extra.exec(o.text);
+    return m ? `Use the extra ${m[1]} from ${m[2].replace(/^"(.*)"$/, "$1")}` : o.text;
+  });
+  return { kind: "option", options, hint: "Which Normal Summon do you use?" };
 }

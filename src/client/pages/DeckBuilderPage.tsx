@@ -17,8 +17,9 @@ import { CardPreviewLayer, preview, previewHandlers } from "../components/cards/
 import { CARD_DRAG_TYPE, CardSearchPanel } from "../components/cards/CardSearchPanel.tsx";
 import { banLimit, downloadText, safeFileName } from "../components/cards/cardInfo.ts";
 import "./DeckBuilderPage.css";
-import { RARITIES, RARITY_LABEL, RARITY_SHORT, rarityOf, type Rarity } from "../../shared/rarity.ts";
+import { LETTERINGS, LETTERING_LABEL, PICTURES, PICTURE_LABEL, RARITIES, RARITY_LABEL, RARITY_SHORT, foilOf, foilParts, isPreset, rarityLabel, rarityOf, rarityShort, type Rarity } from "../../shared/rarity.ts";
 import { RarityFoil, useFoilPointer } from "../components/cards/Rarity.tsx";
+import { cardImage } from "../api.ts";
 
 const SECTIONS: { key: Section; label: string; min?: number; max: number }[] = [
   { key: "main", label: "Main Deck", min: 40, max: 60 },
@@ -95,6 +96,8 @@ export function DeckBuilderPage() {
   const [saving, setSaving] = useState(false);
   const [, setVersion] = useState(0);
   const [menu, setMenu] = useState<Menu | null>(null);
+  /** The foil being hovered in the card menu: shown on a big copy of the card beside the menu. */
+  const [foilPreview, setFoilPreview] = useState<Rarity | null>(null);
   const [over, setOver] = useState<Section | null>(null);
   const [tab, setTab] = useState<"search" | "deck">("deck");
   const [testHand, setTestHand] = useState(false);
@@ -303,7 +306,7 @@ export function DeckBuilderPage() {
                           {...previewHandlers(c)}>
                           <CardImage card={c} />
                           <RarityFoil rarity={rar} type={c.type} code={id} />
-                          {rar !== "common" && <span className={`rarity-badge r-${rar}`} title={RARITY_LABEL[rar]}>{RARITY_SHORT[rar]}</span>}
+                          {rar !== "common" && <span className={`rarity-badge r-${isPreset(rar) ? rar : "custom"}`} title={rarityLabel(rar)}>{rarityShort(rar)}</span>}
                           {lim < 3 && <span className={`cs-ban ban-${lim}`}>{lim}</span>}
                         </button>
                       );
@@ -322,7 +325,21 @@ export function DeckBuilderPage() {
         const extra = isExtraDeckType(c.type);
         const other: Section = menu.section === "side" ? (extra ? "extra" : "main") : "side";
         return (
-          <div className="db-menu" role="menu" style={{ left: Math.min(menu.x, innerWidth - 200), top: Math.min(menu.y, innerHeight - 230) }} onClick={(e) => e.stopPropagation()}>
+          <div className="db-menu" role="menu" style={{ left: Math.min(menu.x, innerWidth - 230), top: Math.min(menu.y, innerHeight - 420) }} onClick={(e) => e.stopPropagation()}>
+            {/* a big copy of the card wearing the hovered foil (or its current one) */}
+            {(() => {
+              const shown = foilPreview ?? rarityOf(deck.rarity, c.id);
+              const left = menu.x > innerWidth - 700;
+              return (
+                <div className={`db-foil-preview ${left ? "is-left" : ""}`} aria-hidden="true">
+                  <span data-foil={shown}>
+                    <img src={cardImage(c.id, "full")} alt="" />
+                    <RarityFoil rarity={shown} type={c.type} code={c.id} />
+                  </span>
+                  <small>{shown === "common" ? "Common" : rarityLabel(shown)}</small>
+                </div>
+              );
+            })()}
             <div className="db-menu-title">{c.name}</div>
             <button type="button" role="menuitem" onClick={() => { add(c, menu.section); setMenu(null); }}>Add a copy</button>
             <button type="button" role="menuitem" onClick={() => { move(menu.section, menu.index, other); setMenu(null); }}>Move to {other === "side" ? "Side" : other === "extra" ? "Extra" : "Main"} Deck</button>
@@ -332,9 +349,40 @@ export function DeckBuilderPage() {
               <div>
                 {RARITIES.map((r) => (
                   <button key={r} type="button" className={`rarity-pick r-${r} ${rarityOf(deck.rarity, c.id) === r ? "is-on" : ""}`} title={RARITY_LABEL[r]}
-                    onClick={() => { setRarity(c.id, r); setMenu(null); }}>{RARITY_SHORT[r]}</button>
+                    onMouseEnter={() => setFoilPreview(r)} onMouseLeave={() => setFoilPreview(null)} onFocus={() => setFoilPreview(r)} onBlur={() => setFoilPreview(null)}
+                    onClick={() => { setRarity(c.id, r); setFoilPreview(null); setMenu(null); }}>{RARITY_SHORT[r]}</button>
                 ))}
               </div>
+              {/* or mix your own: the name's lettering and the picture separately */}
+              {(() => {
+                const cur = foilParts(rarityOf(deck.rarity, c.id));
+                return (
+                  <div className="db-menu-foil">
+                    <span className="muted">Lettering</span>
+                    <div className="db-foil-chips">
+                      {LETTERINGS.map((l) => {
+                        const v = foilOf(l, cur.picture);
+                        return (
+                          <button key={l} type="button" className={`db-foil-chip ${cur.lettering === l ? "is-on" : ""}`} title={LETTERING_LABEL[l]}
+                            onMouseEnter={() => setFoilPreview(v)} onMouseLeave={() => setFoilPreview(null)} onFocus={() => setFoilPreview(v)} onBlur={() => setFoilPreview(null)}
+                            onClick={() => setRarity(c.id, v)}>{LETTERING_LABEL[l].replace(" (none)", "").replace(" rainbow", "")}</button>
+                        );
+                      })}
+                    </div>
+                    <span className="muted">Picture</span>
+                    <div className="db-foil-chips">
+                      {PICTURES.map((pic) => {
+                        const v = foilOf(cur.lettering, pic);
+                        return (
+                          <button key={pic} type="button" className={`db-foil-chip ${cur.picture === pic ? "is-on" : ""}`} title={PICTURE_LABEL[pic]}
+                            onMouseEnter={() => setFoilPreview(v)} onMouseLeave={() => setFoilPreview(null)} onFocus={() => setFoilPreview(v)} onBlur={() => setFoilPreview(null)}
+                            onClick={() => setRarity(c.id, v)}>{PICTURE_LABEL[pic].replace(/ \(.*\)$/, "")}</button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         );

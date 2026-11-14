@@ -20,7 +20,7 @@ import { useBoardAnimations } from "../components/duel/anim/useBoardAnimations.t
 import { play as sfx } from "../components/duel/anim/sfx.ts";
 import { EndOverlay, MuteToggle, ReconnectOverlay, TurnBanner } from "../components/duel/DuelFx.tsx";
 import { useEngineBoard, type Decision } from "../components/engine/EngineBoard.tsx";
-import { TurnTimer } from "../components/duel/TurnTimer.tsx";
+import { ClockFace, SecondBar, SecondsText, TurnTimer } from "../components/duel/TurnTimer.tsx";
 import { SkinPicker } from "../components/SkinPicker.tsx";
 import { DuelSettingsButton } from "../components/duel/DuelSettingsPanel.tsx";
 import { ChainStack } from "../components/duel/ChainStack.tsx";
@@ -639,7 +639,7 @@ export function DuelPage() {
                   </div>
                 )}
                 <TurnSign board={board!} you={you} names={names}
-                acting={engineMode ? engineBoard.yourMove : board!.turnPlayer === you} waiting={engineMode && you !== null && !engineBoard.yourMove ? waitingName : null} />
+                acting={engineMode ? engineBoard.yourMove : board!.turnPlayer === you} waiting={engineMode && you !== null && !engineBoard.yourMove ? waitingName : null} timer={session.timer} />
               </>}
               status={<>
                 {engineMode && engineBoard.decision && !auto.on && (
@@ -787,7 +787,9 @@ function PlayerBar({ board, player, you, onLp, onLpChange, connected, timer, sta
       </span>
       <span className="duel-pinfo">
         <b className="duel-pname">{pb.name}{player === you ? " (you)" : ""}</b>
-        <span className="duel-lpbar" aria-hidden="true"><i style={{ width: `${Math.max(0, Math.min(100, (pb.lp / startLp) * 100))}%` }} /></span>
+        {/* timed rooms: the bar ticks the seconds of this player's clock; otherwise it shows their LP */}
+        {timer ? <SecondBar timer={timer} seat={player} />
+          : <span className="duel-lpbar" aria-hidden="true"><i style={{ width: `${Math.max(0, Math.min(100, (pb.lp / startLp) * 100))}%` }} /></span>}
         <span className="muted duel-pcounts">
           <span title="Cards in hand">✋ {pb.hand.length}</span>
           <span title="Cards in Deck">🂠 {pb.deck.length}</span>
@@ -821,32 +823,6 @@ function PhaseCell({ controls, go, phases, endTurn }: { controls: PhaseControls;
   );
 }
 
-/** The sign beats hard for a few seconds when your turn / move starts, and again after a while with no input;
- *  while you're busy (moving the mouse, clicking, typing) it only breathes. `key` restarts it. */
-function useRelaxed(key: string): boolean {
-  const [relaxed, setRelaxed] = useState(false);
-  useEffect(() => {
-    setRelaxed(false);
-    let idle: ReturnType<typeof setTimeout> | undefined;
-    const start = setTimeout(() => setRelaxed(true), 3000);
-    let last = 0;
-    const onActive = () => {
-      const now = Date.now();
-      if (now - last < 250) return;
-      last = now;
-      if (now - startedAt > 3000) setRelaxed(true);
-      clearTimeout(idle);
-      idle = setTimeout(() => setRelaxed(false), 12000);   // gone quiet: ask again
-    };
-    const startedAt = Date.now();
-    idle = setTimeout(() => setRelaxed(false), 15000);
-    const evs = ["pointermove", "pointerdown", "keydown", "wheel"] as const;
-    evs.forEach((e) => addEventListener(e, onActive, { passive: true }));
-    return () => { clearTimeout(start); clearTimeout(idle); evs.forEach((e) => removeEventListener(e, onActive)); };
-  }, [key]);
-  return relaxed;
-}
-
 /** The nearest element between `el` and the board that scrolls on its own (has overflow to scroll). */
 function scrollableAncestor(el: HTMLElement | null): HTMLElement | null {
   for (let n = el; n && !n.classList.contains("duel-board-wrap") && n !== document.body; n = n.parentElement) {
@@ -867,15 +843,24 @@ function decidingText(d: { seat: 0 | 1; kind: string; hint?: string } | undefine
 }
 
 /** Bottom right: whose turn it is, beating like a heart when it's yours (or when it's your move on their turn). */
-function TurnSign({ board, you, names, acting, waiting }: { board: BoardState; you: Seat | null; names: [string, string]; acting: boolean; waiting: string | null }) {
+function TurnSign({ board, you, names, acting, waiting, timer }: { board: BoardState; you: Seat | null; names: [string, string]; acting: boolean; waiting: string | null; timer?: TurnClock }) {
   const mine = board.turnPlayer === you;
   const theirMove = acting && !mine;
   const cls = theirMove ? "is-acting" : mine ? (acting ? "is-mine" : "is-mine is-waiting") : "is-theirs";
-  const relaxed = useRelaxed(`${board.turn}:${theirMove}:${mine}`);
   return (
-    <div className={`duel-turnsign ${cls} ${relaxed ? "is-relaxed" : ""}`} role="status" aria-live="polite">
-      <b>{theirMove ? "Your move" : mine ? "Your turn" : `${names[board.turnPlayer]}'s turn`}</b>
-      {waiting && mine && <small>waiting for {waiting}</small>}
+    <div className="duel-turnrow">
+      {/* the clock of whoever the duel waits on: it passes back and forth with the decisions */}
+      {timer && (() => {
+        const seat = (timer.running ?? board.turnPlayer) as 0 | 1;
+        return <ClockFace timer={timer} seat={seat} mine={seat === you} label={seat === you ? "your time" : `${names[seat]}'s time`} />;
+      })()}
+      <div className={`duel-turnsign ${cls}`} role="status" aria-live="polite">
+        {/* timed duels: the letters are the seconds bar of whoever is deciding */}
+        {timer
+          ? <SecondsText timer={timer} seat={(timer.running ?? board.turnPlayer) as 0 | 1}>{theirMove ? "Your move" : mine ? "Your turn" : `${names[board.turnPlayer]}'s turn`}</SecondsText>
+          : <b>{theirMove ? "Your move" : mine ? "Your turn" : `${names[board.turnPlayer]}'s turn`}</b>}
+        {waiting && mine && <small>waiting for {waiting}</small>}
+      </div>
     </div>
   );
 }

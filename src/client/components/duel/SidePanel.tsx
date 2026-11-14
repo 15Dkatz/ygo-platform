@@ -22,11 +22,16 @@ export function CardPreview({ code, onZoom, large }: { code: number | null; onZo
           </button>
         : <span className="duel-preview-art" data-foil={rarity !== "common" ? rarity : undefined}><img src={cardImage(code, "full")} alt={card?.name ?? ""} /><RarityFoil rarity={rarity} type={card?.type} code={code} /></span>}
       <div className="duel-preview-text">
-        <h3>{card?.name ?? `Card ${code}`}</h3>
+        {/* name and ATK / DEF share one row (less height, more room for the text) */}
+        <div className="duel-preview-head">
+          <h3>{card?.name ?? `Card ${code}`}</h3>
+          {card && card.category === "Monster" && (
+            <span className="duel-preview-atk">
+              <b>{card.atk ?? "?"}</b>{card.linkval ? <small> ATK</small> : <><small>/</small><b>{card.defense ?? "?"}</b></>}
+            </span>
+          )}
+        </div>
         {card && <div className="muted">{card.type}{stats ? ` — ${stats}` : ""}</div>}
-        {card && card.category === "Monster" && (
-          <div className="duel-preview-atk">ATK {card.atk ?? "?"}{card.linkval ? "" : ` / DEF ${card.defense ?? "?"}`}</div>
-        )}
         {card?.desc && <CardText text={card.desc} />}
       </div>
     </div>

@@ -4,7 +4,12 @@ import { ARTWORK_OFFSET, EngineData, clearEngineCaches, type EngineCardRow } fro
 
 describe("engine hint text", () => {
   const names = (c: number) => (c === 197042 ? "Exosister Returnia" : null);
-  it("maps known hint ids", () => expect(hintText(569, () => "", names)).toBe("Select a zone"));
+  it("maps known hint ids (EDOPro's own wording)", () => {
+    expect(hintText(569, () => "", names)).toBe("Select the zone to place this card");
+    expect(hintText(1, () => "", names)).toBe("Normal Summon");
+    expect(hintText(1213, () => "", names)).toBe("Yes");
+  });
+  it("fills the placeholders of system strings", () => expect(hintText(95, () => "", names)).toBe("Use the effect of this card?"));
   it("shows a card's name when the hint is a card code", () => expect(hintText(197042, () => "", names)).toBe("Exosister Returnia"));
   it("shows nothing for hint 0 or an unknown card code", () => {
     expect(hintText(0, () => "", names)).toBe("");

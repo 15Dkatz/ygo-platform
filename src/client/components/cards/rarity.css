@@ -2,66 +2,21 @@
    name bar ~ x 7-80%, y 4.5-11.5%; art box ~ x 12-88%, y 18-70.5%. --mx / --my follow the pointer. */
 .rfoil { position: absolute; inset: 0; pointer-events: none; overflow: hidden; border-radius: inherit; z-index: 1; --mx: 50%; --my: 35%; }
 .rfoil > i { position: absolute; display: block; }
-.rf-art { left: 12%; right: 12%; top: 18%; bottom: 29.5%; }
-.rf-name { left: 7%; right: 20%; top: 4.5%; bottom: 88.5%; border-radius: 2px; }
+
 .rf-glare { inset: 0; }
 [data-foil] { --mx: 50%; --my: 35%; }
 
-@keyframes rf-sweep { 0%, 55% { background-position: 160% 0; } 100% { background-position: -60% 0; } }
-@keyframes rf-drift { to { background-position: 200% 100%, 0 0; } }
 @keyframes rf-twinkle { 0%, 100% { opacity: .35; } 50% { opacity: .9; } }
-@keyframes rf-hue { to { filter: hue-rotate(360deg); } }
 
 /* ---- Rare: a silver light sweeping across the name ---- */
-.r-rare .rf-name, .r-super .rf-name, .r-secret .rf-name {
-  background: linear-gradient(100deg, transparent 35%, rgb(255 255 255 / .85) 48%, rgb(200 220 255 / .6) 52%, transparent 65%) 160% 0 / 260% 100% no-repeat;
-  mix-blend-mode: overlay; animation: rf-sweep 4.5s ease-in-out infinite;
-}
 
 /* ---- Super: the art shimmers like holofoil ---- */
-.r-super .rf-art, .r-ultra .rf-art, .r-secret .rf-art {
-  background:
-    repeating-linear-gradient(115deg, #ff6b6b 0%, #ffd56b 6%, #7dff9b 12%, #6bd5ff 18%, #b06bff 24%, #ff6b6b 30%) calc(var(--mx) * 1.5) calc(var(--my) * 1.5) / 300% 300%,
-    radial-gradient(circle at var(--mx) var(--my), rgb(255 255 255 / .55), transparent 55%);
-  mix-blend-mode: color-dodge; opacity: .38; transition: opacity .2s;
-}
-[data-foil]:hover .r-super .rf-art, [data-foil]:hover .r-ultra .rf-art, [data-foil]:hover .r-secret .rf-art { opacity: .55; }
 
 /* ---- Ultra: + a gold name ---- */
-.r-ultra .rf-name {
-  background:
-    linear-gradient(100deg, transparent 35%, rgb(255 250 220 / .9) 48%, transparent 62%) 160% 0 / 260% 100% no-repeat,
-    linear-gradient(180deg, #fff1a8, #e2b13c 45%, #a8741b 55%, #ffe58a);
-  mix-blend-mode: hard-light; opacity: .7; animation: rf-sweep 4s ease-in-out infinite;
-}
-.r-ultra .rf-glare { background: radial-gradient(circle at var(--mx) var(--my), rgb(255 236 170 / .28), transparent 45%); mix-blend-mode: soft-light; }
 
 /* ---- Secret: a fine rainbow crosshatch over the whole card ---- */
-.r-secret .rf-glare {
-  background:
-    repeating-linear-gradient(45deg, rgb(255 255 255 / .0) 0 3px, rgb(255 255 255 / .22) 3px 4px),
-    repeating-linear-gradient(-45deg, rgb(255 255 255 / .0) 0 3px, rgb(255 255 255 / .22) 3px 4px),
-    linear-gradient(115deg, #ff7a7a, #ffe07a, #7affa1, #7ad7ff, #c27aff, #ff7a7a) calc(var(--mx) * 2) calc(var(--my) * 2) / 300% 300%;
-  mix-blend-mode: overlay; opacity: .55;
-}
 
 /* ---- Starlight: everything glows, sparkles twinkle, the colours drift ---- */
-.r-starlight .rf-glare {
-  background:
-    linear-gradient(120deg, #ff8a8a, #ffe48a, #8affb0, #8ae0ff, #c98aff, #ff8a8a) 0 0 / 300% 300%,
-    radial-gradient(circle at var(--mx) var(--my), rgb(255 255 255 / .5), transparent 50%);
-  mix-blend-mode: color-dodge; opacity: .42; animation: rf-drift 6s linear infinite alternate;
-}
-.r-starlight .rf-art {
-  background:
-    radial-gradient(1.2px 1.2px at 12% 18%, #fff 99%, transparent), radial-gradient(1px 1px at 33% 72%, #fff 99%, transparent),
-    radial-gradient(1.6px 1.6px at 58% 30%, #fff 99%, transparent), radial-gradient(1px 1px at 81% 64%, #fff 99%, transparent),
-    radial-gradient(1.4px 1.4px at 22% 48%, #fff 99%, transparent), radial-gradient(1.2px 1.2px at 70% 12%, #fff 99%, transparent),
-    radial-gradient(1px 1px at 90% 88%, #fff 99%, transparent), radial-gradient(1.5px 1.5px at 44% 90%, #fff 99%, transparent);
-  background-size: 38px 38px; animation: rf-twinkle 1.8s ease-in-out infinite;
-}
-.r-starlight .rf-name { background: linear-gradient(100deg, transparent 35%, #fff 50%, transparent 65%) 160% 0 / 260% 100% no-repeat; mix-blend-mode: overlay; animation: rf-sweep 3s ease-in-out infinite; }
-.rfoil.r-starlight { box-shadow: inset 0 0 0 1px rgb(255 255 255 / .35); }
 
 /* rarity badge (deck builder) */
 .rarity-badge {
@@ -78,67 +33,18 @@
 
 /* ======== name + art only (the text box is never touched) ======== */
 /* shared: a light sweep over the name */
-.r-gold .rf-name, .r-platinum .rf-name, .r-prismatic .rf-name, .r-ghost .rf-name, .r-ultimate .rf-name, .r-collector .rf-name { animation: rf-sweep 4.2s ease-in-out infinite; }
 
 /* Gold: gold name, gold-washed art with a slow sweep */
-.r-gold .rf-name {
-  background: linear-gradient(100deg, transparent 35%, rgb(255 252 230 / .95) 48%, transparent 62%) 160% 0 / 260% 100% no-repeat, linear-gradient(180deg, #fff3b0, #d4a017 50%, #8a6410 56%, #ffe27a);
-  mix-blend-mode: hard-light; opacity: .78;
-}
-.r-gold .rf-art {
-  background: linear-gradient(105deg, transparent 30%, rgb(255 236 160 / .7) 48%, transparent 66%) 160% 0 / 260% 100% no-repeat, linear-gradient(135deg, #ffd96a, #b9861c);
-  mix-blend-mode: soft-light; opacity: .75; animation: rf-sweep 5s ease-in-out infinite;
-}
 
 /* Platinum: cold silver-blue name and a moving sheen on the art */
-.r-platinum .rf-name {
-  background: linear-gradient(100deg, transparent 35%, #fff 48%, transparent 62%) 160% 0 / 260% 100% no-repeat, linear-gradient(180deg, #f5f9ff, #a9b9cf 50%, #6d7f99 56%, #e6eefb);
-  mix-blend-mode: hard-light; opacity: .75;
-}
-.r-platinum .rf-art {
-  background: linear-gradient(125deg, transparent 20%, rgb(230 240 255 / .55) 40%, transparent 46%, rgb(200 220 255 / .45) 60%, transparent 70%) calc(var(--mx) * 1.2) 0 / 220% 100%;
-  mix-blend-mode: screen; opacity: .7; transition: background-position .2s;
-}
 
 /* Prismatic Secret: rainbow name, bold diagonal prism bands across the art (follow the mouse) */
-.r-prismatic .rf-name, .r-collector .rf-name {
-  background: linear-gradient(100deg, transparent 35%, #fff 48%, transparent 62%) 160% 0 / 260% 100% no-repeat, linear-gradient(90deg, #ff5f6d, #ffc371, #a8ff78, #78ffd6, #6a82fb, #fc5c7d);
-  mix-blend-mode: color; opacity: .85;
-}
-.r-prismatic .rf-art {
-  background: repeating-linear-gradient(135deg, #ff5f6d 0 6%, #ffc371 6% 12%, #a8ff78 12% 18%, #78ffd6 18% 24%, #6a82fb 24% 30%, #fc5c7d 30% 36%) calc(var(--mx) * 2) calc(var(--my) * 2) / 250% 250%;
-  mix-blend-mode: color-dodge; opacity: .45;
-}
 
 /* Ghost: the art turns pale and silvery, with a cold glare; silver name */
-.r-ghost .rf-art {
-  background: radial-gradient(circle at var(--mx) var(--my), rgb(255 255 255 / .55), transparent 55%), linear-gradient(#9aa4b1, #9aa4b1);
-  background-blend-mode: screen; mix-blend-mode: saturation; opacity: .92;
-}
-.r-ghost .rf-glare { left: 12%; right: 12%; top: 18%; bottom: 29.5%; background: linear-gradient(115deg, transparent 30%, rgb(220 235 255 / .5) 50%, transparent 70%) 160% 0 / 260% 100% no-repeat; mix-blend-mode: screen; animation: rf-sweep 3.6s ease-in-out infinite; }
-.r-ghost .rf-name { background: linear-gradient(100deg, transparent 35%, #fff 48%, transparent 62%) 160% 0 / 260% 100% no-repeat, linear-gradient(180deg, #ffffff, #c4ccd8); mix-blend-mode: luminosity; opacity: .8; }
 
 /* Ultimate: an embossed gold lattice pressed into the art; gold name */
-.r-ultimate .rf-name {
-  background: linear-gradient(100deg, transparent 35%, #fffbe6 48%, transparent 62%) 160% 0 / 260% 100% no-repeat, linear-gradient(180deg, #ffe9a0, #c99a2e 50%, #7d5a14 56%, #f5d277);
-  mix-blend-mode: hard-light; opacity: .78;
-}
-.r-ultimate .rf-art {
-  background:
-    repeating-linear-gradient(45deg, rgb(255 255 255 / .28) 0 1px, transparent 1px 7px),
-    repeating-linear-gradient(-45deg, rgb(0 0 0 / .22) 0 1px, transparent 1px 7px),
-    radial-gradient(circle at var(--mx) var(--my), rgb(255 230 150 / .6), transparent 60%),
-    linear-gradient(135deg, #e9c46a, #a87a22);
-  mix-blend-mode: overlay; opacity: .85;
-}
 
 /* Collector's: rainbow bubble rings drifting over the art; rainbow name */
-.r-collector .rf-art {
-  background:
-    repeating-radial-gradient(circle at var(--mx) var(--my), transparent 0 10px, rgb(255 255 255 / .28) 11px, transparent 13px),
-    linear-gradient(120deg, #ff8a8a, #ffe48a, #8affb0, #8ae0ff, #c98aff) 0 0 / 300% 300%;
-  mix-blend-mode: color-dodge; opacity: .42; animation: rf-drift 7s linear infinite alternate;
-}
 
 .rarity-badge.r-gold, .rarity-pick.r-gold { background: linear-gradient(135deg, #fff3b0, #d4a017); color: #111; }
 .rarity-badge.r-platinum, .rarity-pick.r-platinum { background: linear-gradient(135deg, #f5f9ff, #8ea2bd); color: #111; }
@@ -151,55 +57,75 @@
 .duel-preview-art { position: relative; display: inline-block; flex: none; line-height: 0; border-radius: 4px; overflow: hidden; }
 .rfoil { border-radius: 0; }
 .rfoil .rf-glare { left: 12%; right: 12%; top: 18.1%; bottom: 29.6%; inset: 18.1% 12% 29.6% 12%; }
-.rf-art { inset: 18.1% 12% 29.6% 12%; }
-.rf-name { inset: 4.6% 16% 88.6% 7.6%; }
+
 /* Secret / Starlight used to cover the whole card: their glare now lives in the picture */
-.r-secret .rf-glare { opacity: .4; }
-.r-starlight .rf-glare { opacity: .32; }
-.rfoil.r-starlight { box-shadow: none; }
-.r-starlight .rf-name {
-  background: linear-gradient(100deg, transparent 35%, #fff 48%, transparent 62%) 160% 0 / 260% 100% no-repeat,
-    linear-gradient(90deg, #ff8a8a, #ffe48a, #8affb0, #8ae0ff, #c98aff) 0 0 / 200% 100%;
-  mix-blend-mode: color; opacity: .75; animation: rf-sweep 3s ease-in-out infinite;
-}
+
 /* keep the picture readable */
-.r-super .rf-art, .r-ultra .rf-art, .r-secret .rf-art { opacity: .3; }
-[data-foil]:hover .r-super .rf-art, [data-foil]:hover .r-ultra .rf-art, [data-foil]:hover .r-secret .rf-art { opacity: .45; }
-.r-ultimate .rf-art { opacity: .55; }
-.r-prismatic .rf-art { opacity: .32; }
-.r-collector .rf-art { opacity: .34; }
-.r-gold .rf-art { opacity: .5; }
-.r-ghost .rf-art { opacity: .8; }
 
 /* ================= name lettering: only the letters change colour, the bar stays as printed =================
    Dark letters on a light bar: "lighten" keeps the (lighter) bar and turns the (darker) letters into the
    foil colour. Light letters on a dark bar (Spells, Traps, Xyz): "darken" does the same the other way. */
-@keyframes rf-letters { to { background-position: -200% 0; } }
-.rfoil .rf-name { opacity: 1 !important; mix-blend-mode: lighten !important; animation: rf-letters 3.2s linear infinite !important; background-size: 200% 100% !important; background-repeat: repeat !important; }
-.rfoil.is-light-name .rf-name { mix-blend-mode: darken !important; }
-.r-super .rf-name { display: none; }
-.r-rare .rf-name, .r-ghost .rf-name { background-image: linear-gradient(90deg, #7d8796, #c3cad4 25%, #8b95a5 50%, #d5dbe3 75%, #7d8796) !important; }
-.r-ultra .rf-name, .r-gold .rf-name, .r-ultimate .rf-name { background-image: linear-gradient(90deg, #9a6b12, #e6b833 25%, #a87a1a 50%, #ffd968 75%, #9a6b12) !important; }
-.r-platinum .rf-name { background-image: linear-gradient(90deg, #6f86a6, #b8cbe3 25%, #7f95b3 50%, #d0def0 75%, #6f86a6) !important; }
-.r-secret .rf-name, .r-collector .rf-name { background-image: linear-gradient(90deg, #c46a8a, #c9a64f, #5fb27e, #4f9cc9, #9a6ad1, #c46a8a) !important; }
-.r-starlight .rf-name, .r-prismatic .rf-name { background-image: linear-gradient(90deg, #ff3d6e, #ffb02e, #3ddc84, #2eb6ff, #a24dff, #ff3d6e) !important; }
+
 /* light-letter cards need light foil colours to show against the dark bar */
-.rfoil.is-light-name.r-rare .rf-name, .rfoil.is-light-name.r-ghost .rf-name { background-image: linear-gradient(90deg, #dfe5ee, #ffffff 25%, #c5cdd9 50%, #ffffff 75%, #dfe5ee) !important; }
-.rfoil.is-light-name.r-ultra .rf-name, .rfoil.is-light-name.r-gold .rf-name, .rfoil.is-light-name.r-ultimate .rf-name { background-image: linear-gradient(90deg, #ffd24a, #fff1b0 25%, #f2b92c 50%, #fff6c9 75%, #ffd24a) !important; }
-.rfoil.is-light-name.r-platinum .rf-name { background-image: linear-gradient(90deg, #cfe0f5, #ffffff 25%, #b7cbe6 50%, #ffffff 75%, #cfe0f5) !important; }
-.rfoil.is-light-name.r-secret .rf-name, .rfoil.is-light-name.r-collector .rf-name, .rfoil.is-light-name.r-starlight .rf-name, .rfoil.is-light-name.r-prismatic .rf-name { background-image: linear-gradient(90deg, #ff9ab4, #ffe08a, #9df5c0, #9adcff, #d3a6ff, #ff9ab4) !important; }
 
 /* ================= the picture: lighter touch so the art stays visible ================= */
-.r-ghost .rf-art { opacity: .55; }
-.r-ultimate .rf-art { opacity: .38; }
-.r-secret .rf-art { opacity: .26; }
-.r-secret .rf-glare { opacity: .3; }
-.r-starlight .rf-glare { opacity: .3; }
-.r-gold .rf-art { opacity: .42; }
 
 /* no z-index / isolation on the foil: its layers must blend with the card image under it */
 .rfoil { z-index: auto !important; isolation: auto; }
 
 /* name lettering (SVG letter mask, see Rarity.tsx) */
-.rf-letters { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-.rfoil .rf-name { display: none !important; }
+
+/* ================= SVG foil layers (Rarity.tsx): built from the card image ================= */
+.rf-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+/* the older CSS-only layers are replaced */
+
+/* one soft glare that follows the mouse, inside the picture only */
+.rfoil .rf-glare {
+  inset: 18.1% 12% 29.6% 12% !important; animation: none !important; opacity: 1 !important;
+  background: radial-gradient(circle at var(--mx) var(--my), rgb(255 255 255 / .35), transparent 45%) !important;
+  mix-blend-mode: soft-light !important; transition: opacity .2s;
+}
+[data-foil]:not(:hover) .rfoil .rf-glare { opacity: .45 !important; }
+
+/* ================= the earlier picture looks, as options (inside the art box only) ================= */
+.rfoil .rf-legacy { position: absolute; inset: 18.1% 12% 29.6% 12%; display: block; pointer-events: none; }
+.rf-legacy.lg-classic {
+  background:
+    repeating-linear-gradient(115deg, #ff6b6b 0%, #ffd56b 6%, #7dff9b 12%, #6bd5ff 18%, #b06bff 24%, #ff6b6b 30%) calc(var(--mx) * 1.5) calc(var(--my) * 1.5) / 300% 300%,
+    radial-gradient(circle at var(--mx) var(--my), rgb(255 255 255 / .55), transparent 55%);
+  mix-blend-mode: color-dodge; opacity: .42;
+}
+.rf-legacy.lg-crosshatch {
+  background:
+    repeating-linear-gradient(45deg, transparent 0 3px, rgb(255 255 255 / .28) 3px 4px),
+    repeating-linear-gradient(-45deg, transparent 0 3px, rgb(255 255 255 / .28) 3px 4px),
+    linear-gradient(115deg, #ff7a7a, #ffe07a, #7affa1, #7ad7ff, #c27aff, #ff7a7a) calc(var(--mx) * 2) calc(var(--my) * 2) / 300% 300%;
+  mix-blend-mode: overlay; opacity: .6;
+}
+.rf-legacy.lg-shimmer {
+  background:
+    radial-gradient(1.2px 1.2px at 12% 18%, #fff 99%, transparent), radial-gradient(1px 1px at 33% 72%, #fff 99%, transparent),
+    radial-gradient(1.6px 1.6px at 58% 30%, #fff 99%, transparent), radial-gradient(1px 1px at 81% 64%, #fff 99%, transparent),
+    radial-gradient(1.4px 1.4px at 22% 48%, #fff 99%, transparent), radial-gradient(1.2px 1.2px at 70% 12%, #fff 99%, transparent),
+    linear-gradient(120deg, #ff8a8a, #ffe48a, #8affb0, #8ae0ff, #c98aff, #ff8a8a);
+  background-size: 38px 38px, 38px 38px, 38px 38px, 38px 38px, 38px 38px, 38px 38px, 300% 300%;
+  mix-blend-mode: color-dodge; opacity: .5; animation: rf-drift-legacy 6s linear infinite alternate, rf-twinkle 1.8s ease-in-out infinite;
+}
+.rf-legacy.lg-bubbles {
+  background:
+    repeating-radial-gradient(circle at var(--mx) var(--my), transparent 0 10px, rgb(255 255 255 / .3) 11px, transparent 13px),
+    linear-gradient(120deg, #ff8a8a, #ffe48a, #8affb0, #8ae0ff, #c98aff) 0 0 / 300% 300%;
+  mix-blend-mode: color-dodge; opacity: .42; animation: rf-drift-legacy 7s linear infinite alternate;
+}
+.rf-legacy.lg-lattice {
+  background:
+    repeating-linear-gradient(45deg, rgb(255 255 255 / .28) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(-45deg, rgb(0 0 0 / .22) 0 1px, transparent 1px 7px),
+    radial-gradient(circle at var(--mx) var(--my), rgb(255 230 150 / .6), transparent 60%),
+    linear-gradient(135deg, #e9c46a, #a87a22);
+  mix-blend-mode: overlay; opacity: .55;
+}
+@keyframes rf-drift-legacy { to { background-position: 0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 100% 100%; } }
+@media (prefers-reduced-motion: reduce) { .rf-legacy { animation: none !important; } }
+
+.rarity-badge.r-custom { background: conic-gradient(from 45deg, #ffd24a, #ff8a8a, #8ae0ff, #a8ff78, #ffd24a); color: #111; }

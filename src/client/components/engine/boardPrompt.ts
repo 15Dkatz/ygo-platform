@@ -16,11 +16,18 @@ export interface CardAction {
 const short = (s: string, n = 72) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
 /** Activate labels: the effect text when a card offers several effects (or always, for chains). */
-function activateLabels(refs: { desc: string }[], uids: string[], always: boolean): string[] {
+function activateLabels(refs: { desc: string; from?: number }[], uids: string[], always: boolean): string[] {
   const count = new Map<string, number>();
   uids.forEach((u) => count.set(u, (count.get(u) ?? 0) + 1));
-  return refs.map((r, i) => (r.desc && (always || count.get(uids[i])! > 1) ? `Activate: ${short(r.desc)}` : "Activate"));
+  return refs.map((r, i) => {
+    const base = r.desc && (always || count.get(uids[i])! > 1 || r.from) ? `Activate: ${short(r.desc)}` : "Activate";
+    // an effect another card gives this one: say whose it is
+    return r.from ? `${base} (from ${grantName(r.from)})` : base;
+  });
 }
+/** Name of the card that granted an effect (the client's card catalogue; a number if unknown). */
+let grantName: (code: number) => string = (code) => `card ${code}`;
+export function setGrantNamer(f: (code: number) => string) { grantName = f; }
 
 /** Main Phase / Battle Phase / chain window: every card's legal actions, keyed by board uid. */
 export function actionsByUid(p: EnginePrompt): Map<string, CardAction[]> {

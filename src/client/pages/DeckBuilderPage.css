@@ -79,3 +79,44 @@
 .rarity-pick.r-secret { background: linear-gradient(135deg, #ff8a8a, #ffe48a, #8affb0, #8ae0ff); color: #111; }
 .rarity-pick.r-starlight { background: linear-gradient(135deg, #ffffff, #ffd6f5, #c9e7ff); color: #111; box-shadow: 0 0 6px #fff8; }
 .db-menu .rarity-pick { width: auto; display: inline-block; text-align: center; }
+
+/* custom foil: lettering + picture pickers in the card menu */
+.db-menu-foil { display: grid; gap: 4px; margin-top: 4px; }
+.db-menu-foil label { display: grid; grid-template-columns: 64px 1fr; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+.db-menu-foil select { font-size: 12px; padding: 2px 4px; width: 100%; }
+
+/* card menu: a big preview of the hovered foil beside the menu, and chips to mix lettering + picture */
+.db-menu { overflow: visible; }
+.db-foil-preview { position: absolute; left: calc(100% + 12px); top: 0; width: 230px; display: grid; gap: 6px; pointer-events: none;
+  filter: drop-shadow(0 12px 30px rgb(0 0 0 / .55)); animation: db-foil-in .18s ease-out both; }
+.db-foil-preview.is-left { left: auto; right: calc(100% + 12px); }
+.db-foil-preview > span { position: relative; display: block; line-height: 0; border-radius: 8px; overflow: hidden; }
+.db-foil-preview img { width: 100%; display: block; }
+.db-foil-preview small { text-align: center; font-weight: 800; font-size: 12px; color: var(--fg); text-shadow: 0 1px 4px rgb(0 0 0 / .7); }
+@keyframes db-foil-in { from { opacity: 0; transform: translateX(-6px) scale(.97); } to { opacity: 1; transform: none; } }
+.db-menu-foil { display: grid; gap: 4px; margin-top: 6px; }
+.db-menu-foil > span { font-size: 11px; }
+.db-foil-chips { display: flex; flex-wrap: wrap; gap: 3px; max-width: 220px; }
+.db-menu .db-foil-chip { width: auto; display: inline-block; padding: 2px 6px; font-size: 11px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-2); color: var(--fg); text-align: center; }
+.db-menu .db-foil-chip:hover { border-color: var(--accent); }
+.db-menu .db-foil-chip.is-on { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+/* lettering, then picture, stacked; compact chips */
+.db-menu-rarity > .db-menu-foil { display: grid; grid-template-columns: 1fr; gap: 4px; }
+.db-menu .db-foil-chips { display: flex; flex-wrap: wrap; gap: 3px; max-width: 230px; }
+.db-menu .db-foil-chips .db-foil-chip { width: auto; flex: none; padding: 2px 7px; font-size: 11px; line-height: 1.4; text-align: center; }
+/* rarity chips keep their colours when hovered (the menu's generic hover would paint them over) */
+.db-menu .rarity-pick.r-common { --rp: var(--surface-2); }
+.db-menu .rarity-pick.r-rare { --rp: linear-gradient(135deg, #f4f6fa, #aab4c4); }
+.db-menu .rarity-pick.r-super { --rp: linear-gradient(135deg, #8ae0ff, #c98aff); }
+.db-menu .rarity-pick.r-ultra { --rp: linear-gradient(135deg, #fff1a8, #d9a432); }
+.db-menu .rarity-pick.r-secret { --rp: linear-gradient(135deg, #ff8a8a, #ffe48a, #8affb0, #8ae0ff); }
+.db-menu .rarity-pick.r-starlight { --rp: linear-gradient(135deg, #ffffff, #ffd6f5, #c9e7ff); }
+.db-menu .rarity-pick.r-gold { --rp: linear-gradient(135deg, #fff3b0, #d4a017); }
+.db-menu .rarity-pick.r-platinum { --rp: linear-gradient(135deg, #f5f9ff, #8ea2bd); }
+.db-menu .rarity-pick.r-prismatic { --rp: linear-gradient(90deg, #ff5f6d, #ffc371, #a8ff78, #78ffd6, #6a82fb); }
+.db-menu .rarity-pick.r-ghost { --rp: linear-gradient(135deg, #ffffff, #9aa4b1); }
+.db-menu .rarity-pick.r-ultimate { --rp: repeating-linear-gradient(45deg, #f5d277 0 3px, #c99a2e 3px 6px); }
+.db-menu .rarity-pick.r-collector { --rp: radial-gradient(circle, #8ae0ff, #c98aff 60%, #ffe48a); }
+.db-menu button.rarity-pick, .db-menu button.rarity-pick:hover, .db-menu button.rarity-pick:focus-visible { background: var(--rp); color: #111; text-align: center; }
+.db-menu button.rarity-pick.r-common, .db-menu button.rarity-pick.r-common:hover { color: var(--fg); }
+.db-menu button.rarity-pick:hover, .db-menu button.rarity-pick:focus-visible { outline: 2px solid var(--fg); outline-offset: 1px; transform: translateY(-1px); }

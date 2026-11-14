@@ -164,6 +164,8 @@ export interface SessionInfo {
   engineHost?: 0 | 1;
   /** Rules-enforced: who the duel waits on and what for (the hint, no cards). */
   deciding?: { seat: 0 | 1; kind: string; hint?: string };
+  /** Rules-enforced: the open chain right now (so a page loaded mid-chain can show it). */
+  chain?: import("./chain.ts").OpenChainLink[];
   settings?: RoomSettings;
   timer?: TurnClock;
 }

@@ -1,4 +1,8 @@
 import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { lazy, Suspense } from "react";
+// /dev/foils: every foil on a few cards, large (unlinked; for checking the foils by eye)
+const FoilLab = lazy(() => import("./pages/FoilLab.tsx"));
+const FxLab = lazy(() => import("./pages/FxLab.tsx"));
 import { SkinPicker } from "./components/SkinPicker.tsx";
 import { HomePage } from "./pages/HomePage.tsx";
 import { usePageTitle } from "./usePageTitle.ts";
@@ -58,6 +62,8 @@ export function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/lobby" element={<LobbyPage />} />
           <Route path="/duel/:roomId" element={<DuelPage />} />
+          <Route path="/dev/foils" element={<Suspense fallback={null}><FoilLab /></Suspense>} />
+          <Route path="/dev/fx" element={<Suspense fallback={null}><FxLab /></Suspense>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>

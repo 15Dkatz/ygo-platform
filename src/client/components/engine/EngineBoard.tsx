@@ -14,8 +14,12 @@ import { engineFirst, indexBoard, placeZone, refUid, visibleCode, zoneKey } from
 import { useDuelSettings } from "../duel/duelSettings.ts";
 import {
   actionsByUid, answersOnClick, dropChoices, isSelectPrompt, layoutRefs, pileKeyOf, placeKeys,
-  selectItems, selectResponse, selectStatus, type CardAction, type SelectItem,
+  selectItems, selectResponse, selectStatus, setGrantNamer, type CardAction, type SelectItem,
 } from "./boardPrompt.ts";
+import { getCard } from "../duel/useDuel.ts";
+
+// "Activate: ... (from JJ "Kewl Tune")": effects granted by another card name that card
+setGrantNamer((code) => getCard(code)?.name ?? "another card");
 import { EnginePromptPanel, title } from "./EnginePrompt.tsx";
 import { play as sfx } from "../duel/anim/sfx.ts";
 
@@ -166,10 +170,11 @@ export function useEngineBoard(o: EngineBoardOpts): EngineBoard {
   const marks: BoardMarks = useMemo(() => {
     const m: BoardMarks = { actionable: new Set(), selectable: new Set(), picked: new Set(), places: new Set(), piles: new Map(), badges: new Map() };
     for (const [uid, link] of o.chainBadges ?? []) m.badges.set(uid, String(link));
+    // the card whose effect is resolving (or was just activated) glows for everyone, whoever's turn or choice it is
+    if (o.source && index.get(o.source.uid)?.card.code === o.source.code) m.source = o.source.uid;
     if (!mine) return m;
     if (mine.kind === "idle" || mine.kind === "battle") for (const uid of actions.keys()) m.actionable.add(uid);
     if (mine.kind === "battle" && settings.dragAttack) m.drag = new Set(mine.attacks.map((r) => refUid(r)));
-    if (isDecisionKind(mine) && o.source && index.get(o.source.uid)?.card.code === o.source.code) m.source = o.source.uid;
     if (mine.kind === "selectChain") for (const uid of actions.keys()) m.selectable.add(uid);
     if (mine.kind === "effectYesNo") m.selectable.add(refUid(mine.card));
     for (const it of items) {
@@ -459,7 +464,7 @@ function PromptBar({ prompt: p, picked, counts, places, send, onList, cardName, 
               <button onClick={() => send({ kind: "selectChain", index: i })} title={c.desc || cardName(c.code)}
                 onMouseEnter={() => onHover(c.code || null)} onMouseLeave={() => onHover(null)} onFocus={() => onHover(c.code || null)} onBlur={() => onHover(null)}>
                 <span className="duel-card duel-chain-thumb"><span className="duel-card-inner"><CardFace code={c.code} /></span></span>
-                <span className="duel-chain-text"><b>{cardName(c.code) ?? "Card"}</b><small>{c.desc || "Activate"}</small></span>
+                <span className="duel-chain-text"><b>{cardName(c.code) ?? "Card"}</b><small>{c.desc || "Activate"}{c.from ? <em className="duel-granted"> · from {cardName(c.from) ?? "another card"}</em> : null}</small></span>
                 <span className="duel-chain-go">Chain ›</span>
               </button>
             </li>

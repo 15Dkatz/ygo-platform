@@ -141,7 +141,7 @@ export function describeEvent(e: EngineEvent, names: [string, string], _cardName
     case "draw": return `${names[e.player]} drew ${e.codes.length} card${e.codes.length === 1 ? "" : "s"}`;
     case "summon": return `${names[e.card.controller]} ${e.how === "normal" ? "Normal" : e.how === "flip" ? "Flip" : "Special"} Summoned ${card(e.card.code)}`;
     case "set": return `${names[e.card.controller]} Set ${e.card.location === "monster" ? "a monster" : "a card"}`;
-    case "chain": return `Chain ${e.link}: ${card(e.card.code)}${e.desc ? ` — ${e.desc}` : ""}`;
+    case "chain": return `Chain ${e.link}: ${card(e.card.code)}${e.desc ? ` — ${e.desc}` : ""}${e.from ? ` (from ${card(e.from)})` : ""}`;
     case "chainNegated": return `Chain ${e.link} negated`;
     case "lp": return e.delta ? `${names[e.player]} ${e.delta < 0 ? "lost" : "gained"} ${Math.abs(e.delta)} LP (${e.lp})` : null;
     case "attack": return `${names[e.attacker.controller]}'s ${card(e.attacker.code)} attacks ${e.target ? (e.target.code ? card(e.target.code) : "a face-down monster") : "directly"}`;

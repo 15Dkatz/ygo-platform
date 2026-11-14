@@ -8,6 +8,7 @@ import { REQUIRE_ACCOUNT, cleanName, getIdentity, setGuestName, withIdentity } f
 import { validateDeck } from "../../shared/duelActions.ts";
 import { DEFAULT_SETTINGS, cleanSettings } from "../../shared/roomSettings.ts";
 import type { DuelRoom } from "../duel/DuelRoom.ts";
+import { cleanRarities, type RarityMap } from "../../shared/rarity.ts";
 
 // PHASE 3 (manual duels) owns this file; PHASE 4 adds engine-mode options.
 // Contract:
@@ -48,13 +49,13 @@ duel.post("/api/duel/guest", async (c) => {
 duel.post("/api/rooms", async (c) => {
   const ident = getIdentity(c);
   if (!ident) return c.json({ error: REQUIRE_ACCOUNT ? "sign in required" : "Pick a display name first." }, 401);
-  type Body = { mode?: unknown; name?: unknown; settings?: unknown; demo?: unknown; bot?: { deckId?: unknown; main?: unknown; extra?: unknown; side?: unknown } };
+  type Body = { mode?: unknown; name?: unknown; settings?: unknown; demo?: unknown; bot?: { deckId?: unknown; main?: unknown; extra?: unknown; side?: unknown; rarity?: unknown } };
   const body = await c.req.json<Body>().catch(() => ({}) as Body);
   let mode = (MODES as unknown[]).includes(body.mode) ? (body.mode as DuelMode) : "manual";
   // quick duel: a private rules-enforced room with a bot already seated
-  let bot: { deckId: string; main: number[]; extra: number[]; side: number[] } | undefined;
+  let bot: { deckId: string; main: number[]; extra: number[]; side: number[]; rarity?: RarityMap } | undefined;
   if (body.bot) {
-    const d = { deckId: String(body.bot.deckId ?? "bot").slice(0, 64), main: body.bot.main, extra: body.bot.extra, side: body.bot.side ?? [] };
+    const d = { deckId: String(body.bot.deckId ?? "bot").slice(0, 64), main: body.bot.main, extra: body.bot.extra, side: body.bot.side ?? [], rarity: cleanRarities(body.bot.rarity) };
     const err = validateDeck(d as Parameters<typeof validateDeck>[0]) ?? await skillCardProblem(c.env.DB, d as { main: number[]; extra: number[] });
     if (err) return c.json({ error: `Bot deck: ${err}` }, 400);
     bot = d as typeof bot;

@@ -1,6 +1,6 @@
 // Client-side duel plumbing: identity (guest name / account), the room websocket, card data cache.
 
-import { applyChainEvents, type ChainLink } from "./ChainStack.tsx";
+import { applyChainEvents, chainFromSession, type ChainLink } from "./ChainStack.tsx";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, lookupCards } from "../../api.ts";
 import type { BoardState, CardInstance, ClientMsg, DuelEvent, RoomInfo, ServerMsg, SessionInfo } from "../../../shared/duel.ts";
@@ -104,6 +104,9 @@ export function useDuelSocket(roomId: string, hooks?: DuelSocketHooks) {
           case "session":
             if (msg.session.stage === "lobby") boardRef.current = null;
             setConn((c) => ({ ...c, session: msg.session, board: msg.session.stage === "lobby" ? null : c.board }));
+            // loaded in the middle of a chain: take the server's copy (events keep it current from here)
+            if (msg.session.chain?.length) { const links = msg.session.chain; setChain((cur) => (cur.length ? cur : chainFromSession(links))); }
+            else if (msg.session.stage !== "duel") setChain([]);
             break;
           case "state": {
             const events = eventsRef.current;

@@ -18,6 +18,7 @@ import { eventsFor } from "./engine/EngineDuel.ts";
 import type { EngineEvent } from "../../shared/enginePrompts.ts";
 import { stepClock } from "../../shared/clock.ts";
 import { cleanRarities, type RarityMap } from "../../shared/rarity.ts";
+import { applyChain, type OpenChainLink } from "../../shared/chain.ts";
 
 /** DO storage key of the engine snapshot (seed + decks + responses; replayed on wake). */
 const ENGINE_KEY = "engine";
@@ -83,6 +84,8 @@ interface RoomData {
   chat: ChatLine[];
   /** Engine mode: the prompts currently waiting for an answer (kept so reconnecting players get theirs). */
   prompts?: { seat: Seat; prompt: unknown }[];
+  /** The open chain, from the public events (rules-enforced). */
+  chain?: OpenChainLink[];
   /** Where this room's rules engine runs (fixed when the room is created). */
   engineRunner?: "host" | "server";
   /** Host-runs-rules mode: the duel setup the host's browser starts from. */
@@ -125,7 +128,7 @@ export class DuelRoom extends DurableObject<Env> {
     /** Demo duel vs the bot: decks keep their order (combo pieces in the opening hands). */
     demo?: boolean;
     /** Quick duel: seat a bot with this deck straight away (rules-enforced only). */
-    bot?: { deckId: string; main: number[]; extra: number[]; side: number[] };
+    bot?: { deckId: string; main: number[]; extra: number[]; side: number[]; rarity?: RarityMap };
   }): Promise<void> {
     if (this.room) throw new Error("room already exists");
     const { bot, ...info } = input;
@@ -671,6 +674,9 @@ export class DuelRoom extends DurableObject<Env> {
     if (u.board) room.board = u.board;
     if (room.board) room.board.log = log;
     room.prompts = u.prompts ?? [];
+    // the open chain as everyone sees it (public events: seat 0's view with seat 0's secrets removed)
+    if (u.events) room.chain = applyChain(room.chain ?? [], eventsFor(u.events[0], 1));
+    if (u.finished) room.chain = [];
     if (u.finished) {
       this.finish(u.finished.winner, u.finished.reason);
       await this.dropEngine();
@@ -960,6 +966,7 @@ export class DuelRoom extends DurableObject<Env> {
       deciding: room.mode === "engine" && room.stage === "duel" && room.prompts?.[0]
         ? { seat: room.prompts[0].seat, kind: String((room.prompts[0].prompt as { kind?: string }).kind ?? ""), hint: (room.prompts[0].prompt as { hint?: string }).hint }
         : undefined,
+      chain: room.mode === "engine" && room.stage === "duel" && room.chain?.length ? room.chain : undefined,
     };
   }
 

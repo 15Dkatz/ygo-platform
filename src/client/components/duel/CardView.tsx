@@ -5,6 +5,8 @@ import { HIDDEN_CODE, type CardInstance } from "../../../shared/duel.ts";
 import { getCard } from "./useDuel.ts";
 import { CARD_BACK_SVG } from "./cardBack.ts";
 import { RarityFoil, useRarity } from "../cards/Rarity.tsx";
+import { ResolveFx } from "./ResolveFx.tsx";
+import { useDuelSettings } from "./duelSettings.ts";
 
 /** The original card back (CSS layers + inline SVG emblem, see cardBack.ts). */
 export function CardBack({ className = "" }: { className?: string }) {
@@ -67,6 +69,7 @@ export function CardView({ card, draggable, selected, flash, onClick, onHover, o
   const def = card.position === "def" || card.position === "faceDownDef";
   const ownFaceDown = !card.faceUp && known;
   const counters = card.counters ? Object.entries(card.counters) : [];
+  const resolveStyle = useDuelSettings().resolveFx;
   const rarity = useRarity()(card.faceUp && known && !card.token ? card.code : 0, card.owner);
   const cls = ["duel-card", def ? "is-def" : "", ownFaceDown ? "is-own-facedown" : "", selected ? "is-selected" : "", flash ? "is-flash" : "", onClick ? "is-clickable" : "", mark ? `is-${mark}` : "", source ? "is-source" : ""].join(" ");
   return (
@@ -96,6 +99,7 @@ export function CardView({ card, draggable, selected, flash, onClick, onHover, o
       </div>
       {!!card.materials?.length && <span className="duel-badge duel-badge-mat" title="Xyz materials">{card.materials.length}</span>}
       {source && <span className="duel-srcfx" aria-hidden="true"><i className="sf1" /><i className="sf2" /><i className="sf3" /><i className="sf4" /></span>}
+      {source && <ResolveFx style={resolveStyle} />}
       {source && <span className="duel-source-tag" aria-hidden="true">Resolving</span>}
       {badge && <span className="duel-badge duel-badge-chain" title={/^\d+$/.test(badge) ? `Chain Link ${badge}` : badge}>{badge}</span>}
       {!!quick?.length && (

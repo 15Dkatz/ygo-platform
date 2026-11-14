@@ -136,7 +136,7 @@ export function LobbyPage() {
     try {
       const r = await api<{ roomId: string }>("/api/rooms", {
         method: "POST",
-        json: { mode: "engine", name: "Demo duel", demo: true, bot: { deckId: bot.id, main: bot.main, extra: bot.extra, side: bot.side } },
+        json: { mode: "engine", name: "Demo duel", demo: true, bot: { deckId: bot.id, main: bot.main, extra: bot.extra, side: bot.side, rarity: bot.rarity } },
       });
       navigate(`/duel/${r.roomId}?join=1&autopilot=1&demo=1`);   // joins with the Synchro demo deck
     } catch (x) {
@@ -152,7 +152,8 @@ export function LobbyPage() {
     try {
       const r = await api<{ roomId: string }>("/api/rooms", {
         method: "POST",
-        json: { mode: "engine", name: `${identity.name} vs Bot`, bot: { deckId: botDeck.id, main: botDeck.main, extra: botDeck.extra, side: botDeck.side } },
+        // your room settings apply (time control, starting LP); a bot room stays unlisted
+        json: { mode: "engine", name: `${identity.name} vs Bot`, settings: { ...settings, visibility: "unlisted" }, bot: { deckId: botDeck.id, main: botDeck.main, extra: botDeck.extra, side: botDeck.side, rarity: botDeck.rarity } },
       });
       navigate(`/duel/${r.roomId}?join=1`);
     } catch (x) {

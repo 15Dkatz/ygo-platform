@@ -45,9 +45,9 @@ export interface DuelSettings {
   /** Size of the big card preview shown while you hover a card. */
   previewScale: number;
 }
-export const RESOLVE_FX = ["rings", "sparkle", "fireworks", "aura", "minimal"] as const;
+export const RESOLVE_FX = ["rings", "sparkle", "fireworks", "aura", "powerup", "holy", "void", "electric", "circle", "frost", "minimal"] as const;
 export type ResolveFx = (typeof RESOLVE_FX)[number];
-export const RESOLVE_FX_LABEL: Record<ResolveFx, string> = { rings: "Shockwave rings", sparkle: "Sparkles", fireworks: "Fireworks", aura: "Flame aura", minimal: "Minimal outline" };
+export const RESOLVE_FX_LABEL: Record<ResolveFx, string> = { rings: "Shockwave rings", sparkle: "Sparkles", fireworks: "Fireworks", aura: "Flame aura", powerup: "Power-up aura (energy + lightning)", holy: "Holy light (pillar + halo)", void: "Dark vortex", electric: "Electric current", circle: "Summoning circle", frost: "Frost crystals", minimal: "Minimal outline" };
 export const RESOLVE_COLORS = ["theme", "gold", "crimson", "azure", "emerald", "rainbow"] as const;
 export type ResolveColor = (typeof RESOLVE_COLORS)[number];
 export const RESOLVE_COLOR_LABEL: Record<ResolveColor, string> = { theme: "Theme colour", gold: "Gold", crimson: "Crimson", azure: "Azure", emerald: "Emerald", rainbow: "Rainbow" };

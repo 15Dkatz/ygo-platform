@@ -1,3 +1,4 @@
+import { SYSTEM_STRINGS } from "./systemStrings.ts";
 // Text for the core's hint / system-string ids (HINTMSG_* in CardScripts' constant.lua).
 // EDOPro keeps the full list in its client strings.conf; these cover the common prompts.
 // Ids >= 1<<20 are card strings (code << 20 | index) and are resolved by the caller.
@@ -47,8 +48,18 @@ export function hintText(id: number, cardString: (d: bigint) => string, cardName
     const name = id < 2 ** 32 ? cardName?.(id) : null;
     return name ?? cardString(BigInt(id));
   }
+  // EDOPro's own wording first (systemStrings.ts, generated from strings.conf), then ours
+  const sys = SYSTEM_STRINGS[id];
+  if (sys) return fillPlaceholders(sys);
   if (HINTS[id]) return HINTS[id];
   if (id === 0) return "";                         // no hint
   if (id >= 10_000) return cardName?.(id) ?? "";   // a card code: its name, or nothing if unknown
-  return `#${id}`;
+  return `Option ${id}`;
 }
+
+/** strings.conf texts carry printf-style slots ("Use the effect of \"%ls\"?"): fill them with the card's
+ *  name when known, else neutral words. */
+export function fillPlaceholders(text: string, cardName?: string | null): string {
+  return text.replace(/"?%ls"?/g, cardName ? `"${cardName}"` : "this card").replace(/%d/g, "some");
+}
+
