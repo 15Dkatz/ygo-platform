@@ -1,5 +1,8 @@
 // PHASE 3 owns this page (duel board). PHASE 4 adds engine-mode prompts.
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { newDeck, useDeckStore } from "../store/deckStore.ts";
+import { isStarterDeck } from "../../shared/starterDecks.ts";
+import type { Deck } from "../../shared/types.ts";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import type { BoardState, CardInstance, TurnClock } from "../../shared/duel.ts";
 import type { EngineCardRef, EngineEvent, EnginePrompt, EngineResponse } from "../../shared/enginePrompts.ts";
@@ -20,7 +23,7 @@ import { useBoardAnimations } from "../components/duel/anim/useBoardAnimations.t
 import { play as sfx } from "../components/duel/anim/sfx.ts";
 import { EndOverlay, MuteToggle, ReconnectOverlay, TurnBanner } from "../components/duel/DuelFx.tsx";
 import { useEngineBoard, type Decision } from "../components/engine/EngineBoard.tsx";
-import { ClockFace, SecondBar, SecondsText, TurnTimer } from "../components/duel/TurnTimer.tsx";
+import { ClockFace, SecondsText, TurnTimer } from "../components/duel/TurnTimer.tsx";
 import { SkinPicker } from "../components/SkinPicker.tsx";
 import { DuelSettingsButton } from "../components/duel/DuelSettingsPanel.tsx";
 import { ChainStack } from "../components/duel/ChainStack.tsx";
@@ -35,6 +38,10 @@ import "./DuelPage.css";
 import "../components/duel/duel-scene.css";
 import { ShortcutSheet, ShortcutsButton, useKeyboardCursor } from "../components/duel/Shortcuts.tsx";
 import { RarityContext, rarityLookup, useFoilPointer } from "../components/cards/Rarity.tsx";
+import { SleeveContext } from "../components/duel/Sleeve.tsx";
+import { DuelLog, useRailFit } from "../components/duel/DuelLog.tsx";
+import { useUiScale } from "../components/duel/uiScale.ts";
+const DeckBuilder = lazy(() => import("./DeckBuilderPage.tsx").then((m) => ({ default: m.DeckBuilder })));
 import { RevealStrip, useReveals } from "../components/duel/RevealStrip.tsx";
 
 type Viewer =
@@ -56,7 +63,24 @@ export function DuelPage() {
     beforeState: (prev, next, events) => { anim.beforeState(prev, next, events); revealFeed.current?.(events); },
   });
   const { identity } = useDuelIdentity();
-  const { decks, deck, deckId, setDeckId } = useDecks();
+  const { decks, deck, deckId, setDeckId, setSleeve, upsertDeck } = useDecks();
+  const deckStore = useDeckStore();
+  /** The deck open in the deck builder modal (room setup / end of duel). */
+  const [editDeckId, setEditDeckId] = useState<string | null>(null);
+  const editDeck = async (id: string) => {
+    const d = decks?.find((x) => x.id === id);
+    if (!d) return;
+    if (!isStarterDeck(id)) { setEditDeckId(id); return; }
+    // starter decks can't change: edit your own copy
+    const base = d.name.replace(/^Starter: /, "");
+    const taken = new Set(decks!.map((x) => x.name));
+    let name = base, i = 2;
+    while (taken.has(name)) name = `${base} ${i++}`;
+    const copy = await deckStore.save(newDeck(name, { main: [...d.main], extra: [...d.extra], side: [...d.side], rarity: { ...(d.rarity ?? {}) }, sleeve: d.sleeve }));
+    upsertDeck(copy);
+    setDeckId(copy.id);
+    setEditDeckId(copy.id);
+  };
   const { board, session, room, you } = conn;
 
   const [preview, setPreview] = useState<number | null>(null);
@@ -95,8 +119,18 @@ export function DuelPage() {
     if (code) { setPreview(code); setHovering(true); setPreviewRight(pointerX.current < window.innerWidth / 2); }
     else hoverTimer.current = setTimeout(() => setHovering(false), 350);
   }, []);
+  /** A card named in the log: the same floating preview as a card on the field, in the spot it last used. */
+  const onLogCard = useCallback((code: number | null) => {
+    clearTimeout(hoverTimer.current);
+    if (code) { setPreview(code); setHovering(true); }
+    else hoverTimer.current = setTimeout(() => setHovering(false), 350);
+  }, []);
 
   const live = !!board && (session?.stage === "duel" || session?.stage === "finished");
+  // the live duel keeps its full-size layout, scaled to the window as one piece (phones keep their own layout)
+  const uiZoomNow = useUiScale(live);
+  // the log in the rail reaches almost to the field
+  useRailFit([live, ds.tilt, ds.fieldScale, ds.fieldY, ds.camera, ds.cameraY, drawer, uiZoomNow]);
   const playing = live && session?.stage === "duel" && you !== null;
   const me: Seat = you ?? 0;
   const engineMode = (session?.mode ?? conn.room?.mode) === "engine";
@@ -134,7 +168,7 @@ export function DuelPage() {
     if (you === null && session.stage === "lobby" && session.seats.some((s) => s === null)) {
       autoJoined.current = true;
       const d = params.get("demo") === "1" ? demoDeck("kewl") : deck;   // demo rooms: Kewl Tune (vs the bot's Branded Despia)
-      send({ t: "join", deckId: d.id, main: d.main, extra: d.extra, side: d.side, rarity: d.rarity });
+      send({ t: "join", deckId: d.id, main: d.main, extra: d.extra, side: d.side, rarity: d.rarity, sleeve: d.sleeve });
     } else if (you !== null) autoJoined.current = true;
   }, [params, session, identity, deck, you, conn.status, send]);
 
@@ -227,8 +261,8 @@ export function DuelPage() {
     if (session?.stage !== "finished") setEndShown(false);
   }, [session?.stage]);
 
-  // unread lines while the log / chat drawer is closed
-  const lineCount = (board?.log.length ?? 0) + conn.chat.length;
+  // unread chat messages while the chat is closed (system lines don't count)
+  const lineCount = conn.chat.filter((c) => !c.system).length;
   const seenLines = useRef(lineCount);
   if (drawer) seenLines.current = lineCount;
   const unread = Math.max(0, lineCount - seenLines.current);
@@ -478,6 +512,8 @@ export function DuelPage() {
   // card rarities (foils) of both decks, for every card drawn on this page
   const rar0 = session?.seats[0]?.rarity, rar1 = session?.seats[1]?.rarity;
   const rarityFn = useMemo(() => rarityLookup([rar0, rar1]), [rar0, rar1]);
+  const sl0 = session?.seats[0]?.sleeve, sl1 = session?.seats[1]?.sleeve;
+  const sleeveFn = useCallback((owner: 0 | 1 | undefined) => owner === 0 ? sl0 : owner === 1 ? sl1 : undefined, [sl0, sl1]);
   useFoilPointer();
 
   // ---------- render ----------
@@ -538,13 +574,15 @@ export function DuelPage() {
 
   return (
     <RarityContext.Provider value={rarityFn}>
-    <section className={`duel-page ${live ? "is-live" : ""} ${drawer ? "is-drawer-open" : ""} ${tilt ? "is-tilt" : ""} ${nothingToDo ? "is-nothing-to-do" : ""} ${ds.calmPanels ? "is-calm" : ""} ${ds.edgeFlash ? "" : "no-edge"} ${ds.labelShimmer ? "" : "no-shimmer"} ${ds.heartbeat ? "" : "no-heartbeat"}`}
+    <SleeveContext.Provider value={sleeveFn}>
+    <section className={`duel-page ${live ? "is-live" : ""} ${uiZoomNow ? "is-scaled" : ""} ${drawer ? "is-drawer-open" : ""} ${tilt ? "is-tilt" : ""} ${nothingToDo ? "is-nothing-to-do" : ""} ${ds.calmPanels ? "is-calm" : ""} ${ds.edgeFlash ? "" : "no-edge"} ${ds.labelShimmer ? "" : "no-shimmer"} ${ds.heartbeat ? "" : "no-heartbeat"}`}
       data-resolve={ds.resolveFx} data-resolve-color={ds.resolveColor} ref={anim.rootRef}
       style={{
         ["--tilt" as string]: `${ds.tilt}deg`, ["--field-scale" as string]: ds.fieldScale, ["--hand-scale" as string]: ds.handScale,
         // how much the tilt squashes the field's height on screen (measured: 0.77 at 20deg, 0.54 at 40deg)
         ["--proj" as string]: Math.max(0.3, 1 - 0.0115 * ds.tilt),
         ["--field-y" as string]: ds.fieldY, ["--persp" as string]: `${ds.camera}px`, ["--persp-y" as string]: `${ds.cameraY}%`,
+        ...(uiZoomNow ? { zoom: uiZoomNow, ["--ui-zoom" as string]: uiZoomNow } : {}),
         ["--hand-drop" as string]: `${ds.handDrop}%`, ["--opp-hand-drop" as string]: `-${ds.oppHandDrop}%`, ["--opp-hand-scale" as string]: ds.oppHandScale, ["--preview-scale" as string]: ds.previewScale,
       }}
       data-phase={live && board ? board.phase : undefined}>
@@ -557,8 +595,8 @@ export function DuelPage() {
           {conn.status !== "open" ? (conn.status === "connecting" ? "Connecting…" : "Reconnecting…") : session ? `${session.spectators} watching` : ""}
         </span>
         {live && (
-          <button className="duel-drawer-btn" onClick={() => setDrawer((d) => !d)} aria-expanded={drawer} title="Duel log and chat">
-            Log &amp; chat{unread > 0 && !drawer && <span className="duel-unread">{unread > 99 ? "99+" : unread}</span>}
+          <button className="duel-drawer-btn" onClick={() => setDrawer((d) => !d)} aria-expanded={drawer} title="Chat (L)">
+            Chat{unread > 0 && !drawer && <span className="duel-unread">{unread > 99 ? "99+" : unread}</span>}
           </button>
         )}
         {live && playing && (
@@ -587,9 +625,9 @@ export function DuelPage() {
 
       {!session ? <p className="muted">Connecting to the room…</p> : !live ? (
         <div className="duel-layout is-preduel">
-          <PreDuel session={session} you={you} hasIdentity={!!identity} decks={decks} deckId={deckId} setDeckId={setDeckId} deck={deck} send={send} />
+          <PreDuel session={session} you={you} hasIdentity={!!identity} decks={decks} deckId={deckId} setDeckId={setDeckId} deck={deck} setSleeve={setSleeve} onEditDeck={(id) => void editDeck(id)} send={send} />
           <aside className="duel-side">
-            <LogChat initialTab="chat" log={[]} chat={conn.chat} canChat={!!identity} onChat={(text) => send({ t: "chat", text })} onHover={setPreview} />
+            <LogChat only="chat" log={[]} chat={conn.chat} canChat={!!identity} onChat={(text) => send({ t: "chat", text })} onHover={setPreview} />
           </aside>
         </div>
       ) : (
@@ -605,7 +643,9 @@ export function DuelPage() {
                 <PhaseCell key="c" controls={phaseCtl} go={goPhase} phases={["end"]} />,
               ] : undefined}
               rail={phaseCtl && <>
-                <RecentFeed log={board!.log} onHover={onHoverCard} onZoom={(c) => setZoomCard(c)} onOpen={() => setDrawer(true)} />
+                {/* the duel log (all of it, scrollable); the chat opens under it */}
+                <DuelLog log={board!.log} names={[board!.players[0].name, board!.players[1].name]} you={you} onHover={onLogCard} onZoom={onLogCard} />
+                {drawer && <div className="duel-chatbox"><LogChat only="chat" log={[]} chat={conn.chat} canChat={!!identity} onChat={(text) => send({ t: "chat", text })} onHover={onHoverCard} /></div>}
                 {playing && <>
                 <MorePopover>
                   {!engineMode && <>
@@ -677,9 +717,13 @@ export function DuelPage() {
                 <b>{lpHit.delta > 0 ? "+" : "−"}{Math.abs(lpHit.delta)}</b>
               </div>
             )}
-            {session.stage === "finished" && (
-              <div className="duel-finished">
-                <PreDuel session={session} you={you} hasIdentity={!!identity} decks={decks} deckId={deckId} setDeckId={setDeckId} deck={deck} send={send} />
+            {session.stage === "finished" && !endShown && (
+              <div className="duel-finished duel-finished-bar">
+                <b>{session.winner === null ? "Draw" : session.winner === you ? "You won" : you === null ? `${session.seats[session.winner]?.name ?? "Player"} won` : "You lost"}</b>
+                {you !== null && session.seats[you === 0 ? 1 : 0] && (
+                  <button className="primary" disabled={session.rematch[you]} onClick={() => send({ t: "rematch" })}>{session.rematch[you] ? "Waiting for opponent…" : "Rematch"}</button>
+                )}
+                <button onClick={() => setEndShown(true)}>Results and room setup</button>
               </div>
             )}
           </div>
@@ -756,11 +800,29 @@ export function DuelPage() {
       {engineUi && engineBoard.overlay}
       {live && board && <TurnBanner board={board} you={you} />}
       {endShown && session?.stage === "finished" && (
-        <EndOverlay session={session} you={you} onRematch={() => send({ t: "rematch" })} onClose={() => setEndShown(false)} />
+        <EndOverlay session={session} you={you} onRematch={() => send({ t: "rematch" })} onClose={() => setEndShown(false)}>
+          <PreDuel variant="end" session={session} you={you} hasIdentity={!!identity} decks={decks} deckId={deckId} setDeckId={setDeckId} deck={deck} setSleeve={setSleeve} onEditDeck={(id) => void editDeck(id)} send={send} />
+        </EndOverlay>
+      )}
+      {editDeckId && (
+        <div className="duel-deckedit" role="dialog" aria-modal="true" aria-label="Edit deck">
+          <div className="duel-deckedit-box">
+            <Suspense fallback={<p className="muted">Loading the deck builder…</p>}>
+              <DeckBuilder deckId={editDeckId} onClose={() => setEditDeckId(null)} onSaved={(saved: Deck) => {
+                upsertDeck(saved);
+                // seated with this deck between duels: the room gets the new list right away
+                if (you !== null && saved.id === deckId && session?.seats[you]?.ready && (session.stage === "lobby" || session.stage === "finished")) {
+                  send({ t: "join", deckId: saved.id, main: saved.main, extra: saved.extra, side: saved.side, rarity: saved.rarity, sleeve: saved.sleeve });
+                }
+              }} />
+            </Suspense>
+          </div>
+        </div>
       )}
       {menu && <ContextMenu {...menu} onClose={() => setMenu(null)} />}
       <Toasts toasts={conn.toasts} names={names} describe={describe} />
     </section>
+    </SleeveContext.Provider>
     </RarityContext.Provider>
   );
 }
@@ -787,9 +849,6 @@ function PlayerBar({ board, player, you, onLp, onLpChange, connected, timer, sta
       </span>
       <span className="duel-pinfo">
         <b className="duel-pname">{pb.name}{player === you ? " (you)" : ""}</b>
-        {/* timed rooms: the bar ticks the seconds of this player's clock; otherwise it shows their LP */}
-        {timer ? <SecondBar timer={timer} seat={player} />
-          : <span className="duel-lpbar" aria-hidden="true"><i style={{ width: `${Math.max(0, Math.min(100, (pb.lp / startLp) * 100))}%` }} /></span>}
         <span className="muted duel-pcounts">
           <span title="Cards in hand">✋ {pb.hand.length}</span>
           <span title="Cards in Deck">🂠 {pb.deck.length}</span>
@@ -839,7 +898,14 @@ function decidingText(d: { seat: 0 | 1; kind: string; hint?: string } | undefine
   if (d.kind === "selectChain") return `${who} may respond (chain)…`;
   if (d.kind === "idle") return `${who} is in their Main Phase…`;
   if (d.kind === "battle") return `${who} is in their Battle Phase…`;
-  return d.hint ? `${who} is choosing: ${d.hint}` : `${who} is deciding…`;
+  if (d.hint) return `${who} is choosing: ${d.hint}`;
+  // no public hint (it would name a hidden card): say what kind of choice it is
+  const what: Record<string, string> = {
+    selectPlace: "a zone", selectPosition: "a battle position", selectCard: "cards", selectTribute: "Tributes", selectSum: "materials",
+    selectUnselect: "cards", selectCounter: "counters", effectYesNo: "whether to use an effect", yesNo: "yes or no", option: "an option",
+    sort: "an order", announceNumber: "a number", announceRace: "a Type", announceAttribute: "an Attribute", announceCard: "a card name", rps: "rock, paper or scissors",
+  };
+  return what[d.kind] ? `${who} is choosing ${what[d.kind]}…` : `${who} is deciding…`;
 }
 
 /** Bottom right: whose turn it is, beating like a heart when it's yours (or when it's your move on their turn). */
@@ -901,33 +967,6 @@ function MorePopover({ children }: { children: ReactNode }) {
     <div className="duel-more" ref={ref}>
       <button className="duel-more-btn" onClick={() => setOpen((o) => !o)} aria-expanded={open}>⋯ More</button>
       {open && <div className="duel-tools duel-more-panel" onClick={(e) => { if ((e.target as HTMLElement).closest("button")) setOpen(false); }}>{children}</div>}
-    </div>
-  );
-}
-
-/** What just happened: the last few log lines, on the board (the full log is in the drawer). Folds away. */
-function RecentFeed({ log, onHover, onZoom, onOpen }: { log: string[]; onHover(code: number | null): void; onZoom(code: number): void; onOpen(): void }) {
-  const [open, setOpenState] = useState(() => { try { return localStorage.getItem("ygo.recentOpen") !== "0"; } catch { return true; } });
-  const setOpen = (v: boolean) => { setOpenState(v); try { localStorage.setItem("ygo.recentOpen", v ? "1" : "0"); } catch { /* storage blocked */ } };
-  // skip phase-step noise so the feed shows actions
-  const lines = log.filter((l) => !/^(Draw|Standby|Main|Battle|End) Phase( \d)?$/.test(l)).slice(-8);
-  if (!lines.length) return null;
-  return (
-    <div className={`duel-recent ${open ? "" : "is-folded"}`} role="log" aria-label="Recent actions">
-      <span className="duel-recent-head">
-        <button className="duel-recent-title" onClick={() => setOpen(!open)} aria-expanded={open} title={open ? "Fold away" : "Show recent actions"}>{open ? "▾" : "▸"} Recent</button>
-        <button className="duel-recent-log" onClick={onOpen} title="Open the full duel log">Log ›</button>
-      </span>
-      {open && <ol>
-        {lines.map((l, i) => {
-          const last = i === lines.length - 1;
-          return (
-            <li key={`${log.length}-${i}`} className={last ? "is-new" : ""} style={{ opacity: 0.45 + (0.55 * (i + 1)) / lines.length }}>
-              {last && <span className="duel-recent-now">now</span>}<LogText text={l} onHover={onHover} onZoom={onZoom} />
-            </li>
-          );
-        })}
-      </ol>}
     </div>
   );
 }

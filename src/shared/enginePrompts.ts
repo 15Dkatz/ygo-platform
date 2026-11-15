@@ -37,6 +37,9 @@ interface PromptBase {
   player: Seat;
   /** What the core says the choice is for ("Select a card to destroy", ...), when known. */
   hint?: string;
+  /** The hint is the engine's generic wording (a system string), safe to show the other player; otherwise
+   *  it may name a card (e.g. the card being Set face-down) and stays with the chooser. */
+  hintIsPublic?: boolean;
 }
 
 export type EnginePrompt = PromptBase & (

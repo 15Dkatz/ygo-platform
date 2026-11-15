@@ -14,6 +14,10 @@ import type { Position } from "../../../../shared/duel.ts";
 import { getCard } from "../useDuel.ts";
 import { attackStyle } from "./categories.ts";
 import * as fx from "./fx.ts";
+import * as sfxv from "./summonFx.ts";
+import { cardStars, starLabel } from "./stars.ts";
+import { duelSettings } from "../duelSettings.ts";
+import { uiZoom } from "../uiScale.ts";
 import type { Intent, Spot } from "./intents.ts";
 import { play as sfx, type Sfx } from "./sfx.ts";
 
@@ -21,7 +25,9 @@ export const reducedMotion = () => typeof matchMedia === "function" && matchMedi
 
 const MOVE_MS = 330, ROTATE_MS = 280, SHUFFLE_MS = 420, ATTACK_MS = 440, PULSE_MS = 600;
 /** Gap between consecutive intents of one update, and the cap on the whole timeline's start offsets. */
-const STAGGER: Record<Intent["t"], number> = { effect: 160, banner: 120, move: 90, rotate: 60, shuffle: 80, attack: 380, pulse: 40, excavate: 600 };
+const STAGGER: Record<Intent["t"], number> = { effect: 160, banner: 120, move: 90, rotate: 60, shuffle: 80, attack: 380, pulse: 40, excavate: 600, summon: 240, activate: 200 };
+/** Long combos: after this many splashes in SPLASH_WINDOW ms, only big moments get one (for a while). */
+const SPLASH_BURST = 4, SPLASH_WINDOW = 15_000;
 const MAX_OFFSET = 800;
 
 type Rects = Map<string, DOMRect>;
@@ -40,6 +46,8 @@ export class BoardAnimator {
   private pending: { intents: Intent[]; rects: Rects; flipRest: boolean } | null = null;
   /** Count of animations started (debug / tests). */
   played = 0;
+  /** when recent card-art splashes played (to calm long combos down) */
+  private splashes: number[] = [];
 
   /** Record the current layout for `intents`. Merges with a capture that hasn't been played yet. */
   capture(intents: Intent[], flipRest = false) {
@@ -86,6 +94,8 @@ export class BoardAnimator {
     this.sounds(p.intents);
     if (reducedMotion()) return;
     const flipped = new Set<string>();
+    // several Pendulum monsters arriving at once from the hand / Extra Deck = a Pendulum Summon
+    const pendulums = p.intents.filter((it) => it.t === "summon" && it.how === "special" && (it.from === "hand" || it.from === "extra") && /Pendulum/i.test(getCard(it.code)?.type ?? "")).length;
     let offset = 0;
     const total = p.intents.reduce((t, i) => t + STAGGER[i.t], 0);
     const squeeze = total > MAX_OFFSET ? MAX_OFFSET / total : 1;
@@ -101,6 +111,8 @@ export class BoardAnimator {
           case "attack": this.attack(it.attacker, it.target, it.side, delay, false, it.code); break;
           case "effect": this.effect(p.rects, it, delay); break;
           case "pulse": this.pulse(it.uid, it.tone, delay); break;
+          case "summon": this.summon(it, delay, pendulums >= 2); break;
+          case "activate": this.activate(it, delay); break;
           case "banner": this.banner(it.text, delay); break;
         }
       } catch (e) { console.warn("animation", e); }
@@ -129,6 +141,8 @@ export class BoardAnimator {
       else if (it.t === "excavate") s = "draw";
       else if (it.t === "pulse") s = it.tone === "activate" ? "chain" : it.tone === "resolve" ? "resolve" : null;
       else if (it.t === "rotate" && it.reveal) s = "summon";
+      else if (it.t === "summon") s = it.how === "set" ? "set" : "summon";
+      else if (it.t === "activate") s = "chain";
       if (s && !seen.has(s)) {
         seen.add(s);
         const name = s;
@@ -232,6 +246,9 @@ export class BoardAnimator {
       l.setAttribute("aria-hidden", "true");
       this.root.appendChild(l);
     }
+    // effects are placed in screen px: undo the duel page's zoom (uiScale.ts) for this layer
+    const z = uiZoom();
+    l.style.zoom = z === 1 ? "" : String(1 / z);
     return l;
   }
 
@@ -288,6 +305,13 @@ export class BoardAnimator {
     const ar = a.getBoundingClientRect();
     const tr = t?.getBoundingClientRect();
     if (!tr) return;
+    // a legendary monster's attack is a moment: the card first, then the strike
+    const data = code ? getCard(code) : null;
+    if (data && cardStars(data) === 3) {
+      const layer0 = this.layer();
+      const sp = layer0 ? this.wantSplash("always") : null;
+      if (layer0 && sp) delay = sfxv.splash(layer0, this.run.bind(this), { code: code!, name: data.name, kicker: this.kicker(data, targetUid ? "Attacks" : "Direct attack"), tone: "#ff6a3c", at: ar, ...this.splashAt(ar, "summon"), short: true }, delay);
+    }
     const p = center(ar), q = center(tr);
     const dx = (q.x - p.x) * 0.72, dy = (q.y - p.y) * (targetUid ? 0.72 : 0.5);
     this.arrow(p, q, delay);
@@ -420,6 +444,77 @@ export class BoardAnimator {
       { transform: "none" }, { offset: 0.2, transform: "translate(-4px, 1px)" }, { offset: 0.4, transform: "translate(4px, -1px)" },
       { offset: 0.6, transform: "translate(-3px, 0)" }, { offset: 0.8, transform: "translate(2px, 1px)" }, { transform: "none" },
     ], { duration: 320, easing: "ease-in-out" });
+  }
+
+  /** Whether this moment gets the card-art splash. `level`: "always" (legendary cards, bosses, Extra Deck
+   *  summons), "notable" (popular cards, staples: not in "short" mode or during a long combo), "none". */
+  private wantSplash(level: "always" | "notable" | "none"): "full" | "short" | null {
+    const mode = duelSettings().summonFx;
+    if (mode === "off" || level === "none") return null;
+    const now = performance.now();
+    this.splashes = this.splashes.filter((t) => now - t < SPLASH_WINDOW);
+    const busy = this.splashes.length >= SPLASH_BURST;
+    if ((mode === "short" || busy) && level !== "always") return null;
+    this.splashes.push(now);
+    return busy || mode === "short" ? "short" : "full";
+  }
+  /** "Staple · Synchro Summon" */
+  private kicker(card: ReturnType<typeof getCard>, what: string) {
+    const why = starLabel(card);
+    return why ? `${why} · ${what}` : what;
+  }
+  /** The middle of the field, and whether a card at `r` is on the viewer's (lower) half. */
+  private splashAt(r: DOMRect, what: "summon" | "activate"): { center: { x: number; y: number }; mine: boolean; style: sfxv.SplashStyle } {
+    const f = this.root?.querySelector(".duel-field")?.getBoundingClientRect();
+    const center = f ? { x: f.left + f.width / 2, y: f.top + f.height / 2 } : { x: innerWidth / 2, y: innerHeight / 2 };
+    const s = duelSettings();
+    return { center, mine: r.top + r.height / 2 >= center.y, style: what === "summon" ? s.summonSplash : s.activateSplash };
+  }
+
+  private summon(it: Extract<Intent, { t: "summon" }>, delay: number, pendulumBatch: boolean) {
+    const layer = this.layer();
+    const card = this.el(it.uid);
+    const r = (card ?? this.zoneEl(it.zone))?.getBoundingClientRect();
+    if (!layer || !r?.width) return;
+    if (duelSettings().summonFx === "off") { this.pulse(it.uid, "summon", delay); return; }
+    const data = it.code ? getCard(it.code) : null;
+    const kind = sfxv.summonKindOf(data, it.how, it.from, pendulumBatch);
+    const big = sfxv.isBig(data);
+    const extra = kind === "fusion" || kind === "synchro" || kind === "xyz" || kind === "link" || kind === "ritual" || kind === "pendulum";
+    // the card has just landed (it flew in from the hand / Extra Deck): start once it's there
+    let at = delay + MOVE_MS - 40;
+    const run = this.run.bind(this);
+    // splash for the cards that are a moment: legendary / notable ones, bosses, Extra Deck summons
+    const stars = cardStars(data);
+    const level = it.code <= 0 || kind === "set" ? "none" : stars === 3 || big || extra ? "always" : stars === 2 ? "notable" : "none";
+    const sp = this.wantSplash(level);
+    if (sp && data) {
+      at = sfxv.splash(layer, run, { code: it.code, name: data.name, kicker: this.kicker(data, sfxv.SUMMON_LABEL[kind]), tone: sfxv.toneOf(kind), at: r, ...this.splashAt(r, "summon"), big: big || stars === 3, short: sp === "short" }, at);
+    }
+    sfxv.summon(layer, run, r, kind, at, { card, stage: this.root?.querySelector(".duel-board-wrap"), big, markers: data?.linkmarkers });
+  }
+
+  private activate(it: Extract<Intent, { t: "activate" }>, delay: number) {
+    const layer = this.layer();
+    const card = this.el(it.uid);
+    const r = (card ?? this.zoneEl(it.zone))?.getBoundingClientRect();
+    if (!layer || !r?.width) return;
+    if (duelSettings().summonFx === "off") { this.pulse(it.uid, "activate", delay); return; }
+    const data = it.code ? getCard(it.code) : null;
+    const kind = sfxv.activateKindOf(data);
+    const tone = sfxv.toneOf(kind, data);
+    const run = this.run.bind(this);
+    let at = delay;
+    // only cards that are a moment get the splash (later chain links a shorter one)
+    const stars = cardStars(data);
+    const sp = data ? this.wantSplash(stars === 3 ? "always" : stars === 2 ? "notable" : "none") : null;
+    if (sp && data) {
+      const what = it.link > 1 ? `Chain ${it.link} · ${sfxv.ACTIVATE_LABEL[kind]}` : sfxv.ACTIVATE_LABEL[kind];
+      at = sfxv.splash(layer, run, { code: it.code, name: data.name, kicker: this.kicker(data, what), tone, at: r, ...this.splashAt(r, "activate"), big: stars === 3 && it.link === 1, short: sp === "short" || it.link > 1 }, at);
+    }
+    sfxv.activate(layer, run, r, kind, at, { card, tone });
+    const prev = it.prev ? this.el(it.prev)?.getBoundingClientRect() ?? null : null;
+    sfxv.chainLine(layer, run, prev?.width ? prev : null, r, it.link, at);
   }
 
   private pulse(uid: string, tone: "activate" | "summon" | "target" | "resolve", delay: number) {

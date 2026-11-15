@@ -5,7 +5,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api.ts";
 import type { RoomInfo } from "../../shared/duel.ts";
 import type { DuelMode } from "../../shared/types.ts";
-import { CHESS_CHOICES, DEFAULT_SETTINGS, LP_CHOICES, TIMER_CHOICES, cleanSettings, formatTimeControl, formatTimer, parseTimeControl, timeControlValue, type RoomSettings } from "../../shared/roomSettings.ts";
+import { DEFAULT_SETTINGS, cleanSettings, formatTimeControl, type RoomSettings } from "../../shared/roomSettings.ts";
+import { RoomRules } from "../components/duel/RoomRules.tsx";
 import { DeckSelect, NameForm, useDecks } from "../components/duel/DeckPicker.tsx";
 import { useDuelIdentity } from "../components/duel/useDuel.ts";
 import { EngineSupportNote, skillCards, useEngineSupport } from "../components/engine/EngineSupportNote.tsx";
@@ -67,14 +68,14 @@ export function LobbyPage() {
   const [mode, setMode] = useState<DuelMode>("engine");
   // room settings, remembered for next time
   const [settings, setSettingsState] = useState<RoomSettings>(() => {
-    try { return cleanSettings(JSON.parse(localStorage.getItem("ygo.roomSettings") ?? "null") ?? DEFAULT_SETTINGS); } catch { return DEFAULT_SETTINGS; }
+    try { return cleanSettings(JSON.parse(localStorage.getItem("ygo.roomSettings.v2") ?? "null") ?? DEFAULT_SETTINGS); } catch { return DEFAULT_SETTINGS; }
   });
   const setSetting = <K extends keyof RoomSettings>(k: K, v: RoomSettings[K]) => setSettingsState((cur) => {
     const next = { ...cur, [k]: v };
-    try { localStorage.setItem("ygo.roomSettings", JSON.stringify(next)); } catch { /* private mode */ }
+    try { localStorage.setItem("ygo.roomSettings.v2", JSON.stringify(next)); } catch { /* private mode */ }
     return next;
   });
-  const saveSettings = (next: RoomSettings) => { try { localStorage.setItem("ygo.roomSettings", JSON.stringify(next)); } catch { /* private mode */ } return next; };
+  const saveSettings = (next: RoomSettings) => { try { localStorage.setItem("ygo.roomSettings.v2", JSON.stringify(next)); } catch { /* private mode */ } return next; };
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [renaming, setRenaming] = useState(false);
@@ -136,7 +137,7 @@ export function LobbyPage() {
     try {
       const r = await api<{ roomId: string }>("/api/rooms", {
         method: "POST",
-        json: { mode: "engine", name: "Demo duel", demo: true, bot: { deckId: bot.id, main: bot.main, extra: bot.extra, side: bot.side, rarity: bot.rarity } },
+        json: { mode: "engine", name: "Demo duel", demo: true, bot: { deckId: bot.id, main: bot.main, extra: bot.extra, side: bot.side, rarity: bot.rarity, sleeve: bot.sleeve } },
       });
       navigate(`/duel/${r.roomId}?join=1&autopilot=1&demo=1`);   // joins with the Synchro demo deck
     } catch (x) {
@@ -153,7 +154,7 @@ export function LobbyPage() {
       const r = await api<{ roomId: string }>("/api/rooms", {
         method: "POST",
         // your room settings apply (time control, starting LP); a bot room stays unlisted
-        json: { mode: "engine", name: `${identity.name} vs Bot`, settings: { ...settings, visibility: "unlisted" }, bot: { deckId: botDeck.id, main: botDeck.main, extra: botDeck.extra, side: botDeck.side, rarity: botDeck.rarity } },
+        json: { mode: "engine", name: `${identity.name} vs Bot`, settings: { ...settings, visibility: "unlisted" }, bot: { deckId: botDeck.id, main: botDeck.main, extra: botDeck.extra, side: botDeck.side, rarity: botDeck.rarity, sleeve: botDeck.sleeve } },
       });
       navigate(`/duel/${r.roomId}?join=1`);
     } catch (x) {
@@ -234,38 +235,7 @@ export function LobbyPage() {
           </div>
           <details className="lobby-settings">
             <summary>Room settings <span className="muted">· {formatTimeControl(settings)} · {settings.startingLP} LP · {settings.visibility === "public" ? "public" : "unlisted"}{settings.spectators ? "" : " · no spectators"}</span></summary>
-            <div className="lobby-settings-grid">
-              <label className="lobby-field">
-                <span>Time control</span>
-                <select value={timeControlValue(settings)} onChange={(e) => setSettingsState((s) => saveSettings({ ...s, ...parseTimeControl(e.target.value) }))}>
-                  <option value="off">No timer</option>
-                  <optgroup label="Chess clock: a bank for the duel + seconds per decision">
-                    {CHESS_CHOICES.map(([b, i]) => <option key={`${b}+${i}`} value={`chess:${b}+${i}`}>{b / 60} min + {i}s per decision</option>)}
-                  </optgroup>
-                  <optgroup label="Per turn: a fresh clock every turn">
-                    {TIMER_CHOICES.filter(Boolean).map((t) => <option key={t} value={`turn:${t}`}>{formatTimer(t)} per turn</option>)}
-                  </optgroup>
-                </select>
-                <small className="muted">Only the player who has to decide loses time (including chain responses on the other player's turn). Running out loses the duel.</small>
-              </label>
-              <label className="lobby-field">
-                <span>Starting LP</span>
-                <select value={settings.startingLP} onChange={(e) => setSetting("startingLP", Number(e.target.value))}>
-                  {LP_CHOICES.map((lp) => <option key={lp} value={lp}>{lp.toLocaleString()}</option>)}
-                </select>
-              </label>
-              <label className="lobby-field">
-                <span>Who can find it</span>
-                <select value={settings.visibility} onChange={(e) => setSetting("visibility", e.target.value === "unlisted" ? "unlisted" : "public")}>
-                  <option value="public">Public: listed in the lobby</option>
-                  <option value="unlisted">Unlisted: only people with the link</option>
-                </select>
-              </label>
-              <label className="lobby-check">
-                <input type="checkbox" checked={settings.spectators} onChange={(e) => setSetting("spectators", e.target.checked)} />
-                Allow spectators
-              </label>
-            </div>
+            <RoomRules value={settings} onChange={(next) => setSettingsState(saveSettings(next))} />
           </details>
           {mode === "engine" && deck && mySkills.length > 0 && <small className="lobby-error">Your deck can't be used in rules-enforced duels (see above). Pick another deck, or Manual.</small>}
           <button className="primary" disabled={busy || !identity || !deck || (mode === "engine" && mySkills.length > 0)}>{busy ? "Creating…" : "Create and sit down"}</button>

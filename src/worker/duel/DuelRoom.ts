@@ -4,7 +4,7 @@ import type {
   BoardState, ClientMsg, DuelStage, EngineHostStart, RoomInfo, RpsChoice, ServerMsg, SessionInfo,
 } from "../../shared/duel.ts";
 import type { DuelMode } from "../../shared/types.ts";
-import { DEFAULT_SETTINGS, type RoomSettings } from "../../shared/roomSettings.ts";
+import { DEFAULT_SETTINGS, cleanSettings, formatTimeControl, type RoomSettings } from "../../shared/roomSettings.ts";
 import { skillCardProblem } from "./engine/deckCheck.ts";
 import { validateDeck, type DuelAction, type Seat } from "../../shared/duelActions.ts";
 import { cryptoRng, createBoard } from "./manual/board.ts";
@@ -18,7 +18,9 @@ import { eventsFor } from "./engine/EngineDuel.ts";
 import type { EngineEvent } from "../../shared/enginePrompts.ts";
 import { stepClock } from "../../shared/clock.ts";
 import { cleanRarities, type RarityMap } from "../../shared/rarity.ts";
-import { applyChain, type OpenChainLink } from "../../shared/chain.ts";
+import { DEFAULT_SLEEVE, cleanSleeve } from "../../shared/sleeves.ts";
+import type { OpenChainLink } from "../../shared/chain.ts";
+import { publicChain, publicDeciding } from "./engine/publicView.ts";
 
 /** DO storage key of the engine snapshot (seed + decks + responses; replayed on wake). */
 const ENGINE_KEY = "engine";
@@ -57,7 +59,7 @@ const STALE_MS = 75_000;
 interface SeatState {
   id: string;
   name: string;
-  deck: { deckId: string; main: number[]; extra: number[]; side: number[]; rarity?: RarityMap } | null;
+  deck: { deckId: string; main: number[]; extra: number[]; side: number[]; rarity?: RarityMap; sleeve?: string } | null;
   connected: boolean;
   leftAt: number | null;
   bot?: boolean;
@@ -128,7 +130,7 @@ export class DuelRoom extends DurableObject<Env> {
     /** Demo duel vs the bot: decks keep their order (combo pieces in the opening hands). */
     demo?: boolean;
     /** Quick duel: seat a bot with this deck straight away (rules-enforced only). */
-    bot?: { deckId: string; main: number[]; extra: number[]; side: number[]; rarity?: RarityMap };
+    bot?: { deckId: string; main: number[]; extra: number[]; side: number[]; rarity?: RarityMap; sleeve?: string };
   }): Promise<void> {
     if (this.room) throw new Error("room already exists");
     const { bot, ...info } = input;
@@ -418,11 +420,35 @@ export class DuelRoom extends DurableObject<Env> {
         if (room.stage === "finished") this.resetToLobby();
         room.seats[BOT_SEAT] = {
           id: BOT_ID, name: "Bot", connected: true, leftAt: null, bot: true,
-          deck: { deckId: String(msg.deckId ?? "").slice(0, 64), main: msg.main, extra: msg.extra, side: msg.side ?? [], rarity: cleanRarities((msg as { rarity?: unknown }).rarity) },
+          deck: { deckId: String(msg.deckId ?? "").slice(0, 64), main: msg.main, extra: msg.extra, side: msg.side ?? [], rarity: cleanRarities((msg as { rarity?: unknown }).rarity), sleeve: cleanSleeve((msg as { sleeve?: unknown }).sleeve) },
         };
         this.systemLine("A bot took the empty seat. (It plays random legal moves.)");
         this.advanceLobby();
         await this.botActs();
+        break;
+      }
+      case "settings": {
+        // the host (seat 0) sets the room's rules any time before a duel starts
+        const p = this.seated(a);
+        if (p !== HOST_SEAT || room.seats[p]?.bot) throw new RoomError("Only the room's host can change its rules.");
+        if (room.stage === "duel") throw new RoomError("The rules can be changed between duels.");
+        const before = this.settings(), next = cleanSettings(msg.settings);
+        if (JSON.stringify(before) === JSON.stringify(next)) return;
+        room.settings = next;
+        const what: string[] = [];
+        if (formatTimeControl(before) !== formatTimeControl(next)) what.push(`time: ${formatTimeControl(next)}`);
+        if (before.startingLP !== next.startingLP) what.push(`${next.startingLP.toLocaleString("en-US")} LP`);
+        if (before.spectators !== next.spectators) what.push(next.spectators ? "spectators allowed" : "no spectators");
+        if (before.visibility !== next.visibility) what.push(next.visibility === "public" ? "listed in the lobby" : "unlisted");
+        if (what.length) this.systemLine(`${a.name} changed the room's rules: ${what.join(", ")}.`);
+        break;
+      }
+      case "sleeve": {
+        // cosmetic: the back of your cards, any time (everyone sees it)
+        const p = this.seated(a);
+        const deck = room.seats[p]?.deck;
+        if (!deck) throw new RoomError("Choose a deck first.");
+        deck.sleeve = cleanSleeve(msg.sleeve);
         break;
       }
       case "removeBot": {
@@ -464,7 +490,7 @@ export class DuelRoom extends DurableObject<Env> {
     if (!a.id) throw new RoomError("Pick a display name in the lobby before joining.");
     const err = validateDeck(msg) ?? (room.mode === "engine" ? await skillCardProblem(this.env.DB, msg) : null);
     if (err) throw new RoomError(err);
-    const deck = { deckId: String(msg.deckId ?? "").slice(0, 64), main: msg.main, extra: msg.extra, side: msg.side ?? [], rarity: cleanRarities((msg as { rarity?: unknown }).rarity) };
+    const deck = { deckId: String(msg.deckId ?? "").slice(0, 64), main: msg.main, extra: msg.extra, side: msg.side ?? [], rarity: cleanRarities((msg as { rarity?: unknown }).rarity), sleeve: cleanSleeve((msg as { sleeve?: unknown }).sleeve) };
     let seat = a.seat;
     if (seat === null) {
       if (room.stage !== "lobby" && room.stage !== "finished") throw new RoomError("This duel has already started — you can spectate.");
@@ -675,7 +701,7 @@ export class DuelRoom extends DurableObject<Env> {
     if (room.board) room.board.log = log;
     room.prompts = u.prompts ?? [];
     // the open chain as everyone sees it (public events: seat 0's view with seat 0's secrets removed)
-    if (u.events) room.chain = applyChain(room.chain ?? [], eventsFor(u.events[0], 1));
+    if (u.events) room.chain = publicChain(room.chain ?? [], u.events);
     if (u.finished) room.chain = [];
     if (u.finished) {
       this.finish(u.finished.winner, u.finished.reason);
@@ -942,6 +968,7 @@ export class DuelRoom extends DurableObject<Env> {
       name: s.name, connected: s.connected, ready: !!s.deck, bot: s.bot || undefined,
       deck: s.deck ? { main: s.deck.main.length, extra: s.deck.extra.length, side: s.deck.side.length } : undefined,
       rarity: s.deck?.rarity && Object.keys(s.deck.rarity).length ? s.deck.rarity : undefined,
+      sleeve: s.deck?.sleeve && s.deck.sleeve !== DEFAULT_SLEEVE ? s.deck.sleeve : undefined,
     }) as SessionInfo["seats"];
     const showNotice = room.mode === "engine" && !engineAvailable();
     return {
@@ -963,9 +990,7 @@ export class DuelRoom extends DurableObject<Env> {
       switchVotes: room.mode === "engine" ? room.switchVotes : undefined,
       engineHost: room.mode === "engine" && this.hostMode() ? HOST_SEAT : undefined,
       // what the duel is waiting on, for everyone (the hint only: never the cards)
-      deciding: room.mode === "engine" && room.stage === "duel" && room.prompts?.[0]
-        ? { seat: room.prompts[0].seat, kind: String((room.prompts[0].prompt as { kind?: string }).kind ?? ""), hint: (room.prompts[0].prompt as { hint?: string }).hint }
-        : undefined,
+      deciding: room.mode === "engine" && room.stage === "duel" ? publicDeciding(room.prompts) : undefined,
       chain: room.mode === "engine" && room.stage === "duel" && room.chain?.length ? room.chain : undefined,
     };
   }

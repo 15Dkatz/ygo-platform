@@ -1,0 +1,15 @@
+/* Room rules editor (RoomRules.tsx): lobby "Create a room" and the duel room. */
+.rr { display: flex; flex-direction: column; gap: 9px; font-size: 13px; }
+.rr-row { display: grid; grid-template-columns: 90px 1fr; gap: 8px; align-items: center; }
+.rr-label { color: var(--muted); font-size: 12px; }
+.rr-seg, .rr-chips { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.rr-seg button, .rr-chips button { padding: 4px 10px; font-size: 12px; border-radius: 999px; }
+.rr-seg button.is-on, .rr-chips button.is-on { background: var(--accent); color: var(--accent-fg, #fff); border-color: transparent; }
+.rr.is-readonly button:not(.is-on) { opacity: .45; }
+.rr.is-readonly button:disabled.is-on { opacity: 1; }
+.rr-chip-custom { font-size: 12px; padding: 4px 10px; border-radius: 999px; background: var(--accent); color: var(--accent-fg, #fff); }
+.rr-custom, .rr-duration { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.rr-num { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
+.rr-num input { padding: 3px 6px; font-size: 13px; }
+.rr-help { font-size: 11.5px; }
+@media (max-width: 720px) { .rr-row { grid-template-columns: 1fr; gap: 4px; } }

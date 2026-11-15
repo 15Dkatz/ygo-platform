@@ -72,6 +72,7 @@ export class EngineDuel {
   private handle: ReturnType<OcgCoreSync["createDuel"]> = null;
   private replayPos = 0;
   private pendingHint: string | undefined;
+  private pendingHintPublic = false;
   private lastSelect: OcgMessage | null = null;
   private turnPlayerTeam = 0;
 
@@ -241,10 +242,15 @@ export class EngineDuel {
         // The core listed a choice whose activation then failed its own checks (cost, zones...):
         // it asks again, so tell the player why the same question came back.
         this.pendingHint = "That choice can't be made right now. Choose again.";
+        this.pendingHintPublic = true;
         if (this.lastSelect) this.setPrompt(this.lastSelect);
         return;
       case OcgMessageType.HINT:
-        if (m.hint_type === OcgHintType.SELECTMSG) this.pendingHint = hintText(Number(m.hint), (d) => this.describe(d), (c) => this.cardName(c));
+        if (m.hint_type === OcgHintType.SELECTMSG) {
+          this.pendingHint = hintText(Number(m.hint), (d) => this.describe(d), (c) => this.cardName(c));
+          // system strings (< 10000) are generic wording; anything else names a card
+          this.pendingHintPublic = Number(m.hint) > 0 && Number(m.hint) < 10_000;
+        }
         else if (m.hint_type === OcgHintType.MESSAGE || m.hint_type === OcgHintType.EVENT) {
           this.events.push({ e: "hint", player: ctx.seatOf(m.player), text: hintText(Number(m.hint), (d) => this.describe(d), (c) => this.cardName(c)) });
         }
@@ -311,8 +317,9 @@ export class EngineDuel {
     try { this.snapshotZones(); } catch (e) { console.warn("zone snapshot", e); }
     const body = decodePrompt(this.ctx, m)!;
     const player = this.ctx.seatOf(promptTeam(m));
-    this.prompt = { ...body, id: this.saved.responses.length, player, ...(this.pendingHint ? { hint: this.pendingHint } : {}) } as EnginePrompt;
+    this.prompt = { ...body, id: this.saved.responses.length, player, ...(this.pendingHint ? { hint: this.pendingHint, ...(this.pendingHintPublic ? { hintIsPublic: true } : {}) } : {}) } as EnginePrompt;
     this.pendingHint = undefined;
+    this.pendingHintPublic = false;
     this.status.waitingFor = player;
   }
 
@@ -407,7 +414,8 @@ export class EngineDuel {
 
 function visibleRef(c: EngineCardRef, viewer: Seat): boolean {
   switch (c.location) {
-    case "gy": case "overlay": case "banished": return true;   // (face-down banishment is rare; not tracked)
+    case "gy": case "overlay": return true;
+    case "banished": return c.position !== "faceDown" || c.controller === viewer;   // face-down banishment stays private
     case "deck": return false;
     case "hand": case "extra": return c.controller === viewer;
     default: return c.position !== "faceDown" && c.position !== "faceDownDef" || c.controller === viewer;

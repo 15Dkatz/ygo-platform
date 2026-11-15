@@ -22,6 +22,12 @@ export interface DuelSettings {
   /** Animations: how the card whose effect is resolving is marked, and in what colour. */
   resolveFx: ResolveFx;
   resolveColor: ResolveColor;
+  /** Summons and activations: "full" (signature effects + card-art splash), "short" (effects, splash only for
+   *  big moments), "off" (a plain glow). */
+  summonFx: SummonFxMode;
+  /** How the card itself is shown before its summon, and before its activation (different on purpose). */
+  summonSplash: SplashStyle;
+  activateSplash: SplashStyle;
   /** The big "CHAIN?" / "YOUR MOVE" callouts. */
   callouts: boolean;
   /** Red / green / accent flashes around the screen edge (damage, heals, callouts). */
@@ -48,6 +54,14 @@ export interface DuelSettings {
 export const RESOLVE_FX = ["rings", "sparkle", "fireworks", "aura", "powerup", "holy", "void", "electric", "circle", "frost", "minimal"] as const;
 export type ResolveFx = (typeof RESOLVE_FX)[number];
 export const RESOLVE_FX_LABEL: Record<ResolveFx, string> = { rings: "Shockwave rings", sparkle: "Sparkles", fireworks: "Fireworks", aura: "Flame aura", powerup: "Power-up aura (energy + lightning)", holy: "Holy light (pillar + halo)", void: "Dark vortex", electric: "Electric current", circle: "Summoning circle", frost: "Frost crystals", minimal: "Minimal outline" };
+export const SPLASH_STYLES = ["showcase", "portal", "banner"] as const;
+export type SplashStyle = (typeof SPLASH_STYLES)[number];
+export const SPLASH_STYLE_LABEL: Record<SplashStyle, string> = {
+  showcase: "Showcase (the card rises out of its zone)", portal: "Portal (its art opens over the zone)", banner: "Banner (its art sweeps across the board)",
+};
+export const SUMMON_FX = ["full", "short", "off"] as const;
+export type SummonFxMode = (typeof SUMMON_FX)[number];
+export const SUMMON_FX_LABEL: Record<SummonFxMode, string> = { full: "Full (effects + card art splash)", short: "Short (splash only for big moments)", off: "Off (a simple glow)" };
 export const RESOLVE_COLORS = ["theme", "gold", "crimson", "azure", "emerald", "rainbow"] as const;
 export type ResolveColor = (typeof RESOLVE_COLORS)[number];
 export const RESOLVE_COLOR_LABEL: Record<ResolveColor, string> = { theme: "Theme colour", gold: "Gold", crimson: "Crimson", azure: "Azure", emerald: "Emerald", rainbow: "Rainbow" };
@@ -69,7 +83,7 @@ export const TILT_MAX = 60;
 export const DEFAULT_SCALE = { field: 1.25, hand: 1.2 } as const;
 export const DEFAULT_TILT = 28;
 const DEFAULTS: DuelSettings = { tilt: DEFAULT_TILT, stats: true, matchup: true, confirmEnd: true, fieldScale: DEFAULT_SCALE.field, handScale: DEFAULT_SCALE.hand, autoPlace: true, dragAttack: true, calmPanels: true,
-  resolveFx: "rings", resolveColor: "theme", callouts: true, edgeFlash: true, labelShimmer: true, heartbeat: true,
+  resolveFx: "rings", resolveColor: "theme", summonFx: "full", summonSplash: "showcase", activateSplash: "portal", callouts: true, edgeFlash: true, labelShimmer: true, heartbeat: true,
   ...(Object.fromEntries(Object.entries(LAYOUT).map(([k, v]) => [k, v.def])) as Record<LayoutKey, number>) };
 const KEY = "ygo.duelSettings";
 
@@ -86,6 +100,9 @@ function load(): DuelSettings {
     }
     if (!(RESOLVE_FX as readonly string[]).includes(s.resolveFx)) s.resolveFx = DEFAULTS.resolveFx;
     if (!(RESOLVE_COLORS as readonly string[]).includes(s.resolveColor)) s.resolveColor = DEFAULTS.resolveColor;
+    if (!(SUMMON_FX as readonly string[]).includes(s.summonFx)) s.summonFx = DEFAULTS.summonFx;
+    if (!(SPLASH_STYLES as readonly string[]).includes(s.summonSplash)) s.summonSplash = DEFAULTS.summonSplash;
+    if (!(SPLASH_STYLES as readonly string[]).includes(s.activateSplash)) s.activateSplash = DEFAULTS.activateSplash;
     return { ...s, tilt: Math.min(TILT_MAX, Math.max(0, Number(s.tilt) || 0)), fieldScale: clamp(s.fieldScale, SCALE_RANGE.field, DEFAULT_SCALE.field), handScale: clamp(s.handScale, SCALE_RANGE.hand, DEFAULT_SCALE.hand) };
   } catch { return DEFAULTS; }
 }

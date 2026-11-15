@@ -90,7 +90,7 @@ describe("animation intents", () => {
     ], prev, next);
     expect(ints[0]).toMatchObject({ t: "move", from: { zone: "deck:0:" }, to: { uid: "e0-2-2" }, code: 55, faceUp: true });
     expect(ints[1]).toMatchObject({ t: "move", from: { uid: "e0-2-1" }, to: { uid: "e0-4-2", zone: "monster:0:2" }, flip: true, faceUp: true });
-    expect(ints[2]).toMatchObject({ t: "pulse", uid: "e0-4-2" });
+    expect(ints[2]).toMatchObject({ t: "summon", uid: "e0-4-2", how: "normal", from: "hand", side: 0 });
     expect(ints[3]).toMatchObject({ t: "move", from: { uid: "e1-4-0" }, to: { zone: "gy:1:" }, flip: false });
     expect(ints[4]).toEqual({ t: "shuffle", zone: "deck:1:" });
   });

@@ -1,0 +1,79 @@
+/* Glass theme for every modal, dialog, popover and menu: translucent panels over a light, blurred
+   backdrop, an accent edge and glow, display-font headings. Loaded last (main.tsx) so it wins. */
+:root {
+  --glass-bg: color-mix(in srgb, var(--surface) 68%, transparent);
+  --glass-bg-strong: color-mix(in srgb, var(--surface) 84%, transparent);
+  --glass-edge: color-mix(in srgb, var(--accent) 34%, var(--border));
+  --glass-blur: blur(18px) saturate(1.45);
+  --glass-shadow: 0 26px 70px rgb(0 0 0 / .42), 0 0 46px color-mix(in srgb, var(--accent) 13%, transparent),
+    inset 0 1px 0 rgb(255 255 255 / .12), inset 0 0 0 1px rgb(255 255 255 / .03);
+  --glass-scrim: color-mix(in srgb, var(--bg) 22%, rgb(4 6 14 / .3));
+}
+
+/* ---------- backdrops: lighter, blurred, the page still shows through ---------- */
+html .duel-modal-backdrop, html .th-backdrop, html .sl-picker-backdrop, html .duel-deckedit {
+  background: radial-gradient(120% 90% at 50% 40%, transparent, var(--glass-scrim)), var(--glass-scrim);
+  backdrop-filter: blur(3px) saturate(1.1);
+  animation: glass-scrim-in .2s ease-out both;
+}
+html .card-dialog::backdrop { background: var(--glass-scrim); backdrop-filter: blur(3px); }
+html .duel-end { background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--end-tone, var(--accent)) 26%, transparent), color-mix(in srgb, var(--bg) 30%, rgb(0 0 0 / .45)) 70%); backdrop-filter: blur(4px); }
+
+/* ---------- panels ---------- */
+html .duel-modal, html .th-dialog, html .card-dialog, html .sl-picker, html .duel-end-card, html .duel-settings-panel,
+html .upload-offer, html .duel-menu, html .duel-engine-pos, html .duel-engine-dialog .engine-prompt, html .duel-reveal, html .duel-deckedit-box {
+  background:
+    linear-gradient(160deg, rgb(255 255 255 / .07), transparent 38%),
+    radial-gradient(120% 60% at 0% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 60%),
+    var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-edge);
+  border-radius: 16px;
+  box-shadow: var(--glass-shadow);
+  color: var(--fg);
+}
+html .duel-end-card { border: 1px solid color-mix(in srgb, var(--end-tone) 60%, transparent); box-shadow: var(--glass-shadow), 0 0 80px color-mix(in srgb, var(--end-tone) 30%, transparent); }
+/* long, busy pages stay more solid so they read */
+html .duel-deckedit-box, html .card-dialog { background: linear-gradient(160deg, rgb(255 255 255 / .05), transparent 30%), var(--glass-bg-strong); }
+html .duel-menu, html .duel-settings-panel { border-radius: 14px; }
+
+/* the ones laid out in the page flow anchor their top light (the rest are fixed / absolute already) */
+html .duel-modal, html .th-dialog, html .sl-picker, html .duel-end-card, html .duel-deckedit-box, html .duel-engine-dialog .engine-prompt { position: relative; }
+
+/* a light catching the top edge */
+html .duel-modal::before, html .th-dialog::before, html .sl-picker::before, html .duel-end-card::before, html .duel-settings-panel::before,
+html .upload-offer::before, html .duel-engine-dialog .engine-prompt::before, html .duel-deckedit-box::before {
+  content: ""; position: absolute; left: 12%; right: 12%; top: -1px; height: 1px; pointer-events: none;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 85%, #fff), transparent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+/* entrance */
+html .duel-modal, html .th-dialog, html .sl-picker, html .duel-engine-dialog .engine-prompt, html .duel-deckedit-box { animation: glass-in .26s cubic-bezier(.2, .9, .3, 1.1) both; }
+html .duel-settings-panel, html .duel-menu { animation: glass-drop .18s ease-out both; }
+
+/* ---------- headings and chrome ---------- */
+html .duel-modal-head, html .th-head { border-bottom: 1px solid color-mix(in srgb, var(--glass-edge) 60%, transparent); position: relative; }
+html .duel-modal-head h2, html .th-head h2, html .duel-settings-panel h3 {
+  font-family: var(--font-field, var(--font-display, inherit)); letter-spacing: .04em; font-size: 18px;
+  background: linear-gradient(90deg, var(--fg), color-mix(in srgb, var(--accent) 75%, var(--fg))); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+html .duel-modal-head > button, html .th-x {
+  width: 30px; height: 30px; padding: 0; display: grid; place-items: center; border-radius: 50%; font-size: 14px;
+  background: color-mix(in srgb, var(--fg) 8%, transparent); border: 1px solid color-mix(in srgb, var(--fg) 14%, transparent); transition: background .15s, transform .15s;
+}
+html .duel-modal-head > button:hover, html .th-x:hover { background: color-mix(in srgb, var(--danger) 30%, transparent); transform: rotate(90deg); }
+html .duel-menu-title { border-bottom-color: color-mix(in srgb, var(--glass-edge) 60%, transparent); }
+html .duel-menu-item { border-radius: 8px; }
+html .duel-menu-item:hover, html .duel-menu-item:focus-visible { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+
+/* inner surfaces of glass panels go translucent too */
+html .sl-picker-preview { background: radial-gradient(120% 80% at 50% 30%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 70%); }
+html .duel-end-setup .pd-panel, html .duel-end-setup .pd-seat { background: color-mix(in srgb, var(--surface) 45%, transparent); border-color: color-mix(in srgb, var(--glass-edge) 70%, transparent); }
+
+@keyframes glass-in { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes glass-drop { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+@keyframes glass-scrim-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  html .duel-modal, html .th-dialog, html .sl-picker, html .duel-engine-dialog .engine-prompt, html .duel-deckedit-box, html .duel-settings-panel, html .duel-menu { animation: none; }
+}

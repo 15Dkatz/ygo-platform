@@ -77,7 +77,7 @@ export interface TurnClock {
 
 /** Every websocket message is one JSON envelope. Phases may add new `t` values. */
 export type ClientMsg =
-  | { t: "join"; deckId: string; main: number[]; extra: number[]; side: number[]; rarity?: Record<string, import("./rarity.ts").Rarity> }
+  | { t: "join"; deckId: string; main: number[]; extra: number[]; side: number[]; rarity?: Record<string, import("./rarity.ts").Rarity>; sleeve?: string }
   | { t: "chat"; text: string }
   | { t: "action"; action: unknown }          // manual-mode board action (phase 3 defines)
   | { t: "respond"; response: unknown }       // answer to an engine prompt (phase 4 defines)
@@ -90,8 +90,11 @@ export type ClientMsg =
   | { t: "rematch" }                           // after a finished duel; both must ask
   | { t: "leave" }                             // give up the seat (before the duel) / forfeit (during)
   // --- additive (bot opponent, rules-enforced rooms): only the host (seat 0), before the duel ---
-  | { t: "addBot"; deckId: string; main: number[]; extra: number[]; side: number[]; rarity?: Record<string, import("./rarity.ts").Rarity> }
+  | { t: "addBot"; deckId: string; main: number[]; extra: number[]; side: number[]; rarity?: Record<string, import("./rarity.ts").Rarity>; sleeve?: string }
   | { t: "removeBot" }
+  // --- additive (room setup) ---
+  | { t: "settings"; settings: unknown }      // host only, between duels: time control, LP, who can join/watch
+  | { t: "sleeve"; sleeve: string }           // your card sleeve (cosmetic, any time)
   // --- additive (host-runs-rules mode): only accepted from the host's socket ---
   | { t: "hostUpdate"; update: unknown; snapshot: unknown }   // one engine step, unmasked (the server masks per viewer);
                                                               // update.events (optional) = [seat 0's, seat 1's] masked events
@@ -145,6 +148,8 @@ export interface SeatInfo {
   deck?: { main: number; extra: number; side: number };
   /** Card rarities of this player's deck (cosmetic foils; everyone sees them). */
   rarity?: Record<string, import("./rarity.ts").Rarity>;
+  /** Card sleeve of this player's deck (everyone sees it). */
+  sleeve?: string;
 }
 
 export interface SessionInfo {

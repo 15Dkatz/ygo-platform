@@ -1,0 +1,144 @@
+/* The duel log on the board (DuelLog.tsx): a quiet timeline. A thin line runs down the left; each event
+   is a small dot on it in the colour of whoever did it; turns are typographic headers on the line. */
+.dl {
+  --dl-you: var(--accent); --dl-opp: #ef6a7e; --dl-gold: #d9b45c; --dl-line: color-mix(in srgb, var(--fg) 14%, transparent);
+  display: flex; flex-direction: column; min-height: 0; border-radius: 14px; overflow: hidden;
+  background: color-mix(in srgb, var(--surface) 58%, transparent); backdrop-filter: blur(12px) saturate(1.2);
+  border: 1px solid color-mix(in srgb, var(--fg) 9%, transparent);
+  box-shadow: 0 12px 32px rgb(0 0 0 / .25), inset 0 1px 0 rgb(255 255 255 / .05);
+}
+.dl-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px 6px; }
+.dl-title, .dl-size { padding: 0; border: 0; background: none; cursor: pointer; color: color-mix(in srgb, var(--fg) 55%, transparent); }
+.dl-title { font-size: 10.5px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+.dl-size { font-size: 10px; opacity: .7; }
+.dl-title:hover, .dl-size:hover { color: var(--fg); opacity: 1; }
+.dl-body { position: relative; min-height: 0; display: flex; flex-direction: column; }
+.dl-list {
+  position: relative; list-style: none; margin: 0; padding: 2px 12px 12px 24px; overflow-y: auto; overscroll-behavior: contain; max-height: calc(36 * var(--vh, 1vh));
+  display: flex; flex-direction: column; gap: 1px; scrollbar-width: thin; scrollbar-color: var(--dl-line) transparent;
+  /* fade the oldest lines out at the top */
+  mask-image: linear-gradient(180deg, transparent 0, #000 18px);
+}
+.dl.is-tall .dl-list { max-height: calc(66 * var(--vh, 1vh)); }
+/* the timeline */
+.dl-list::before { content: ""; position: absolute; left: 13px; top: 0; bottom: 0; width: 1px; background: var(--dl-line); }
+
+/* ---------- an event ---------- */
+.dl-line {
+  --dot: color-mix(in srgb, var(--fg) 35%, transparent);
+  position: relative; padding: 3px 4px; border-radius: 6px; font-size: 12.5px; line-height: 1.45; overflow-wrap: anywhere;
+  color: color-mix(in srgb, var(--fg) 80%, transparent); transition: background .15s;
+}
+.dl-line::before {
+  content: ""; position: absolute; left: -14px; top: calc(3px + .72em - 3px); width: 6px; height: 6px; border-radius: 50%;
+  background: var(--dot); box-shadow: 0 0 0 3px color-mix(in srgb, var(--surface) 90%, transparent);
+}
+.dl-line:hover { background: color-mix(in srgb, var(--fg) 5%, transparent); color: var(--fg); }
+.dl-line.is-you { --dot: var(--dl-you); }
+.dl-line.is-opp { --dot: var(--dl-opp); }
+.dl-who { font-weight: 600; }
+.dl-line.is-you .dl-who { color: color-mix(in srgb, var(--dl-you) 85%, var(--fg)); }
+.dl-line.is-opp .dl-who { color: color-mix(in srgb, var(--dl-opp) 85%, var(--fg)); }
+.dl-verb { font-weight: 600; color: var(--fg); }
+.dl-line .duel-log-card { font-weight: 600; color: var(--fg); cursor: pointer; border-bottom: 1px solid color-mix(in srgb, var(--fg) 22%, transparent); transition: border-color .15s, color .15s; }
+.dl-line .duel-log-card:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* turns: a header on the timeline */
+.dl-line.k-turn { --tone: color-mix(in srgb, var(--fg) 60%, transparent); margin: 12px 0 4px; padding: 0 4px; color: var(--fg); }
+.dl-line.k-turn:first-child { margin-top: 4px; }
+.dl-line.k-turn.is-you { --tone: var(--dl-you); }
+.dl-line.k-turn.is-opp { --tone: var(--dl-opp); }
+.dl-line.k-turn::before { left: -18px; top: 50%; width: 10px; height: 10px; margin-top: -5px; background: var(--surface); border: 2px solid var(--tone); box-shadow: 0 0 10px color-mix(in srgb, var(--tone) 55%, transparent); }
+.dl-line.k-turn:hover { background: none; }
+.dl-turn-text { display: flex; align-items: center; gap: 8px; }
+.dl-turn-text b { font-family: var(--font-field, var(--font-display, inherit)); font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--tone); white-space: nowrap; }
+.dl-turn-text span { font-size: 12px; font-weight: 600; color: color-mix(in srgb, var(--fg) 75%, transparent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dl-turn-text i { flex: 1; height: 1px; background: linear-gradient(90deg, color-mix(in srgb, var(--tone) 50%, transparent), transparent); }
+
+/* phases: small labels, no dot */
+.dl-line.k-phase { padding: 2px 4px 1px; font-size: 9.5px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: color-mix(in srgb, var(--fg) 40%, transparent); }
+.dl-line.k-phase::before { width: 3px; height: 3px; left: -12.5px; top: 50%; margin-top: -1.5px; box-shadow: none; }
+.dl-line.k-phase:hover { background: none; color: color-mix(in srgb, var(--fg) 60%, transparent); }
+
+/* chain links: a gold diamond and a gold link number */
+.dl-line.k-chain::before, .dl-line.k-negate::before { --dot: var(--dl-gold); border-radius: 1px; transform: rotate(45deg); width: 6px; height: 6px; }
+.dl-link { margin-right: 4px; font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--dl-gold); }
+.dl-line.k-negate .dl-link { color: var(--dl-opp); }
+.dl-line.k-negate i { color: var(--dl-opp); font-style: italic; }
+
+/* kinds */
+.dl-line.k-summon .dl-verb { font-style: italic; }
+.dl-line.k-set .dl-verb { font-weight: 500; font-style: italic; color: color-mix(in srgb, var(--fg) 70%, transparent); }
+.dl-line.k-draw, .dl-line.k-gy, .dl-line.k-banish { font-size: 11.5px; color: color-mix(in srgb, var(--fg) 55%, transparent); }
+.dl-line.k-draw .dl-verb, .dl-line.k-draw .dl-who { font-weight: 500; }
+.dl-line.k-gy::before, .dl-line.k-banish::before, .dl-line.k-draw::before { width: 4px; height: 4px; left: -13px; top: calc(3px + .72em - 2px); }
+.dl-line.k-lp-loss .dl-verb { color: #ff7b7b; }
+.dl-line.k-lp-gain .dl-verb { color: var(--ok); }
+.dl-line.k-attack .dl-text { color: var(--fg); }
+.dl-line.k-attack::before { box-shadow: 0 0 0 3px color-mix(in srgb, var(--surface) 90%, transparent), 0 0 8px var(--dot); }
+.dl-line.k-win { margin-top: 10px; font-family: var(--font-field, inherit); font-size: 14px; letter-spacing: .04em; color: var(--dl-gold); }
+.dl-line.k-win::before { --dot: var(--dl-gold); width: 10px; height: 10px; left: -16px; box-shadow: 0 0 12px var(--dl-gold); }
+
+/* new events fade in; the latest one's dot glows */
+.dl-line.is-new { animation: dl-in .4s ease-out both; }
+.dl-line.is-last::before { box-shadow: 0 0 0 3px color-mix(in srgb, var(--surface) 90%, transparent), 0 0 0 5px color-mix(in srgb, var(--dot) 30%, transparent), 0 0 10px var(--dot); }
+.dl-line.is-last:not(.k-phase):not(.k-turn) { color: var(--fg); }
+@keyframes dl-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .dl-line.is-new { animation: none; } }
+
+.dl-missed { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); padding: 3px 12px; font-size: 11px; font-weight: 600; border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 80%, transparent); color: var(--fg); border: 1px solid var(--accent); backdrop-filter: blur(6px); box-shadow: 0 4px 14px rgb(0 0 0 / .35); cursor: pointer; }
+
+/* in the rail: as wide as the space up to the field (useRailFit sets --rail-w) */
+@media (min-width: 1001px) {
+  .duel-page.is-live .duel-board-wrap > .duel-rail { width: var(--rail-w, min(var(--side), 220px)); display: flex; flex-direction: column; align-items: stretch; overflow: visible; }
+  .duel-page.is-live .duel-rail .dl { max-height: 100%; }
+  .duel-page.is-live .duel-rail .duel-chatbox { margin-top: 8px; height: min(calc(34 * var(--vh, 1vh)), 360px); display: flex; flex-direction: column; border-radius: 12px; overflow: hidden;
+    background: color-mix(in srgb, var(--surface) 62%, transparent); backdrop-filter: blur(10px); border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border)); padding: 6px; }
+  .duel-page.is-live .duel-rail .duel-chatbox .duel-logchat { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .duel-page.is-live .duel-rail .duel-chatbox .duel-loglist { flex: 1; min-height: 0; overflow-y: auto; }
+}
+/* scaled-copy:start */
+:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-board-wrap > .duel-rail { width: var(--rail-w, min(var(--side), 220px)); display: flex; flex-direction: column; align-items: stretch; overflow: visible; }
+:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-rail .dl { max-height: 100%; }
+:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-rail .duel-chatbox { margin-top: 8px; height: min(calc(34 * var(--vh, 1vh)), 360px); display: flex; flex-direction: column; border-radius: 12px; overflow: hidden;
+    background: color-mix(in srgb, var(--surface) 62%, transparent); backdrop-filter: blur(10px); border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border)); padding: 6px; }
+:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-rail .duel-chatbox .duel-logchat { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-rail .duel-chatbox .duel-loglist { flex: 1; min-height: 0; overflow-y: auto; }
+/* scaled-copy:end */
+
+@media (max-width: 1000px) {
+  :where(body:not(:has(.duel-page.is-scaled))) .duel-rail .dl { display: none; }
+}
+/* "calm panels" fades the rail back; the log stays readable */
+@media (min-width: 1001px) {
+  html .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail { opacity: .88; }
+  html .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail:hover { opacity: 1; }
+}
+/* scaled-copy:start */
+html:where(:has(.duel-page.is-scaled)) .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail { opacity: .88; }
+html:where(:has(.duel-page.is-scaled)) .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail:hover { opacity: 1; }
+/* scaled-copy:end */
+
+
+/* no panel: the log sits straight on the board (text shadows keep it readable) */
+.dl { background: none; backdrop-filter: none; border: 0; box-shadow: none; border-radius: 0; overflow: visible; }
+.dl-head { padding: 2px 4px 4px 12px; }
+.dl-list { padding-left: 24px; }
+.dl-line, .dl-title { text-shadow: 0 1px 2px color-mix(in srgb, var(--bg) 90%, transparent), 0 0 8px color-mix(in srgb, var(--bg) 70%, transparent); }
+.dl-line::before, .dl-line.is-last::before { box-shadow: 0 0 0 2px rgb(0 0 0 / .35); }
+.dl-line.k-turn::before { background: color-mix(in srgb, var(--tone) 25%, #000); }
+.dl-line.is-last::before { box-shadow: 0 0 0 2px rgb(0 0 0 / .35), 0 0 10px var(--dot); }
+.dl-line:hover { background: color-mix(in srgb, var(--fg) 6%, transparent); }
+/* ...and no box around the rail that holds it */
+@media (min-width: 1001px) {
+  html .duel-page.is-live .duel-board-wrap > .duel-rail, html .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail:hover {
+    background: none; border-color: transparent; box-shadow: none; backdrop-filter: none; padding: 0 4px;
+  }
+}
+/* scaled-copy:start */
+html:where(:has(.duel-page.is-scaled)) .duel-page.is-live .duel-board-wrap > .duel-rail, html:where(:has(.duel-page.is-scaled)) .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail:hover {
+    background: none; border-color: transparent; box-shadow: none; backdrop-filter: none; padding: 0 4px;
+  }
+/* scaled-copy:end */
+

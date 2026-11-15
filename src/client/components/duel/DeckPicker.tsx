@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useDeckStore } from "../../store/deckStore.ts";
 import { validateDeck } from "../../../shared/duelActions.ts";
@@ -12,6 +12,12 @@ export function rememberDeck(id: string) {
 }
 export function lastDeckId(): string | null {
   try { return localStorage.getItem(LAST_DECK); } catch { return null; }
+}
+
+/** Sleeves picked in a duel room for decks you can't save (starter decks): deck id -> sleeve. */
+const SLEEVES = "ygo.duel.sleeves";
+function sleeveOverrides(): Record<string, string> {
+  try { return JSON.parse(localStorage.getItem(SLEEVES) ?? "{}") ?? {}; } catch { return {}; }
 }
 
 /** Load the user's decks (through the deck store) plus the built-in starter decks, and keep the chosen one.
@@ -33,8 +39,31 @@ export function useDecks() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const setDeckId = (id: string) => { setDeckIdState(id); rememberDeck(id); };
-  const deck = decks?.find((d) => d.id === deckId) ?? null;
-  return { decks, deck, deckId, setDeckId };
+  const [overrides, setOverrides] = useState(sleeveOverrides);
+  const shown = useMemo(() => decks && decks.map((d) => (overrides[d.id] ? { ...d, sleeve: overrides[d.id] } : d)), [decks, overrides]);
+  const deck = shown?.find((d) => d.id === deckId) ?? null;
+  /** Change a deck's sleeve from the duel room: your own decks are saved with it; starter decks remember it here. */
+  const setSleeve = async (id: string, sleeve: string) => {
+    const d = decks?.find((x) => x.id === id);
+    if (!d) return;
+    if (isStarterDeck(id)) {
+      const next = { ...overrides, [id]: sleeve };
+      setOverrides(next);
+      try { localStorage.setItem(SLEEVES, JSON.stringify(next)); } catch { /* storage blocked */ }
+      return;
+    }
+    const updated = { ...d, sleeve };
+    setDecks((list) => list?.map((x) => (x.id === id ? updated : x)) ?? list);
+    await store.save(updated);
+  };
+  /** A deck was created or saved elsewhere (the duel page's deck editor): show it in the list. */
+  const upsertDeck = (d: Deck) => setDecks((list) => {
+    if (!list) return [d];
+    if (list.some((x) => x.id === d.id)) return list.map((x) => (x.id === d.id ? d : x));
+    const own = [...list.filter((x) => !isStarterDeck(x.id)), d].sort((a, b) => a.name.localeCompare(b.name));
+    return [...own, ...list.filter((x) => isStarterDeck(x.id))];
+  });
+  return { decks: shown, deck, deckId, setDeckId, setSleeve, upsertDeck };
 }
 
 export function DeckSelect({ decks, deckId, onChange }: { decks: Deck[] | null; deckId: string; onChange(id: string): void }) {

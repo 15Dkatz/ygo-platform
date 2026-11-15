@@ -41,6 +41,8 @@ export function locName(location: number, sequence: number): EngineLocation {
 export function posName(pos: number, location: number): Position | undefined {
   const st = location === OcgLocation.SZONE || location === OcgLocation.FZONE || location === OcgLocation.PZONE;
   if (st) return pos & OcgPosition.FACEDOWN ? "faceDown" : undefined;
+  // banished face-down (e.g. Pot of Prosperity's cost): only its owner may know it
+  if (location === OcgLocation.REMOVED) return pos & OcgPosition.FACEDOWN ? "faceDown" : undefined;
   if (location !== OcgLocation.MZONE) return undefined;
   if (pos & OcgPosition.FACEUP_ATTACK) return "atk";
   if (pos & OcgPosition.FACEUP_DEFENSE) return "def";

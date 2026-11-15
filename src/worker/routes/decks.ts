@@ -4,6 +4,7 @@ import type { AppEnv } from "../env.ts";
 import type { CustomTags, Deck } from "../../shared/types.ts";
 import { requireUser } from "./auth.ts";
 import { cleanRarities } from "../../shared/rarity.ts";
+import { DEFAULT_SLEEVE, cleanSleeve } from "../../shared/sleeves.ts";
 
 // PHASE 2 (accounts) owns this file: per-user deck + custom-tag storage in D1.
 // Contract (all require sign-in, bodies use the shared `Deck` type):
@@ -27,7 +28,7 @@ export const MAX_CARD_NAME = 200;
 
 /** D1 allows 100 bound parameters per statement; stay under it. */
 const MAX_PARAMS = 90;
-const DECK_COLS = 11;
+const DECK_COLS = 12;
 const TAG_COLS = 3;
 
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
@@ -74,6 +75,7 @@ function parseDeck(raw: unknown, now: string, keepTimes: boolean): Deck {
     file_modified: optDate(d.file_modified, "file_modified"),
     file_created: optDate(d.file_created, "file_created"),
     rarity: cleanRarities(d.rarity),
+    sleeve: cleanSleeve(d.sleeve),
     created_at,
     updated_at: keepTimes ? timestamp(d.updated_at, now) : now,
   };
@@ -88,6 +90,7 @@ interface DeckRow {
   file_modified: string | null;
   file_created: string | null;
   rarity: string | null;
+  sleeve: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -101,11 +104,12 @@ const rowToDeck = (r: DeckRow): Deck => ({
   file_modified: r.file_modified,
   file_created: r.file_created,
   rarity: r.rarity ? cleanRarities(JSON.parse(r.rarity)) : {},
+  sleeve: cleanSleeve(r.sleeve),
   created_at: r.created_at,
   updated_at: r.updated_at,
 });
 
-const DECK_SELECT = "SELECT id, name, main, extra, side, file_modified, file_created, rarity, created_at, updated_at FROM decks";
+const DECK_SELECT = "SELECT id, name, main, extra, side, file_modified, file_created, rarity, sleeve, created_at, updated_at FROM decks";
 
 /** Multi-row upserts, ≤ 90 bound parameters each. created_at of existing decks is kept. */
 function upsertStatements(db: D1Database, userId: string, list: Deck[]): D1PreparedStatement[] {
@@ -113,18 +117,18 @@ function upsertStatements(db: D1Database, userId: string, list: Deck[]): D1Prepa
   const out: D1PreparedStatement[] = [];
   for (let i = 0; i < list.length; i += perStmt) {
     const chunk = list.slice(i, i + perStmt);
-    const values = chunk.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
+    const values = chunk.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
     const params = chunk.flatMap((d) => [
       d.id, userId, d.name, JSON.stringify(d.main), JSON.stringify(d.extra), JSON.stringify(d.side),
-      d.file_modified ?? null, d.file_created ?? null, d.rarity && Object.keys(d.rarity).length ? JSON.stringify(d.rarity) : null, d.created_at, d.updated_at,
+      d.file_modified ?? null, d.file_created ?? null, d.rarity && Object.keys(d.rarity).length ? JSON.stringify(d.rarity) : null, d.sleeve && d.sleeve !== DEFAULT_SLEEVE ? d.sleeve : null, d.created_at, d.updated_at,
     ]);
     out.push(
       db.prepare(
-        `INSERT INTO decks (id, user_id, name, main, extra, side, file_modified, file_created, rarity, created_at, updated_at)
+        `INSERT INTO decks (id, user_id, name, main, extra, side, file_modified, file_created, rarity, sleeve, created_at, updated_at)
          VALUES ${values}
          ON CONFLICT (user_id, id) DO UPDATE SET
            name = excluded.name, main = excluded.main, extra = excluded.extra, side = excluded.side,
-           file_modified = excluded.file_modified, file_created = excluded.file_created, rarity = excluded.rarity,
+           file_modified = excluded.file_modified, file_created = excluded.file_created, rarity = excluded.rarity, sleeve = excluded.sleeve,
            updated_at = excluded.updated_at`,
       ).bind(...params),
     );

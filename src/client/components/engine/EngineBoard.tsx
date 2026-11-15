@@ -3,6 +3,7 @@
 // a small dialog. The list panel (EnginePromptPanel) stays as the fallback for anything that
 // can't be shown on the board, and behind the bar's "List" button.
 
+import { toCss } from "../duel/uiScale.ts";
 import { useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent, type ReactNode } from "react";
 import type { BoardState, CardInstance, Position } from "../../../shared/duel.ts";
 import type { EngineCardRef, EnginePlace, EnginePrompt, EngineResponse, EngineResponseBody, Seat } from "../../../shared/enginePrompts.ts";
@@ -334,7 +335,7 @@ export function useEngineBoard(o: EngineBoardOpts): EngineBoard {
         </div>
       );
     } else if (mine.kind === "selectPosition") {
-      overlay = <PositionChooser prompt={mine} at={point.current} name={o.cardName(mine.code)} onPick={(position) => send({ kind: "selectPosition", position })} />;
+      overlay = <PositionChooser prompt={mine} at={point.current} name={o.cardName(mine.code)} you={o.you} onPick={(position) => send({ kind: "selectPosition", position })} />;
     } else if (mine.kind !== "idle" && mine.kind !== "battle") {
       const hintText = mine.hint ?? title(mine);
       overlay = minimized
@@ -481,8 +482,8 @@ function PromptBar({ prompt: p, picked, counts, places, send, onList, cardName, 
 }
 
 /** Battle position chooser, next to where the player last clicked (centred otherwise). */
-function PositionChooser({ prompt: p, at, name, onPick }: {
-  prompt: Extract<EnginePrompt, { kind: "selectPosition" }>; at: { x: number; y: number } | null; name?: string; onPick(p: Position): void;
+function PositionChooser({ prompt: p, at, name, you, onPick }: {
+  prompt: Extract<EnginePrompt, { kind: "selectPosition" }>; at: { x: number; y: number } | null; name?: string; you: Seat; onPick(p: Position): void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
@@ -490,7 +491,7 @@ function PositionChooser({ prompt: p, at, name, onPick }: {
     const el = ref.current;
     if (!el || !at || innerWidth <= 600) { setPos(null); return; }
     const r = el.getBoundingClientRect();
-    setPos({ left: Math.max(8, Math.min(at.x - r.width / 2, innerWidth - r.width - 8)), top: Math.max(8, Math.min(at.y - r.height - 12, innerHeight - r.height - 8)) });
+    setPos({ left: toCss(Math.max(8, Math.min(at.x - r.width / 2, innerWidth - r.width - 8))), top: toCss(Math.max(8, Math.min(at.y - r.height - 12, innerHeight - r.height - 8))) });
   }, [at, p.id]);
   useEffect(() => { ref.current?.querySelector("button")?.focus(); }, [p.id]);
   return (
@@ -500,7 +501,7 @@ function PositionChooser({ prompt: p, at, name, onPick }: {
         {p.positions.map((x) => (
           <button key={x} onClick={() => onPick(x)} title={POS_LABEL[x]}>
             <span className={`duel-card ${x === "def" || x === "faceDownDef" ? "is-def" : ""}`}>
-              <span className="duel-card-inner">{x === "faceDownDef" || x === "faceDown" ? <CardBack /> : <CardFace code={p.code} />}</span>
+              <span className="duel-card-inner">{x === "faceDownDef" || x === "faceDown" ? <CardBack owner={you} /> : <CardFace code={p.code} />}</span>
             </span>
             <span>{POS_LABEL[x]}</span>
           </button>

@@ -62,8 +62,9 @@ export function LogText({ text, onHover, onZoom }: { text: string; onHover(code:
   );
 }
 
-export function LogChat({ log, chat, canChat, onChat, onHover, initialTab = "log" }: { log: string[]; chat: ChatLine[]; canChat: boolean; onChat(text: string): void; onHover(code: number | null): void; initialTab?: "log" | "chat" }) {
-  const [tab, setTab] = useState<"log" | "chat">(initialTab);
+export function LogChat({ log, chat, canChat, onChat, onHover, initialTab = "log", only }: { log: string[]; chat: ChatLine[]; canChat: boolean; onChat(text: string): void; onHover(code: number | null): void; initialTab?: "log" | "chat"; /** just the chat, no tabs */ only?: "chat" }) {
+  const [tabState, setTab] = useState<"log" | "chat">(initialTab);
+  const tab = only ?? tabState;
   const [text, setText] = useState("");
   const [unread, setUnread] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
@@ -88,12 +89,12 @@ export function LogChat({ log, chat, canChat, onChat, onHover, initialTab = "log
 
   return (
     <div className="duel-logchat">
-      <div className="duel-tabs" role="tablist">
+      {only ? <div className="duel-chat-title">Chat</div> : <div className="duel-tabs" role="tablist">
         <button role="tab" aria-selected={tab === "log"} className={tab === "log" ? "is-active" : ""} onClick={() => setTab("log")}>Duel log</button>
         <button role="tab" aria-selected={tab === "chat"} className={tab === "chat" ? "is-active" : ""} onClick={() => setTab("chat")}>
           Chat{unread ? <span className="duel-unread">{unread}</span> : null}
         </button>
-      </div>
+      </div>}
       <div className="duel-loglist" ref={listRef}>
         {tab === "log"
           ? log.map((l, i) => <div key={i} className="duel-logline"><LogText text={l} onHover={onHover} /></div>)

@@ -73,7 +73,7 @@ export function DecksPage() {
       const taken = new Set((decks || []).map((x) => x.name));
       let name = `${d.name} (copy)`, i = 2;
       while (taken.has(name)) name = `${d.name} (copy ${i++})`;
-      await store.save(newDeck(name, { main: [...d.main], extra: [...d.extra], side: [...d.side] }));
+      await store.save(newDeck(name, { main: [...d.main], extra: [...d.extra], side: [...d.side], rarity: { ...(d.rarity ?? {}) }, sleeve: d.sleeve }));
     });
   const importYdke = () =>
     run(async () => {
@@ -93,7 +93,7 @@ export function DecksPage() {
       const taken = new Set((decks || []).map((x) => x.name));
       let name = base, i = 2;
       while (taken.has(name)) name = `${base} ${i++}`;
-      const saved = await store.save(newDeck(name, { main: [...d.main], extra: [...d.extra], side: [...d.side] }));
+      const saved = await store.save(newDeck(name, { main: [...d.main], extra: [...d.extra], side: [...d.side], rarity: { ...(d.rarity ?? {}) }, sleeve: d.sleeve }));
       navigate(`/decks/${saved.id}`);
     });
   const remove = (d: Deck) => {

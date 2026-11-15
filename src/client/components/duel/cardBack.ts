@@ -18,3 +18,17 @@ export const CARD_BACK_SVG = `<svg class="duel-back-art" viewBox="0 0 59 86" ari
 <path class="bk-gem-hi" d="M0-7.5L4.6 0L0 0Z"/>
 </g>
 </svg>`;
+
+// A frame for art sleeves: the card's artwork under a bevelled double border and a small emblem.
+export const SLEEVE_FRAME_SVG = `<svg class="duel-back-art" viewBox="0 0 59 86" aria-hidden="true" focusable="false">
+<rect class="bk-frame" x="2.2" y="2.2" width="54.6" height="81.6" rx="3.2"/>
+<rect class="bk-inner" x="5.4" y="5.4" width="48.2" height="75.2" rx="2"/>
+<path class="bk-corner" d="M8.5 15V8.5H15M44 8.5H50.5V15M50.5 71V77.5H44M15 77.5H8.5V71"/>
+<g transform="translate(29.5 76.4)"><circle class="sl-medal" r="4.2"/><path class="bk-gem" d="M0-2.6L1.7 0L0 2.6L-1.7 0Z"/></g>
+</svg>`;
+
+// A thin border for background sleeves (a scene fills the whole back).
+export const SCENE_FRAME_SVG = `<svg class="duel-back-art sl-scene-frame" viewBox="0 0 59 86" aria-hidden="true" focusable="false">
+<rect class="bk-frame" x="1.6" y="1.6" width="55.8" height="82.8" rx="3"/>
+<rect class="bk-inner" x="3.6" y="3.6" width="51.8" height="78.8" rx="2"/>
+</svg>`;

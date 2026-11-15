@@ -17,6 +17,7 @@ import { CardPreviewLayer, preview, previewHandlers } from "../components/cards/
 import { CARD_DRAG_TYPE, CardSearchPanel } from "../components/cards/CardSearchPanel.tsx";
 import { banLimit, downloadText, safeFileName } from "../components/cards/cardInfo.ts";
 import "./DeckBuilderPage.css";
+import { SleevePicker, SleeveSwatch } from "../components/cards/SleevePicker.tsx";
 import { LETTERINGS, LETTERING_LABEL, PICTURES, PICTURE_LABEL, RARITIES, RARITY_LABEL, RARITY_SHORT, foilOf, foilParts, isPreset, rarityLabel, rarityOf, rarityShort, type Rarity } from "../../shared/rarity.ts";
 import { RarityFoil, useFoilPointer } from "../components/cards/Rarity.tsx";
 import { cardImage } from "../api.ts";
@@ -88,9 +89,15 @@ const breakdown = (ids: number[]) => {
 
 export function DeckBuilderPage() {
   const { deckId } = useParams();
+  return <DeckBuilder deckId={deckId} />;
+}
+
+/** The deck builder for one deck: as a page, or in a modal (duel room) with `onClose` / `onSaved`. */
+export function DeckBuilder({ deckId, onClose, onSaved }: { deckId: string | undefined; onClose?(): void; onSaved?(deck: Deck): void }) {
   const store = useDeckStore();
   const [deck, setDeck] = useState<Deck | null>(null);
   const [savedJson, setSavedJson] = useState("");
+  const [sleeveOpen, setSleeveOpen] = useState(false);
   const [state, setState] = useState<"loading" | "ready" | "missing" | "error">("loading");
   const [message, setMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -113,7 +120,7 @@ export function DeckBuilderPage() {
         await ensureCards([...d.main, ...d.extra, ...d.side]);
         if (!alive) return;
         setDeck(d);
-        setSavedJson(JSON.stringify([d.name, d.main, d.extra, d.side]));
+        setSavedJson(JSON.stringify([d.name, d.main, d.extra, d.side, d.rarity ?? {}, d.sleeve ?? ""]));
         setVersion(catalog.version);
         setState("ready");
       } catch (e) {
@@ -123,7 +130,7 @@ export function DeckBuilderPage() {
     return () => { alive = false; };
   }, [deckId, store]);
 
-  const dirty = !!deck && JSON.stringify([deck.name, deck.main, deck.extra, deck.side]) !== savedJson;
+  const dirty = !!deck && JSON.stringify([deck.name, deck.main, deck.extra, deck.side, deck.rarity ?? {}, deck.sleeve ?? ""]) !== savedJson;
   useEffect(() => {
     if (!dirty) return;
     const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); };
@@ -200,7 +207,8 @@ export function DeckBuilderPage() {
       const name = deck.name.trim().slice(0, 100) || "Untitled deck";
       const saved = await store.save({ ...deck, name });
       setDeck(saved);
-      setSavedJson(JSON.stringify([saved.name, saved.main, saved.extra, saved.side]));
+      onSaved?.(saved);
+      setSavedJson(JSON.stringify([saved.name, saved.main, saved.extra, saved.side, saved.rarity ?? {}, saved.sleeve ?? ""]));
       const errs = validateDeck(saved).filter((p) => p.level === "error").length;
       setMessage(errs ? `Saved (with ${errs} problem${errs === 1 ? "" : "s"}).` : "Saved.");
     } catch (e) {
@@ -219,13 +227,18 @@ export function DeckBuilderPage() {
 
   return (
     <section className="deck-builder">
+      {sleeveOpen && <SleevePicker value={deck.sleeve} deckCards={[...deck.main, ...deck.extra, ...deck.side]} cardName={(id) => cardOf(id).name}
+        onPick={(s) => update((d) => ({ ...d, sleeve: s }))} onClose={() => setSleeveOpen(false)} />}
       {testHand && <TestHand main={deck.main} cardOf={cardOf} onClose={() => setTestHand(false)} />}
       <div className="db-head">
-        <Link to="/decks" className="muted db-back">← Decks</Link>
+        {onClose
+          ? <button type="button" className="db-back" onClick={() => { if (!dirty || window.confirm("Close without saving your changes?")) onClose(); }}>✕ Close</button>
+          : <Link to="/decks" className="muted db-back">← Decks</Link>}
         <input className="db-name" value={deck.name} maxLength={100} onChange={(e) => update((d) => ({ ...d, name: e.target.value }))} aria-label="Deck name" />
         <div className="db-actions">
           <button type="button" className="primary" onClick={() => void save()} disabled={saving || !dirty}>{saving ? "Saving…" : dirty ? "Save" : "Saved"}</button>
           <button type="button" onClick={() => update((d) => ({ ...d, main: sortSection(d.main), extra: sortSection(d.extra), side: sortSection(d.side) }))}>Sort</button>
+          <button type="button" onClick={() => setSleeveOpen(true)} title="Choose the card sleeve (card back) for this deck"><SleeveSwatch sleeve={deck.sleeve} />Sleeve</button>
           <button type="button" disabled={deck.main.length < 5} onClick={() => setTestHand(true)} title="Draw a random opening hand">Test hand</button>
           <button type="button" onClick={() => downloadText(`${safeFileName(deck.name)}.ydk`, toYdk(deck))}>Export .ydk</button>
           <button type="button" disabled={!total} title="Copy a ydke:// link (EDOPro, YGOPRODeck, Discord)" onClick={() => {

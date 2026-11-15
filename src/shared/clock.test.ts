@@ -59,9 +59,17 @@ describe("time control settings", () => {
     expect(cleanSettings({ turnTimerSec: 120 })).toMatchObject({ timeControl: "turn", turnTimerSec: 120 });
     expect(cleanSettings({})).toMatchObject({ timeControl: "off" });
   });
-  it("only allows the chess presets", () => {
+  it("allows custom times and LP within the limits", () => {
     expect(cleanSettings({ timeControl: "chess", bankSec: 300, incrementSec: 3 })).toMatchObject({ timeControl: "chess", bankSec: 300, incrementSec: 3 });
-    expect(cleanSettings({ timeControl: "chess", bankSec: 1, incrementSec: 999 }).timeControl).toBe("off");
+    expect(cleanSettings({ timeControl: "chess", bankSec: 450, incrementSec: 0 })).toMatchObject({ timeControl: "chess", bankSec: 450, incrementSec: 0 });
+    expect(formatTimeControl(cleanSettings({ timeControl: "chess", bankSec: 450, incrementSec: 7 }))).toBe("7:30+7");
+    expect(cleanSettings({ timeControl: "turn", turnTimerSec: 45 })).toMatchObject({ timeControl: "turn", turnTimerSec: 45 });
+    expect(cleanSettings({ startingLP: 6000 }).startingLP).toBe(6000);
+    for (const bad of [{ bankSec: 1, incrementSec: 3 }, { bankSec: 300, incrementSec: 999 }, { bankSec: 300.5, incrementSec: 3 }, { bankSec: "300", incrementSec: -1 }])
+      expect(cleanSettings({ timeControl: "chess", ...bad }).timeControl).toBe("off");
+    expect(cleanSettings({ timeControl: "turn", turnTimerSec: 5 }).timeControl).toBe("off");
+    expect(cleanSettings({ startingLP: 50 }).startingLP).toBe(8000);
+    expect(cleanSettings({ startingLP: 1e9 }).startingLP).toBe(8000);
   });
   it("round-trips the select value and formats it", () => {
     const s = cleanSettings({ ...parseTimeControl("chess:600+5") });

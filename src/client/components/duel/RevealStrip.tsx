@@ -48,24 +48,35 @@ export function useReveals(names: [string, string], you: Seat | null) {
     });
   }, [you]);
 
-  // linger: a while after the last change (longer while cards are still undecided)
-  useEffect(() => {
-    if (!reveal) return;
-    const open = reveal.cards.some((c) => !c.fate);
-    const t = setTimeout(() => setReveal(null), open ? 12_000 : 3_500);
-    return () => clearTimeout(t);
-  }, [reveal]);
-
-  return { reveal, onEvents, dismiss: () => setReveal(null) };
+  // stable, so the strip's countdown doesn't restart on every page render
+  const dismiss = useCallback(() => setReveal(null), []);
+  return { reveal, onEvents, dismiss };
 }
 
+/** How long a reveal stays up when nobody points at it; pointing at it pauses (and then restarts) the countdown. */
+export const REVEAL_MS = 8_000;
+
 export function RevealStrip({ reveal, onHover, onZoom, onClose }: { reveal: Reveal; onHover(code: number | null): void; onZoom(code: number): void; onClose(): void }) {
+  const [held, setHeld] = useState(false);
+  // the countdown restarts whenever the reveal changes (a card's destination arrives) or the pointer leaves
+  const [round, setRound] = useState(0);
+  const fates = reveal.cards.filter((c) => c.fate).length;
+  useEffect(() => {
+    if (held) return;
+    const t = setTimeout(onClose, REVEAL_MS);
+    return () => clearTimeout(t);
+  }, [held, round, reveal.key, fates, onClose]);
   return (
-    <div key={reveal.key} className="duel-reveal" role="status" aria-live="polite">
+    <div key={reveal.key} className={`duel-reveal ${held ? "is-held" : ""}`} role="status" aria-live="polite"
+      onMouseEnter={() => setHeld(true)} onMouseLeave={() => { setHeld(false); setRound((r) => r + 1); }}
+      onFocus={() => setHeld(true)} onBlur={() => { setHeld(false); setRound((r) => r + 1); }}>
       <div className="duel-reveal-head">
         <b>{reveal.title}</b>
+        <span className="duel-reveal-hint">{held ? "Paused" : ""}</span>
         <button onClick={onClose} aria-label="Hide" title="Hide">✕</button>
       </div>
+      {/* time left before it closes by itself */}
+      <span className="duel-reveal-timer" aria-hidden="true"><i key={`${reveal.key}-${fates}-${round}`} style={{ animationDuration: `${REVEAL_MS}ms` }} /></span>
       <div className="duel-reveal-cards">
         {reveal.cards.map((c, i) => (
           <div key={i} className={`duel-reveal-card ${c.fate ? "has-fate" : ""}`} style={{ animationDelay: `${i * 110}ms` }}

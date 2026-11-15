@@ -192,6 +192,13 @@ const FOILS: Record<string, Deck["rarity"]> = {
 };
 for (const d of STARTER_DECKS) if (FOILS[d.id]) d.rarity = FOILS[d.id];
 
+// each starter deck gets a sleeve of its own: its ace's art, or a design that suits it
+const SLEEVES: Record<string, string> = {
+  "starter:kewl": "art:89392810", "starter:branded": "art:68468459", "starter:dragon": "art:89631139",
+  "starter:warrior": "design:crimson", "starter:synchro": "art:44508094", "starter:xyz": "art:84013237",
+};
+for (const d of STARTER_DECKS) d.sleeve = SLEEVES[d.id] ?? "design:classic";
+
 export const isStarterDeck = (id: string) => id.startsWith("starter:");
 
 /** Demo duels: a starter deck whose opening hand holds a combo (the rest shuffled), for rooms whose

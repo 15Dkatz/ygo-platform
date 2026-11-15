@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { AUTO_PASS_LABEL, type AutoPassMode } from "../../../shared/autoPass.ts";
 import { getVolume, isMuted, onMuteChange, play, setMuted, setVolume } from "./anim/sfx.ts";
-import { RESOLVE_COLORS, RESOLVE_COLOR_LABEL, RESOLVE_FX, RESOLVE_FX_LABEL, type ResolveColor, type ResolveFx } from "./duelSettings.ts";
+import { RESOLVE_COLORS, RESOLVE_COLOR_LABEL, RESOLVE_FX, RESOLVE_FX_LABEL, type ResolveColor, type ResolveFx, SUMMON_FX, SUMMON_FX_LABEL, SPLASH_STYLES, SPLASH_STYLE_LABEL, type SplashStyle, type SummonFxMode } from "./duelSettings.ts";
 import { DEFAULT_SCALE, DEFAULT_TILT, LAYOUT, SCALE_RANGE, TILT_MAX, setDuelSetting, useDuelSettings, type DuelSettings, type LayoutKey } from "./duelSettings.ts";
 
 const pct = (v: number) => `${Math.round(v * 100)}%`;
@@ -76,6 +76,24 @@ export function DuelSettingsButton({ autoPass, setAutoPass, engine }: { autoPass
           </Section>
 
           <Section title="Animations" id="anim">
+            <label className="duel-setting">
+              <span>Summons and activations</span>
+              <select value={s.summonFx} onChange={(e) => setDuelSetting("summonFx", e.target.value as SummonFxMode)} aria-label="Summon and activation animations">
+                {SUMMON_FX.map((f) => <option key={f} value={f}>{SUMMON_FX_LABEL[f]}</option>)}
+              </select>
+            </label>
+            <label className="duel-setting">
+              <span>Summons shown as</span>
+              <select value={s.summonSplash} onChange={(e) => setDuelSetting("summonSplash", e.target.value as SplashStyle)} aria-label="Summons shown as">
+                {SPLASH_STYLES.map((f) => <option key={f} value={f}>{SPLASH_STYLE_LABEL[f]}</option>)}
+              </select>
+            </label>
+            <label className="duel-setting">
+              <span>Activations shown as</span>
+              <select value={s.activateSplash} onChange={(e) => setDuelSetting("activateSplash", e.target.value as SplashStyle)} aria-label="Activations shown as">
+                {SPLASH_STYLES.map((f) => <option key={f} value={f}>{SPLASH_STYLE_LABEL[f]}</option>)}
+              </select>
+            </label>
             <label className="duel-setting">
               <span>Resolving card</span>
               <select value={s.resolveFx} onChange={(e) => setDuelSetting("resolveFx", e.target.value as ResolveFx)} aria-label="Resolving card effect">

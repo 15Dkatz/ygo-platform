@@ -48,6 +48,8 @@ export interface Deck {
   file_created?: string | null;
   /** Foil rarity per card id (deck builder); missing = Common. */
   rarity?: Record<string, import("./rarity.ts").Rarity>;
+  /** Card sleeve (the back of every card): "design:<id>" or "art:<card id>"; missing = the classic back. */
+  sleeve?: string;
   created_at: string;    // ISO timestamp
   updated_at: string;
 }

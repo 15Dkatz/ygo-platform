@@ -165,7 +165,7 @@ function Pile({ cards, at, ui }: { cards: CardInstance[]; at: ZoneRef; ui: Board
     <DropZone at={at} ui={ui} className={`duel-pile duel-pile-${at.zone}`} label={cards.length ? undefined : PILE_LABEL[at.zone]}>
       {top && (showFace
         ? <CardView card={top} onHover={ui.onHover} draggable={!ui.marks && ui.you === at.player} onDragStart={dragStart(top)} badge={ui.marks?.badges.get(top.uid)} />
-        : <div className="duel-card"><div className="duel-card-inner"><CardBack /></div></div>)}
+        : <div className="duel-card"><div className="duel-card-inner"><CardBack owner={at.player} /></div></div>)}
       <span className="duel-pile-count" title={`${PILE_LABEL[at.zone]}: ${cards.length}`}>{cards.length}</span>
       <span className="duel-pile-name">{PILE_LABEL[at.zone]}</span>
     </DropZone>

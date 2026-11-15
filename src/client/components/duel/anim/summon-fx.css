@@ -1,0 +1,121 @@
+/* Summon / activation effects (summonFx.ts). Everything sits in the animation layer (fixed, no pointer events). */
+.sfx { position: absolute; pointer-events: none; will-change: transform, opacity; }
+
+/* particles */
+.sfx-spark { border-radius: 50%; background: radial-gradient(circle, #fff 0 30%, var(--c) 60%, transparent 72%); box-shadow: 0 0 8px var(--c); mix-blend-mode: screen; }
+.sfx-dust { border-radius: 50%; background: radial-gradient(circle, rgb(235 225 205 / .55), rgb(200 185 160 / .25) 55%, transparent 72%); filter: blur(1px); }
+.sfx-star { background: #fff; clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%); filter: drop-shadow(0 0 4px #b8ffcf); }
+
+/* rings, flashes, light */
+.sfx-shock { border-radius: 50%; border: var(--w, 3px) solid var(--c); box-shadow: 0 0 18px var(--c), inset 0 0 12px color-mix(in srgb, var(--c) 50%, transparent); }
+.sfx-flash { border-radius: 50%; background: radial-gradient(circle, #fff 0 12%, var(--c) 35%, color-mix(in srgb, var(--c) 30%, transparent) 55%, transparent 70%); mix-blend-mode: screen; }
+.sfx-sweep { border-radius: 4px; background: linear-gradient(0deg, transparent 0 35%, color-mix(in srgb, var(--c) 70%, #fff) 48%, #fff 50%, color-mix(in srgb, var(--c) 70%, #fff) 52%, transparent 65%) 0 0 / 100% 300%; mix-blend-mode: screen; }
+.sfx-column { border-radius: 50% 50% 8px 8px / 20% 20% 8px 8px; transform-origin: 50% 85%;
+  background: linear-gradient(0deg, color-mix(in srgb, var(--c) 85%, #fff), color-mix(in srgb, var(--c) 45%, transparent) 55%, transparent);
+  filter: blur(2px); mix-blend-mode: screen; box-shadow: 0 0 40px var(--c); }
+.sfx-dim { position: fixed; inset: 0; background: radial-gradient(circle at 50% 50%, transparent 15%, rgb(0 0 0 / .55) 75%); }
+
+/* set: a cool, quiet veil */
+.sfx-setveil { border-radius: 5px; background: linear-gradient(105deg, transparent 30%, color-mix(in srgb, var(--c) 55%, transparent) 50%, transparent 70%) 0 0 / 200% 100%;
+  box-shadow: 0 0 14px color-mix(in srgb, var(--c) 40%, transparent); mix-blend-mode: screen; }
+
+/* summoning circle (special / ritual) and spell runes */
+.sfx-circle svg, .sfx-runes svg, .sfx-hex svg, .sfx-linkarrow svg, .sfx-pendarc svg { width: 100%; height: 100%; overflow: visible; display: block; }
+.sfx-circle, .sfx-runes { filter: drop-shadow(0 0 6px var(--c)) drop-shadow(0 0 14px var(--c)); }
+.sfx-circle .o, .sfx-runes .o { fill: none; stroke: var(--c); stroke-width: 1.6; }
+.sfx-circle .i, .sfx-runes .i { fill: none; stroke: color-mix(in srgb, var(--c) 70%, #fff); stroke-width: .8; stroke-dasharray: 3 2; }
+.sfx-circle .s, .sfx-runes .s { fill: none; stroke: color-mix(in srgb, var(--c) 80%, #fff); stroke-width: 1.1; stroke-linejoin: round; }
+.sfx-circle text, .sfx-runes text { fill: #fff; font-size: 6px; font-family: serif; }
+.sfx-circle { background: radial-gradient(circle, color-mix(in srgb, var(--c) 30%, transparent), transparent 62%); border-radius: 50%; }
+.sfx-candle { border-radius: 50% 50% 45% 45% / 65% 65% 35% 35%; background: radial-gradient(ellipse at 50% 70%, #fff 0 18%, #9fd0ff 40%, var(--c) 65%, transparent 72%); filter: blur(.5px) drop-shadow(0 0 6px var(--c)); }
+
+/* fusion vortex */
+.sfx-vortex { border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent, var(--c), #ff9a3c, transparent 40%, var(--c) 60%, #ffd1f0, transparent 85%),
+    radial-gradient(circle, #fff 0 6%, transparent 30%);
+  mask-image: radial-gradient(circle, #000 0 55%, transparent 70%); filter: blur(1px) drop-shadow(0 0 16px var(--c)); mix-blend-mode: screen; }
+
+/* synchro rings and beam */
+.sfx-synring { border-radius: 50%; border: 3px solid #7dffb0; box-shadow: 0 0 14px #7dffb0, inset 0 0 10px #7dffb0; }
+.sfx-beam { background: linear-gradient(90deg, transparent, rgb(200 255 230 / .7) 30%, #fff 50%, rgb(200 255 230 / .7) 70%, transparent); filter: blur(1.5px); box-shadow: 0 0 40px #b8ffcf; mix-blend-mode: screen; }
+
+/* xyz galaxy */
+.sfx-galaxy { border-radius: 50%;
+  background: radial-gradient(circle, #fff6d0 0 4%, #e6c35c 10%, transparent 22%),
+    conic-gradient(from 0deg, transparent, rgb(230 195 92 / .85) 10%, transparent 25%, rgb(130 90 255 / .8) 45%, transparent 60%, rgb(230 195 92 / .7) 75%, transparent 90%),
+    radial-gradient(circle, rgb(20 10 40 / .95) 0 40%, transparent 68%);
+  mask-image: radial-gradient(circle, #000 0 55%, transparent 70%); filter: drop-shadow(0 0 14px rgb(230 195 92 / .8)); }
+.sfx-orbit { overflow: visible; }
+.sfx-orbit i { position: absolute; border-radius: 50%; background: radial-gradient(circle, #fff 0 25%, var(--c) 55%, transparent 72%); box-shadow: 0 0 12px var(--c), 0 0 24px var(--c); }
+
+/* link arrows and circuit */
+.sfx-linkarrow svg path { fill: #3fa9ff; stroke: #d4ecff; stroke-width: .6; filter: drop-shadow(0 0 3px #3fa9ff); }
+.sfx-linkarrow { filter: drop-shadow(0 0 8px #3fa9ff); }
+.sfx-circuit { border-radius: 50%;
+  background:
+    repeating-conic-gradient(from 0deg, rgb(63 169 255 / .75) 0 1.2deg, transparent 1.2deg 22.5deg),
+    repeating-radial-gradient(circle, transparent 0 9%, rgb(63 169 255 / .5) 9% 9.8%, transparent 9.8% 18%);
+  mask-image: radial-gradient(circle, #000 20%, transparent 70%); filter: drop-shadow(0 0 6px #3fa9ff); mix-blend-mode: screen; }
+
+/* pendulum arc */
+.sfx-pendarc { transform-origin: 50% 0; }
+.sfx-pendarc path { fill: none; stroke: #3fe0b0; stroke-width: 3; stroke-linecap: round; filter: drop-shadow(0 0 6px #3fe0b0) drop-shadow(0 0 14px #3fe0b0); }
+
+/* activations */
+.sfx-trapflash { border-radius: 5px; background: radial-gradient(circle, color-mix(in srgb, var(--c) 30%, #fff) 0, var(--c) 45%, transparent 85%); mix-blend-mode: screen; box-shadow: 0 0 26px var(--c); }
+.sfx-spike { transform-origin: 0 50%; background: linear-gradient(90deg, transparent, var(--c) 30%, #fff 60%, transparent); clip-path: polygon(0 35%, 100% 50%, 0 65%); filter: drop-shadow(0 0 4px var(--c)); }
+.sfx-speed { transform-origin: 0 50%; background: linear-gradient(90deg, transparent, var(--c), #fff); border-radius: 2px; }
+.sfx-hex svg path { fill: color-mix(in srgb, var(--c) 18%, transparent); stroke: var(--c); stroke-width: 2.5; filter: drop-shadow(0 0 6px var(--c)); }
+.sfx-aura { border-radius: 6px; box-shadow: 0 0 0 2px var(--c), 0 0 24px 4px var(--c), inset 0 0 18px color-mix(in srgb, var(--c) 60%, transparent); }
+
+/* the chain drawing itself */
+.sfx-chainline { transform-origin: 0 50%; border-radius: 3px; background: linear-gradient(90deg, rgb(230 184 79 / .2), #e6b84f 40%, #fff3c4); box-shadow: 0 0 10px #e6b84f, 0 0 20px rgb(230 184 79 / .6); }
+.sfx-chaintag { display: grid; place-items: center; border-radius: 50%; font-weight: 900; color: #1c1405; background: radial-gradient(circle at 35% 30%, #fff3c4, #e6b84f 60%, #a77b1e);
+  box-shadow: 0 0 0 2px rgb(28 20 5 / .6), 0 0 14px #e6b84f; font-family: var(--font-field, inherit); z-index: 2; }
+
+/* ---------- the card-art splash: showcase (the card rises out of its zone, big) ---------- */
+.sfx-show { z-index: 3; perspective: 900px; }
+.sfx-show-glow { position: absolute; inset: -45%; border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--c) 55%, transparent) 0, color-mix(in srgb, var(--c) 22%, transparent) 35%, transparent 65%); filter: blur(8px); }
+.sfx-show-rays { position: absolute; inset: -70%; border-radius: 50%; mix-blend-mode: screen;
+  background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--c) 45%, transparent) 0 4deg, transparent 4deg 18deg);
+  mask-image: radial-gradient(circle, #000 12%, transparent 62%); }
+.sfx-show-card { position: absolute; inset: 0; border-radius: 4.5% / 3.1%; overflow: hidden;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 80%, #fff), 0 0 30px var(--c), 0 30px 60px rgb(0 0 0 / .6); }
+.sfx-show-card img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.sfx-show-sheen { position: absolute; top: -10%; bottom: -10%; width: 35%; left: 0;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / .55), transparent); mix-blend-mode: overlay; }
+.sfx-show-plate, .sfx-portal-plate { position: absolute; left: 50%; top: calc(100% + 14px); transform: translateX(-50%); display: grid; justify-items: center; gap: 2px; white-space: nowrap;
+  padding: 6px 18px 7px; border-radius: 999px; text-align: center;
+  background: linear-gradient(180deg, rgb(10 12 22 / .88), rgb(10 12 22 / .72)); border: 1px solid color-mix(in srgb, var(--c) 70%, transparent);
+  box-shadow: 0 8px 24px rgb(0 0 0 / .5), 0 0 18px color-mix(in srgb, var(--c) 35%, transparent); backdrop-filter: blur(6px); }
+.sfx-show-plate small, .sfx-portal-plate small { font-size: 10.5px; font-weight: 800; letter-spacing: .26em; text-transform: uppercase; color: var(--c); }
+.sfx-show-plate b, .sfx-portal-plate b { font-family: var(--font-field, var(--font-display, inherit)); font-size: 20px; color: #fff; letter-spacing: .02em; }
+.sfx-show.is-big .sfx-show-plate b, .sfx-portal.is-big .sfx-portal-plate b { font-size: 26px; background: linear-gradient(180deg, #fff, color-mix(in srgb, var(--c) 60%, #fff)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+/* ---------- the card-art splash: portal (its art opens over the zone) ---------- */
+.sfx-portal { z-index: 3; }
+.sfx-portal-art { position: absolute; inset: 0; border-radius: 50%; background: var(--art) center 35% / cover no-repeat, #0b0d14; box-shadow: inset 0 0 40px rgb(0 0 0 / .7); }
+.sfx-portal-ring { position: absolute; inset: -6%; filter: drop-shadow(0 0 6px var(--c)) drop-shadow(0 0 16px var(--c)); }
+.sfx-portal-ring svg { width: 100%; height: 100%; overflow: visible; display: block; }
+.sfx-portal-ring .o { fill: none; stroke: var(--c); stroke-width: 2.2; }
+.sfx-portal-ring .i { fill: none; stroke: color-mix(in srgb, var(--c) 70%, #fff); stroke-width: .8; stroke-dasharray: 3 2; }
+.sfx-portal-ring .s { display: none; }
+.sfx-portal-ring text { fill: #fff; font-size: 6px; font-family: serif; }
+
+/* ---------- the card-art splash: banner (its art sweeps across the board in a slanted band) ---------- */
+.sfx-splash { left: -4vw; right: -4vw; overflow: hidden; z-index: 3;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 60%, transparent), 0 20px 50px rgb(0 0 0 / .55), 0 0 60px color-mix(in srgb, var(--c) 30%, transparent); }
+.sfx-splash-art { position: absolute; inset: -20% 0; background: var(--art) center 35% / cover no-repeat; filter: saturate(1.15) contrast(1.05);
+  mask-image: linear-gradient(90deg, transparent 0, #000 22%, #000 78%, transparent 100%); }
+.sfx-splash-shade { position: absolute; inset: 0;
+  background: linear-gradient(90deg, rgb(5 6 14 / .92) 0%, rgb(5 6 14 / .55) 30%, transparent 55%, transparent 70%, rgb(5 6 14 / .7) 100%),
+    linear-gradient(0deg, color-mix(in srgb, var(--c) 28%, transparent), transparent 45%); }
+.sfx-splash.from-right .sfx-splash-shade { transform: scaleX(-1); }
+.sfx-splash-text { position: absolute; top: 50%; translate: 0 -50%; left: 9vw; display: grid; gap: 2px; transform: skewY(5deg); text-shadow: 0 2px 10px rgb(0 0 0 / .9); }
+.sfx-splash.from-right .sfx-splash-text { left: auto; right: 9vw; text-align: right; }
+.sfx-splash-text small { font-size: clamp(11px, 1.1vw, 15px); font-weight: 800; letter-spacing: .28em; text-transform: uppercase; color: var(--c); }
+.sfx-splash-text b { font-family: var(--font-field, var(--font-display, inherit)); font-size: clamp(22px, 2.6vw, 40px); line-height: 1.05; color: #fff; letter-spacing: .02em; max-width: 46vw; }
+.sfx-splash.is-big .sfx-splash-text b { font-size: clamp(28px, 3.6vw, 58px); background: linear-gradient(180deg, #fff, color-mix(in srgb, var(--c) 60%, #fff)); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 2px 8px rgb(0 0 0 / .8)); }
+.sfx-splash-edge { position: absolute; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, transparent, var(--c) 20%, #fff 50%, var(--c) 80%, transparent); box-shadow: 0 0 14px var(--c); }
+.sfx-splash-edge.t { top: 0; } .sfx-splash-edge.b { bottom: 0; }

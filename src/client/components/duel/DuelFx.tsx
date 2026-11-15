@@ -1,7 +1,7 @@
 // Duel "moments": turn banner + phase ribbon, the end-of-duel overlay, the reconnecting
 // overlay and the sound toggle. Pure presentation; the page decides when they show.
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { BoardState, SessionInfo } from "../../../shared/duel.ts";
 import { PHASE_LABEL, type Seat } from "../../../shared/duelActions.ts";
@@ -46,7 +46,7 @@ export function TurnBanner({ board, you }: { board: BoardState; you: Seat | null
 }
 
 /** Full-screen Victory / Defeat / Draw when a duel ends, with Rematch / Back to lobby. */
-export function EndOverlay({ session, you, onRematch, onClose }: { session: SessionInfo; you: Seat | null; onRematch(): void; onClose(): void }) {
+export function EndOverlay({ session, you, onRematch, onClose, children }: { session: SessionInfo; you: Seat | null; onRematch(): void; onClose(): void; children?: ReactNode }) {
   const w = session.winner;
   const result = w === null ? "draw" : you === null ? "watch" : w === you ? "win" : "lose";
   const title = result === "draw" ? "Draw" : result === "win" ? "Victory" : result === "lose" ? "Defeat" : `${session.seats[w!]?.name ?? "Player"} wins`;
@@ -66,6 +66,7 @@ export function EndOverlay({ session, you, onRematch, onClose }: { session: Sess
           <button onClick={onClose}>View the board</button>
         </div>
         {you !== null && opp && session.rematch[you === 0 ? 1 : 0] && !asked && <p className="muted">{opp.name} wants a rematch.</p>}
+        {children && <div className="duel-end-setup">{children}</div>}
       </div>
     </div>
   );

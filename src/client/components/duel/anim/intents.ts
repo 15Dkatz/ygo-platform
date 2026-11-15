@@ -36,6 +36,11 @@ export type Intent =
   | { t: "shuffle"; zone: string }
   /** `code`: the attacker's (visible) code, for its attribute / type themed strike. */
   | { t: "attack"; attacker: string; target: string | null; side: Seat; code?: number }
+  /** A monster arrives: its summon signature (the animator picks Fusion / Synchro / ... from the card).
+   *  `from`: where it came from (hand, extra, gy...). */
+  | { t: "summon"; uid: string; zone: string; code: number; how: "normal" | "tribute" | "set" | "flip" | "special"; from?: string; side: Seat }
+  /** A card or effect is activated (chain link `link`; `prev` = the previous link's card). */
+  | { t: "activate"; uid: string; zone: string; code: number; side: Seat; link: number; prev?: string }
   /** A short glow: activation, summon landing, targeting, a chain link resolving. */
   | { t: "pulse"; uid: string; tone: "activate" | "summon" | "target" | "resolve" }
   /** A short text ribbon over the board ("Chain Link 2 resolves"). */
@@ -89,6 +94,12 @@ export function engineIntents(events: EngineEvent[], prev: BoardState, next: Boa
   const finalAt = (i: number, uid: string) => !touches.slice(i + 1).some((t) => t.includes(uid));
   let resolving: number | null = null;
   let battled = false;
+  let tributes = 0;   // monsters released since the last summon (Tribute Summon)
+  // where the card now at `uid` came from in this batch
+  const cameFrom = (i: number, uid: string) => {
+    for (let j = i - 1; j >= 0; j--) { const x = events[j]; if (x.e === "move" && x.to && refUid(x.to) === uid) return x.from?.location; }
+    return undefined;
+  };
   // the next summon after event i (within a few events), for tributes and Extra Deck materials
   const nextSummon = (i: number) => {
     for (let j = i + 1; j < Math.min(events.length, i + 10); j++) {
@@ -125,7 +136,7 @@ export function engineIntents(events: EngineEvent[], prev: BoardState, next: Boa
         let via: Spot | undefined;
         if (FIELD.has(from.location) && (to.location === "gy" || to.location === "overlay" || to.location === "banished") && !chainCard) {
           const sum = nextSummon(i);
-          if (sum && sum.ev.how === "normal" && resolving === null) style = "tribute";                       // Tribute Summon
+          if (sum && sum.ev.how === "normal" && resolving === null) { style = "tribute"; tributes++; }        // Tribute Summon
           else if (sum && sum.ev.how === "special" && fromExtra(sum.j)) { style = "material"; via = refSpot(sum.ev.card, first); }   // Synchro / Xyz / Fusion / Link
           else if (to.location === "gy" && !battled && resolving !== null && !DESTROYING.has(kindOf(chain.code.get(resolving) ?? 0))) style = "send";
           else if (to.location === "gy" && !battled && resolving === null) style = "send";                // costs, rules
@@ -136,10 +147,20 @@ export function engineIntents(events: EngineEvent[], prev: BoardState, next: Boa
       }
       case "summon": {
         const uid = refUid(ev.card);
+        const zone = zoneKey(refZone(ev.card, first));
         if (ev.how === "flip") {
           const was = before.get(uid)?.card, now = after.get(uid)?.card;
           out.push({ t: "rotate", uid, from: was?.position ?? "faceDownDef", to: now?.position ?? ev.card.position, reveal: true });
-        } else out.push({ t: "pulse", uid, tone: "summon" });
+        }
+        const how = ev.how === "flip" ? "flip" : ev.how === "normal" ? (tributes ? "tribute" : "normal") : "special";
+        out.push({ t: "summon", uid, zone, code: ev.card.code, how, from: cameFrom(i, uid), side: ev.card.controller });
+        tributes = 0;
+        return;
+      }
+      case "set": {
+        if (ev.card.location !== "monster") return;
+        const uid = refUid(ev.card);
+        out.push({ t: "summon", uid, zone: zoneKey(refZone(ev.card, first)), code: 0, how: "set", side: ev.card.controller });
         return;
       }
       case "reposition": {
@@ -153,7 +174,7 @@ export function engineIntents(events: EngineEvent[], prev: BoardState, next: Boa
         const uid = refUid(ev.card);
         chain.uid.set(ev.link, uid);
         if (ev.card.code) chain.code.set(ev.link, ev.card.code);
-        out.push({ t: "pulse", uid, tone: "activate" });
+        out.push({ t: "activate", uid, zone: zoneKey(refZone(ev.card, first)), code: ev.card.code, side: ev.card.controller, link: ev.link, prev: chain.uid.get(ev.link - 1) });
         // hand traps flash and slam forward as they are activated
         if (ev.card.location === "hand" && ev.card.code && kindOf(ev.card.code) === "handtrap") out.push({ t: "effect", kind: "handtrap", source: uid, targets: [] });
         return;

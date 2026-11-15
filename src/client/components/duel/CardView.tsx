@@ -3,14 +3,14 @@ import type { CSSProperties, DragEvent, MouseEvent } from "react";
 import { cardImage } from "../../api.ts";
 import { HIDDEN_CODE, type CardInstance } from "../../../shared/duel.ts";
 import { getCard } from "./useDuel.ts";
-import { CARD_BACK_SVG } from "./cardBack.ts";
+import { SleeveBack, useSleeve } from "./Sleeve.tsx";
 import { RarityFoil, useRarity } from "../cards/Rarity.tsx";
 import { ResolveFx } from "./ResolveFx.tsx";
 import { useDuelSettings } from "./duelSettings.ts";
 
-/** The original card back (CSS layers + inline SVG emblem, see cardBack.ts). */
-export function CardBack({ className = "" }: { className?: string }) {
-  return <div className={`duel-card-back ${className}`} aria-label="Face-down card" dangerouslySetInnerHTML={{ __html: CARD_BACK_SVG }} />;
+/** A card back in its owner's sleeve (Sleeve.tsx); no owner = the classic back. */
+export function CardBack({ className = "", owner }: { className?: string; owner?: 0 | 1 }) {
+  return <SleeveBack sleeve={useSleeve(owner)} className={className} />;
 }
 
 export function CardFace({ code, token, size = "small" }: { code: number; token?: boolean; size?: "small" | "full" }) {
@@ -93,7 +93,7 @@ export function CardView({ card, draggable, selected, flash, onClick, onHover, o
       onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(e as unknown as MouseEvent); } } : undefined}
     >
       <div className="duel-card-inner">
-        {known && (card.faceUp || ownFaceDown) ? <CardFace code={card.code} token={card.token} /> : <CardBack />}
+        {known && (card.faceUp || ownFaceDown) ? <CardFace code={card.code} token={card.token} /> : <CardBack owner={card.owner} />}
         {ownFaceDown && <span className="duel-badge duel-badge-fd" title="Face-down (only you can see it)">set</span>}
         <RarityFoil rarity={rarity} type={getCard(card.code)?.type} code={card.code} />
       </div>

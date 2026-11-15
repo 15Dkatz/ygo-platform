@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { toCss } from "./uiScale.ts";
 import type { MenuItem } from "./menus.ts";
 import type { Toast } from "./useDuel.ts";
 import { CardView } from "./CardView.tsx";
@@ -16,7 +17,8 @@ export function ContextMenu({ x, y, title, items, onClose }: { x: number; y: num
     const el = ref.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    setPos({ left: Math.max(8, Math.min(x, innerWidth - r.width - 8)), top: Math.max(8, Math.min(y, innerHeight - r.height - 8)) });
+    // screen px, then into the (possibly scaled) page's CSS px
+    setPos({ left: toCss(Math.max(8, Math.min(x, innerWidth - r.width - 8))), top: toCss(Math.max(8, Math.min(y, innerHeight - r.height - 8))) });
   }, [x, y, cur]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
