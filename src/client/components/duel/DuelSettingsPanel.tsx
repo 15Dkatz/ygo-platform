@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { AUTO_PASS_LABEL, type AutoPassMode } from "../../../shared/autoPass.ts";
 import { getVolume, isMuted, onMuteChange, play, setMuted, setVolume } from "./anim/sfx.ts";
+import { SoundThemePicker } from "./SoundThemePicker.tsx";
 import { RESOLVE_COLORS, RESOLVE_COLOR_LABEL, RESOLVE_FX, RESOLVE_FX_LABEL, type ResolveColor, type ResolveFx, SUMMON_FX, SUMMON_FX_LABEL, SPLASH_STYLES, SPLASH_STYLE_LABEL, type SplashStyle, type SummonFxMode } from "./duelSettings.ts";
 import { DEFAULT_SCALE, DEFAULT_TILT, LAYOUT, SCALE_RANGE, TILT_MAX, setDuelSetting, useDuelSettings, type DuelSettings, type LayoutKey } from "./duelSettings.ts";
 
@@ -124,6 +125,7 @@ export function DuelSettingsButton({ autoPass, setAutoPass, engine }: { autoPass
                   onChange={(e) => setVolume(Number(e.target.value) / 100)} onPointerUp={() => play("pick")} aria-label="Volume" />
               </span>
             </label>
+            <SoundThemePicker />
           </Section>
 
           {engine && (

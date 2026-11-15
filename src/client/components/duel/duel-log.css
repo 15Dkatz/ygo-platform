@@ -107,6 +107,10 @@
 :where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-rail .duel-chatbox .duel-loglist { flex: 1; min-height: 0; overflow-y: auto; }
 /* scaled-copy:end */
 
+
+
+
+
 @media (max-width: 1000px) {
   :where(body:not(:has(.duel-page.is-scaled))) .duel-rail .dl { display: none; }
 }
@@ -119,6 +123,10 @@
 html:where(:has(.duel-page.is-scaled)) .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail { opacity: .88; }
 html:where(:has(.duel-page.is-scaled)) .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail:hover { opacity: 1; }
 /* scaled-copy:end */
+
+
+
+
 
 
 /* no panel: the log sits straight on the board (text shadows keep it readable) */
@@ -141,4 +149,8 @@ html:where(:has(.duel-page.is-scaled)) .duel-page.is-live .duel-board-wrap > .du
     background: none; border-color: transparent; box-shadow: none; backdrop-filter: none; padding: 0 4px;
   }
 /* scaled-copy:end */
+
+
+
+
 

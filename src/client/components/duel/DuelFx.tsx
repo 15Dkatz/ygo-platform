@@ -23,22 +23,28 @@ export function TurnBanner({ board, you }: { board: BoardState; you: Seat | null
     const who = you === null ? `${name}'s turn` : mine ? "Your turn" : `${name}'s turn`;
     if (board.turn !== prev.turn) {
       setShown({ key: `t${board.turn}`, big: who, small: `Turn ${board.turn}`, mine, phase: "turn", turn: true });
-      play("turn");
+      play(mine ? "turn-mine" : "turn-theirs");
     } else if (board.phase !== prev.phase && board.phase !== "draw" && board.phase !== "standby") {
       setShown({ key: `p${board.turn}${board.phase}`, big: PHASE_LABEL[board.phase], small: `Turn ${board.turn} · ${who}`, mine, phase: board.phase, turn: false });
-      if (board.phase === "battle") play("attack"); else play("pick");
+      if (board.phase === "main1" || board.phase === "battle" || board.phase === "main2" || board.phase === "end") play(`phase-${board.phase}`);
     } else return;
     const t = setTimeout(() => setShown(null), board.turn !== prev.turn ? 1700 : 1350);
     return () => clearTimeout(t);
   }, [board.turn, board.phase, board.turnPlayer, board.players, you]);
   if (!shown) return null;
+  const { key, ...b } = shown;
+  return <PhaseBanner key={key} {...b} />;
+}
+
+/** The banner itself (the duel page and the /dev/summons lab show it). */
+export function PhaseBanner({ big, small, mine, phase, turn }: { big: string; small: string; mine: boolean; phase: string; turn: boolean }) {
   return (
-    <div key={shown.key} className={`duel-phasefx ph-${shown.phase} ${shown.turn ? "is-turn" : "is-phase"} ${shown.mine ? "is-mine" : "is-theirs"}`} aria-live="polite">
+    <div className={`duel-phasefx ph-${phase} ${turn ? "is-turn" : "is-phase"} ${mine ? "is-mine" : "is-theirs"}`} aria-live="polite">
       <div className="duel-phasefx-band">
         <div className="duel-phasefx-inner">
-          {!shown.turn && <span className="duel-phasefx-glyph" aria-hidden="true">{PHASE_GLYPH[shown.phase] ?? "✦"}</span>}
-          <b className="duel-phasefx-text">{shown.big}</b>
-          <span className="duel-phasefx-sub">{shown.small}</span>
+          {!turn && <span className="duel-phasefx-glyph" aria-hidden="true">{PHASE_GLYPH[phase] ?? "✦"}</span>}
+          <b className="duel-phasefx-text">{big}</b>
+          <span className="duel-phasefx-sub">{small}</span>
         </div>
       </div>
     </div>

@@ -125,14 +125,17 @@ export class BoardAnimator {
   /** One sound per kind of thing that happened, in timeline order. */
   private sounds(intents: Intent[]) {
     const seen = new Set<Sfx>();
+    // summons / activations with their own effects bring their own sounds (summonFx); the generic ones are for
+    // "off" mode and manual rooms
+    const own = duelSettings().summonFx !== "off" && intents.some((i) => i.t === "summon" || i.t === "activate");
     let offset = 0;
     for (const it of intents) {
       let s: Sfx | null = null;
       if (it.t === "move") {
         const to = it.to.zone.split(":")[0], from = it.from.zone.split(":")[0];
         s = from === "deck" && to === "hand" ? "draw"
-          : to === "monster" || to === "extraMonster" ? (it.faceUp ? "summon" : "set")
-          : to === "spelltrap" || to === "field" ? (it.faceUp ? "chain" : "set")
+          : to === "monster" || to === "extraMonster" ? (own ? null : it.faceUp ? "summon" : "set")
+          : to === "spelltrap" || to === "field" ? (own ? null : it.faceUp ? "chain" : "set")
           : null;
         if (it.style === "shatter") s = "damage";
         if (it.style === "tribute" || it.style === "material") s = "resolve";
@@ -141,10 +144,11 @@ export class BoardAnimator {
       else if (it.t === "effect") s = it.kind === "negate" ? "damage" : it.kind === "burn" ? "damage" : it.kind === "revive" || it.kind === "search" ? "gain" : "chain";
       else if (it.t === "shuffle") s = "shuffle";
       else if (it.t === "excavate") s = "draw";
-      else if (it.t === "pulse") s = it.tone === "activate" ? "chain" : it.tone === "resolve" ? "resolve" : null;
+      // a link resolving sounds like its resolve animation (the duel setting), in the sound theme
+      else if (it.t === "pulse") s = it.tone === "activate" ? "chain" : it.tone === "resolve" ? `resolve-${duelSettings().resolveFx}` : null;
       else if (it.t === "rotate" && it.reveal) s = "summon";
-      else if (it.t === "summon") s = it.how === "set" ? "set" : "summon";
-      else if (it.t === "activate") s = "chain";
+      else if (it.t === "summon") s = own ? null : it.how === "set" ? "set" : "summon";
+      else if (it.t === "activate") s = own ? null : "chain";
       if (s && !seen.has(s)) {
         seen.add(s);
         const name = s;

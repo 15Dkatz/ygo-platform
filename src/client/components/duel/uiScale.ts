@@ -1,5 +1,5 @@
-// The live duel is laid out at a fixed design size (1920 x 1080 CSS px, centred, the rest of a window of
-// another shape left as a border) and scaled to the window as one piece (CSS `zoom`), so a laptop screen shows
+// The live duel is laid out at the design size (1920 x 1080 CSS px, or more in one direction to fill a
+// window of another shape; the field keeps its 16:9 size) and scaled to the window as one piece (CSS `zoom`), so a laptop screen shows
 // exactly the full-size layout, only smaller, instead of a re-flowed one. Phones (under 640 x 400) keep the
 // responsive layout. While scaled, the desktop CSS applies whatever the window size (see the scaled copies
 // in duel-scene.css, generated next to each desktop @media block).

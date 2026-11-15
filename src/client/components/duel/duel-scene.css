@@ -143,8 +143,11 @@
                  + the opponent's hand peek (35%) must fit the board;
          width:  7 zone columns.
        --proj and --hand-scale come from the duel settings (DuelPage). */
-    --base: calc((100cqh - 24px) / 8.15);
-    --fit-h: calc((100cqh - 16px) / (8.5 * var(--proj, 1) + 0.71 * var(--hand-scale, 1) + 0.37));
+    /* the height the field sizes itself by: the board's, but no more than a 16:9 window of this width
+       would give (a taller window gets room around the field, not a field that grows into the corners) */
+    --h16: min(100cqh, 100cqw * .54);
+    --base: calc((var(--h16) - 24px) / 8.15);
+    --fit-h: calc((var(--h16) - 16px) / (8.5 * var(--proj, 1) + 0.71 * var(--hand-scale, 1) + 0.37));
     --cw: max(44px, min(calc(var(--field-scale, 1) * var(--base)), var(--fit-h), calc((100cqw - 40px) / 9.2)));
   }
   .duel-page.is-live .duel-field {
@@ -263,8 +266,11 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
                  + the opponent's hand peek (35%) must fit the board;
          width:  7 zone columns.
        --proj and --hand-scale come from the duel settings (DuelPage). */
-    --base: calc((100cqh - 24px) / 8.15);
-    --fit-h: calc((100cqh - 16px) / (8.5 * var(--proj, 1) + 0.71 * var(--hand-scale, 1) + 0.37));
+    /* the height the field sizes itself by: the board's, but no more than a 16:9 window of this width
+       would give (a taller window gets room around the field, not a field that grows into the corners) */
+    --h16: min(100cqh, 100cqw * .54);
+    --base: calc((var(--h16) - 24px) / 8.15);
+    --fit-h: calc((var(--h16) - 16px) / (8.5 * var(--proj, 1) + 0.71 * var(--hand-scale, 1) + 0.37));
     --cw: max(44px, min(calc(var(--field-scale, 1) * var(--base)), var(--fit-h), calc((100cqw - 40px) / 9.2)));
   }
 :where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-field {
@@ -344,6 +350,10 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 :where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-engine-bar { top: 52px; bottom: auto; }
 :where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-toasts { top: 52px; }
 /* scaled-copy:end */
+
+
+
+
 
 
 /* ---------- effect visuals (anim/fx.ts) ---------- */
@@ -531,6 +541,10 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 /* scaled-copy:end */
 
 
+
+
+
+
 .duel-autopass { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
 .duel-autopass select { font-size: 12px; padding: 3px 4px; }
 
@@ -588,6 +602,10 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
   }
 :where(body:has(.duel-page.is-scaled)) .duel-page.is-live.is-tilt .duel-field .duel-card-inner { box-shadow: 0 6px 10px -4px rgb(0 0 0 / .55); }
 /* scaled-copy:end */
+
+
+
+
 
 @media (prefers-reduced-motion: reduce) { .duel-page.is-live.is-tilt .duel-field { transition: none; } }
 
@@ -653,6 +671,10 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 :where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-engine-bar-list { font-size: 12px; font-weight: 500 !important; padding: 4px !important; background: none; border-color: transparent; color: var(--muted); }
 :where(body:has(.duel-page.is-scaled)) .duel-page.is-live:has(.duel-engine-bar) .duel-status .duel-engine { display: none; }
 /* scaled-copy:end */
+
+
+
+
 
 @keyframes dock-in { from { opacity: 0; transform: translateY(10px); } }
 @media (prefers-reduced-motion: reduce) { .duel-page.is-live .duel-engine-bar { animation: none; } }
@@ -735,6 +757,10 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 /* scaled-copy:end */
 
 
+
+
+
+
 /* ---------- hover action buttons on playable cards ---------- */
 .duel-quick {
   position: absolute; left: 50%; bottom: calc(100% + 4px); transform: translateX(-50%); z-index: 20;
@@ -789,6 +815,10 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 /* scaled-copy:end */
 
 
+
+
+
+
 @media (min-width: 1001px) {
   /* the dock fits the strip beside the field (as wide as the action cluster); wider on big screens */
   .duel-page.is-live .duel-engine-bar .duel-chain-options button { grid-template-columns: 30px 1fr; padding: 5px 6px; gap: 6px; }
@@ -802,6 +832,10 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 :where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-engine-bar .duel-chain-go { display: none; }
 :where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-engine-bar-hint { font-size: 13px; }
 /* scaled-copy:end */
+
+
+
+
 
 @media (min-width: 1700px) {
   .duel-page.is-live .duel-engine-bar { width: 260px; }
@@ -817,6 +851,10 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 :where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-engine-bar .duel-chain-thumb { --cw: 38px; }
 :where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-engine-bar .duel-chain-go { display: inline; }
 /* scaled-copy:end */
+
+
+
+
 
 
 /* ---------- dock: minimize / back signals ---------- */
@@ -847,6 +885,10 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 :where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-board-wrap { overflow: clip; }
 :where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-topline { position: relative; z-index: 30; }
 /* scaled-copy:end */
+
+
+
+
 
 
 /* ---------- LP hits: a big number over that player's half + a flash at the screen edge ---------- */
@@ -893,6 +935,10 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 :where(body:has(.duel-page.is-scaled)) .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail:hover { background: var(--plate-bg); }
 /* scaled-copy:end */
 
+
+
+
+
 /* no glass box when the status column has nothing to say */
 .duel-status .duel-engine:empty { display: none; }
 @media (min-width: 1001px) {
@@ -901,6 +947,10 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 /* scaled-copy:start */
 :where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-board-wrap > .duel-status:not(:has(> :not(.duel-engine:empty))) { background: none; border-color: transparent; box-shadow: none; backdrop-filter: none; padding: 0; }
 /* scaled-copy:end */
+
+
+
+
 
 
 /* ---------- phases in the middle row's empty cells ---------- */
@@ -945,6 +995,10 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 :where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-hand.is-opp { transform: translate(-50%, var(--opp-hand-drop, -65%)); --hw: calc(var(--cw) * .72 * var(--opp-hand-scale, 1)); }
 /* scaled-copy:end */
 
+
+
+
+
 .duel-setting-layout { border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; display: flex; flex-direction: column; gap: 8px; }
 .duel-setting-layout summary { cursor: pointer; font-weight: 700; font-size: 13px; }
 .duel-setting-layout[open] summary { margin-bottom: 6px; }
@@ -956,6 +1010,10 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 /* scaled-copy:start */
 :where(body:has(.duel-page.is-scaled)) .duel-page.is-live { overflow: clip; }
 /* scaled-copy:end */
+
+
+
+
 
 
 /* ---------- settings panel sections ---------- */
@@ -988,6 +1046,10 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 /* scaled-copy:end */
 
 
+
+
+
+
 /* ---------- whose turn: bottom right, a heartbeat when it is yours ---------- */
 @media (min-width: 1001px) {
   .duel-page.is-live .duel-board-wrap > .duel-corner { right: 16px; bottom: 14px; width: auto; min-width: 150px; align-items: flex-end; }
@@ -995,6 +1057,10 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 /* scaled-copy:start */
 :where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-board-wrap > .duel-corner { right: 16px; bottom: 14px; width: auto; min-width: 150px; align-items: flex-end; }
 /* scaled-copy:end */
+
+
+
+
 
 .duel-turnsign { display: flex; flex-direction: column; align-items: flex-end; text-align: right; pointer-events: none; user-select: none; }
 .duel-turnsign b { font-family: var(--font-field, inherit); font-size: clamp(22px, calc(3.4 * var(--vh, 1vh)), 38px); font-weight: 900; line-height: 1; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
@@ -1270,6 +1336,10 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 :where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-floatpreview .duel-preview-text h3 { font-size: calc(14px * clamp(.9, var(--preview-scale, 1), 1.4)); }
 /* scaled-copy:end */
 
+
+
+
+
 /* the preview always fits the window: the picture shrinks to the height available, the text gets the rest */
 @media (min-width: 1001px) {
   .duel-page.is-live .duel-floatpreview { --pw: min(calc(220px * var(--preview-scale, 1)), calc((calc(100 * var(--vh, 1vh)) - 250px) / 1.458)); width: max(260px, calc(var(--pw) + 60px)); top: 56px; }
@@ -1281,6 +1351,10 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 :where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-floatpreview .duel-preview img { width: var(--pw); }
 :where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-floatpreview .duel-preview-text { max-height: max(90px, min(calc(200px * var(--preview-scale, 1)), calc(calc(100 * var(--vh, 1vh)) - 170px - var(--pw) * 1.458))); }
 /* scaled-copy:end */
+
+
+
+
 
 
 /* ---- Power-up aura: jagged energy flames roaring upward, crackling lightning, rising sparks, a trembling card ---- */
@@ -1372,6 +1446,10 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 :where(body:has(.duel-page.is-scaled)) .duel-page.is-live:has(.duel-clockface) .duel-engine-bar, :where(body:has(.duel-page.is-scaled)) .duel-page.is-live:has(.duel-clockface) .duel-decision-pill { bottom: 250px; max-height: calc(calc(100 * var(--vh, 1vh)) - 330px); }
 /* scaled-copy:end */
 
+
+
+
+
 /* your hand ends before the bottom-right corner (turn buttons, clock, turn sign); the cards fan tighter instead */
 @media (min-width: 1001px) {
   .duel-page.is-live .duel-hand.is-own { width: min(76%, calc(var(--hw) * 7.6), calc(100% - 2 * clamp(250px, 19%, 300px))); }
@@ -1379,6 +1457,10 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 /* scaled-copy:start */
 :where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-hand.is-own { width: min(76%, calc(var(--hw) * 7.6), calc(100% - 2 * clamp(250px, 19%, 300px))); }
 /* scaled-copy:end */
+
+
+
+
 
 /* the turn sign a touch smaller (it shares the corner with the clock); the seconds bar easier to see */
 .duel-turnsign b { font-size: clamp(18px, calc(2.7 * var(--vh, 1vh)), 30px); }
@@ -1476,6 +1558,10 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 :where(body:has(.duel-page.is-scaled)) .duel-page:has(.duel-reveal) .duel-engine-dialog { top: auto; bottom: calc(16 * var(--vh, 1vh)); transform: translateX(-50%); max-height: calc(calc(100 * var(--vh, 1vh)) - 360px); }
 /* scaled-copy:end */
 
+
+
+
+
 /* your hand fits its own width (the cards overlap more instead of spilling under Next / End turn) */
 @media (min-width: 1001px) {
   .duel-page.is-live .duel-hand.is-own .duel-hand-fan { container-type: inline-size; }
@@ -1483,6 +1569,10 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 /* scaled-copy:start */
 :where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-hand.is-own .duel-hand-fan { container-type: inline-size; }
 /* scaled-copy:end */
+
+
+
+
 
 
 .turn-timer { position: relative; }
@@ -1508,6 +1598,10 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 :where(body:has(.duel-page.is-scaled)) .duel-fulllog .duel-loglist { flex: 1; min-height: 0; overflow-y: auto; font-size: 12.5px; }
 :where(body:has(.duel-page.is-scaled)) .duel-fulllog-close { align-self: flex-start; padding: 2px 8px; font-size: 12px; background: none; border: 1px solid var(--border); }
 /* scaled-copy:end */
+
+
+
+
 
 @keyframes fulllog-in { from { opacity: 0; transform: translateY(-6px) scale(.98); } to { opacity: 1; transform: none; } }
 
@@ -1548,6 +1642,10 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 /* scaled-copy:end */
 
 
+
+
+
+
 /* ---------- reveal strip: closes by itself after REVEAL_MS unless you point at it ---------- */
 .duel-reveal-hint { margin-left: auto; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
 .duel-reveal-timer { display: block; height: 3px; margin: -2px 0 10px; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--fg) 10%, transparent); }
@@ -1561,10 +1659,10 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 :root { --vh: 1vh; --vw: 1vw; }
 /* viewport units inside the zoomed page: as a share of the real screen, like at full size */
 .duel-page.is-scaled { --vh: calc(1vh / var(--ui-zoom)); --vw: calc(1vw / var(--ui-zoom)); }
-/* exactly the design size, centred: the same proportions at every window size (spare room = a plain border) */
-.duel-page.is-live.is-scaled { width: 1920px; height: 1080px; right: auto; bottom: auto;
-  left: max(0px, calc((100vw / var(--ui-zoom) - 1920px) / 2)); top: max(0px, calc((100vh / var(--ui-zoom) - 1080px) / 2)); }
-body:has(.duel-page.is-live.is-scaled) { background: #05060c; overflow: hidden; }
+/* the whole window: at least the design size in both directions (1920 x 1080), more in one when the window
+   is a different shape; the field keeps its 16:9 size (--h16) and the corners keep their places */
+.duel-page.is-live.is-scaled { width: calc(100vw / var(--ui-zoom)); height: calc(100vh / var(--ui-zoom)); right: auto; bottom: auto; left: 0; top: 0; }
+body:has(.duel-page.is-live.is-scaled) { overflow: hidden; }
 
 
 /* ---------- smoothness: compositor-only ambient motion, contained panels ---------- */
@@ -1583,3 +1681,13 @@ body:has(.duel-page.is-live.is-scaled) { background: #05060c; overflow: hidden; 
 
 /* the page title's light sweep is for the site, not the duel (it repainted the title every frame) */
 .duel-page.is-live h1 { animation: none !important; }
+
+/* a window taller than 16:9: the opponent's hand stays just above the field (the field keeps its 16:9 size);
+   the spare height is above it, where the log and their LP sit */
+@media (min-width: 1001px) {
+  .duel-page.is-live .duel-hand.is-opp { top: calc(100cqh - var(--h16, 100cqh)); }
+}
+/* scaled-copy:start */
+:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-hand.is-opp { top: calc(100cqh - var(--h16, 100cqh)); }
+/* scaled-copy:end */
+

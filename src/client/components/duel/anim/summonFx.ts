@@ -8,6 +8,7 @@
 import { cardImage } from "../../../api.ts";
 import type { Card } from "../../../../shared/types.ts";
 import type { SplashStyle } from "../duelSettings.ts";
+import { play as sfx, type Sfx } from "./sfx.ts";
 import "./summon-fx.css";
 
 type Run = (el: Element, frames: Keyframe[], opts: KeyframeAnimationOptions) => Animation;
@@ -162,6 +163,9 @@ export function summon(layer: HTMLElement, run: Run, r: R, kind: SummonKind, del
   const tone = TONE[kind];
   const heavy = !!o.big;
   let ms = 700;
+  // its sound, timed to the moment that matters in its look (the landing, the rise...)
+  const at: Record<SummonKind, number> = { normal: 230, flip: 0, tribute: 380, set: 200, special: 300, ritual: 0, fusion: 0, synchro: 0, xyz: 0, link: 0, pendulum: 0 };
+  sfx(`sum-${kind}` as Sfx, { inMs: delay + at[kind] });
   switch (kind) {
     case "normal": case "flip":
       if (kind === "normal") land(o.card ?? null, run, delay, heavy);
@@ -262,6 +266,7 @@ export function summon(layer: HTMLElement, run: Run, r: R, kind: SummonKind, del
     }
   }
   if (heavy) {
+    sfx("boss", { inMs: delay + ms * 0.55 });
     const dim = bit(layer, "sfx-dim", {}, 1100, delay);
     run(dim, [{ opacity: 0 }, { offset: 0.2, opacity: 1 }, { offset: 0.7, opacity: 1 }, { opacity: 0 }], { duration: 1100, delay, fill: "both" });
     shock(layer, run, r, tone, delay + ms * 0.55, 3.4, 800, false, 4);
@@ -324,6 +329,7 @@ function flames(layer: HTMLElement, run: Run, r: R, tone: string, delay: number)
 export function activate(layer: HTMLElement, run: Run, r: R, kind: ActivateKind, delay: number, o: { card?: HTMLElement | null; tone?: string } = {}): number {
   const tone = o.tone ?? TONE[kind];
   const card = o.card ?? null;
+  sfx(`act-${kind}` as Sfx, { inMs: delay });
   switch (kind) {
     case "spell": case "quick": {
       const fast = kind === "quick";
@@ -386,6 +392,7 @@ function embers(layer: HTMLElement, run: Run, r: R, tone: string, delay: number)
 /** The chain drawing itself: a gold line from the previous link's card to this one, with the link number. */
 export function chainLine(layer: HTMLElement, run: Run, from: R | null, to: R, link: number, delay: number) {
   const b = ctr(to);
+  sfx("chain-link", { link, inMs: delay + (from ? 380 : 0) });
   if (from) {
     const a = ctr(from), len = Math.hypot(b.x - a.x, b.y - a.y), ang = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
     const el = bit(layer, "sfx-chainline", { left: `${a.x}px`, top: `${a.y - 1.5}px`, width: `${len}px`, height: "3px", transform: `rotate(${ang}deg)` }, 1200, delay);
@@ -427,6 +434,7 @@ export function splash(layer: HTMLElement, run: Run, o: SplashOpts, delay: numbe
   const wait = start - now;
   const ms = o.short ? 900 : o.big ? 1550 : 1250;
   splashFree = start + ms * 0.8;
+  sfx(o.big ? "splash-big" : "splash", { inMs: wait });
   const style = o.style ?? "showcase";
   switch (style) {
     case "portal": return portal(layer, run, o, wait, ms);

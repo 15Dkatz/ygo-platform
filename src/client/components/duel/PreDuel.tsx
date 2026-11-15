@@ -13,6 +13,7 @@ import { SleevePicker } from "../cards/SleevePicker.tsx";
 import { TestHand } from "../library/TestHand.tsx";
 import "../library/deck-tools.css";
 import { DeckSelect } from "./DeckPicker.tsx";
+import { SoundThemePicker } from "./SoundThemePicker.tsx";
 import { RoomRules } from "./RoomRules.tsx";
 import { SleeveBack } from "./Sleeve.tsx";
 import { RESOLVE_COLORS, RESOLVE_COLOR_LABEL, RESOLVE_FX, RESOLVE_FX_LABEL, SPLASH_STYLES, SPLASH_STYLE_LABEL, SUMMON_FX, SUMMON_FX_LABEL, TILT_MAX, setDuelSetting, useDuelSettings, type ResolveColor, type ResolveFx, type SplashStyle, type SummonFxMode } from "./duelSettings.ts";
@@ -391,6 +392,7 @@ function ViewPanel() {
         <span>3D tilt <b>{ds.tilt}°</b></span>
         <input type="range" min={0} max={TILT_MAX} value={ds.tilt} onChange={(e) => setDuelSetting("tilt", Number(e.target.value))} />
       </label>
+      <SoundThemePicker className="pd-field" />
       <div className="pd-toggles">
         {toggle("autoPlace", "Place cards for me", "Summoned / Set cards go to a zone by themselves instead of asking")}
         {toggle("confirmEnd", "Confirm ending a turn", "Ask before ending the turn with an unused Normal Summon")}
