@@ -428,7 +428,15 @@ export function splash(layer: HTMLElement, run: Run, o: SplashOpts, delay: numbe
   const ms = o.short ? 900 : o.big ? 1550 : 1250;
   splashFree = start + ms * 0.8;
   const style = o.style ?? "showcase";
-  return style === "portal" ? portal(layer, run, o, wait, ms) : style === "banner" ? banner(layer, run, o, wait, o.short ? 820 : o.big ? 1500 : 1150) : showcase(layer, run, o, wait, ms);
+  switch (style) {
+    case "portal": return portal(layer, run, o, wait, ms);
+    case "banner": return banner(layer, run, o, wait, o.short ? 820 : o.big ? 1500 : 1150);
+    case "cutin": return cutin(layer, run, o, wait, ms);
+    case "hologram": return hologram(layer, run, o, wait, ms);
+    case "comic": return comic(layer, run, o, wait, ms);
+    case "spotlight": return spotlight(layer, run, o, wait, ms);
+    default: return showcase(layer, run, o, wait, ms);
+  }
 }
 
 /** The card's artwork sweeping across the middle of the board in a slanted band, with its name. */
@@ -500,6 +508,86 @@ function portal(layer: HTMLElement, run: Run, o: SplashOpts, wait: number, ms: n
   run(el.querySelector(".sfx-portal-ring")!, [{ transform: "rotate(-90deg) scale(.2)", opacity: 0 }, { offset: 0.25, transform: "rotate(0deg) scale(1)", opacity: 1 }, { offset: 0.75, transform: "rotate(60deg) scale(1)", opacity: 1 }, { transform: "rotate(120deg) scale(.15)", opacity: 0 }],
     { duration: ms, delay: wait, easing: "cubic-bezier(.5,0,.3,1)", fill: "both" });
   run(el.querySelector(".sfx-portal-plate")!, [{ opacity: 0, transform: "translate(-50%, 8px)" }, { offset: 0.25, opacity: 0, transform: "translate(-50%, 8px)" }, { offset: 0.35, opacity: 1, transform: "translate(-50%, 0)" }, { offset: 0.72, opacity: 1, transform: "translate(-50%, 0)" }, { opacity: 0, transform: "translate(-50%, 0)" }],
+    { duration: ms, delay: wait, easing: "ease-out", fill: "both" });
+  return wait + ms * 0.85;
+}
+
+/** A framed, slanted panel of the art bursting in from the screen edge on the owner's side (a fighting-game cut-in). */
+function cutin(layer: HTMLElement, run: Run, o: SplashOpts, wait: number, ms: number): number {
+  const w = Math.round(Math.min(innerWidth * 0.46, 760)), h = Math.round(Math.min(innerHeight * (o.big ? 0.3 : 0.24), 300));
+  const left = o.mine;
+  const y = Math.min(innerHeight - h - 20, Math.max(20, ctr(o.at).y - h / 2));
+  const el = bit(layer, `sfx-cutin ${left ? "from-left" : "from-right"} ${o.big ? "is-big" : ""}`, { top: `${y}px`, width: `${w}px`, height: `${h}px`, [left ? "left" : "right"]: "0px", "--c": o.tone, "--art": `url("${cardImage(o.code, "crop")}")` }, ms, wait,
+    `<i class="sfx-cutin-lines"></i><div class="sfx-cutin-frame"><div class="sfx-cutin-art"></div></div><div class="sfx-cutin-text"><small></small><b></b></div>`);
+  el.querySelector("small")!.textContent = o.kicker;
+  el.querySelector("b")!.textContent = o.name;
+  const d = left ? -1 : 1;
+  run(el, [{ transform: `translateX(${d * 110}%)` }, { offset: 0.14, transform: `translateX(${-d * 3}%)` }, { offset: 0.2, transform: "translateX(0)" }, { offset: 0.8, transform: `translateX(${-d * 1.5}%)` }, { transform: `translateX(${d * 110}%)` }],
+    { duration: ms, delay: wait, easing: "cubic-bezier(.2,.8,.3,1)", fill: "both" });
+  run(el.querySelector(".sfx-cutin-art")!, [{ transform: "scale(1.25) translateX(4%)" }, { transform: "scale(1.1) translateX(-4%)" }], { duration: ms, delay: wait, easing: "linear", fill: "both" });
+  run(el.querySelector(".sfx-cutin-lines")!, [{ transform: "translateX(0)", opacity: 0 }, { offset: 0.15, opacity: 1 }, { offset: 0.85, opacity: 1 }, { transform: `translateX(${-d * 120}px)`, opacity: 0 }], { duration: ms, delay: wait, easing: "linear", fill: "both" });
+  return wait + ms * 0.85;
+}
+
+/** A projector beam from the card and the card above it as a flickering hologram. */
+function hologram(layer: HTMLElement, run: Run, o: SplashOpts, wait: number, ms: number): number {
+  const h = Math.round(Math.min(innerHeight * (o.big ? 0.48 : 0.4), 460)), w = Math.round(h * 59 / 86);
+  const z = ctr(o.at);
+  const cx = Math.min(innerWidth - w / 2 - 16, Math.max(w / 2 + 16, z.x));
+  const top = Math.max(12, Math.min(o.at.top - h * 0.85, innerHeight - h - 70));
+  const el = bit(layer, `sfx-holo ${o.big ? "is-big" : ""}`, { left: `${cx - w / 2}px`, top: `${top}px`, width: `${w}px`, height: `${h}px`, "--c": o.tone }, ms, wait,
+    `<div class="sfx-holo-card"><img alt="" src="${cardImage(o.code, "full")}"><i class="sfx-holo-scan"></i></div><div class="sfx-holo-text"><small></small><b></b></div>`);
+  el.querySelector("small")!.textContent = o.kicker;
+  el.querySelector("b")!.textContent = o.name;
+  // the beam: from the card up to the hologram's bottom edge
+  const beamTop = top + h * 0.9, beamH = Math.max(20, z.y - beamTop);
+  const beam = bit(layer, "sfx-holo-beam", { left: `${cx - w * 0.6}px`, top: `${beamTop}px`, width: `${w * 1.2}px`, height: `${beamH}px`, "--c": o.tone, "--base": `${Math.max(8, (o.at.width / (w * 1.2)) * 50)}%` }, ms, wait);
+  run(beam, [{ opacity: 0, transform: "scaleY(0)" }, { offset: 0.15, opacity: 1, transform: "scaleY(1)" }, { offset: 0.8, opacity: 0.9 }, { opacity: 0, transform: "scaleY(.2)" }], { duration: ms, delay: wait, easing: "ease-out", fill: "both" });
+  run(el.querySelector(".sfx-holo-card")!, [
+    { opacity: 0, transform: "translateY(30%) scaleY(.05)" }, { offset: 0.18, opacity: 0.9, transform: "translateY(0) scaleY(1)" },
+    { offset: 0.3, opacity: 0.55 }, { offset: 0.33, opacity: 0.9 }, { offset: 0.6, opacity: 0.85 }, { offset: 0.62, opacity: 0.5 }, { offset: 0.65, opacity: 0.9 },
+    { offset: 0.82, opacity: 0.9, transform: "translateY(0) scaleY(1)" }, { opacity: 0, transform: "translateY(40%) scaleY(.02)" },
+  ], { duration: ms, delay: wait, easing: "ease-in-out", fill: "both" });
+  run(el.querySelector(".sfx-holo-scan")!, [{ transform: "translateY(-100%)" }, { transform: "translateY(100%)" }], { duration: 700, delay: wait, iterations: Math.ceil(ms / 700), easing: "linear", fill: "both" });
+  run(el.querySelector(".sfx-holo-text")!, [{ opacity: 0 }, { offset: 0.25, opacity: 0 }, { offset: 0.35, opacity: 1 }, { offset: 0.78, opacity: 1 }, { opacity: 0 }], { duration: ms, delay: wait, fill: "both" });
+  return wait + ms * 0.85;
+}
+
+/** A comic-book starburst next to the card: halftone, the art in a tilted frame, the name in bold outline. */
+function comic(layer: HTMLElement, run: Run, o: SplashOpts, wait: number, ms: number): number {
+  const s = Math.round(Math.min(innerHeight * (o.big ? 0.56 : 0.46), 520));
+  const z = ctr(o.at);
+  const side = o.mine ? 1 : -1;
+  const cx = Math.min(innerWidth - s / 2 - 8, Math.max(s / 2 + 8, z.x + side * s * 0.55)), cy = Math.min(innerHeight - s / 2 - 8, Math.max(s / 2 + 8, z.y - s * 0.25));
+  const el = bit(layer, `sfx-comic ${o.big ? "is-big" : ""}`, { left: `${cx - s / 2}px`, top: `${cy - s / 2}px`, width: `${s}px`, height: `${s}px`, "--c": o.tone, "--art": `url("${cardImage(o.code, "crop")}")` }, ms, wait,
+    `<div class="sfx-comic-burst"></div><div class="sfx-comic-frame"><div class="sfx-comic-art"></div></div><div class="sfx-comic-text"><small></small><b></b></div>`);
+  el.querySelector("small")!.textContent = o.kicker;
+  el.querySelector("b")!.textContent = o.name;
+  run(el, [{ transform: "scale(0) rotate(-20deg)", opacity: 0 }, { offset: 0.12, transform: "scale(1.15) rotate(4deg)", opacity: 1 }, { offset: 0.18, transform: "scale(.96) rotate(-2deg)" },
+    { offset: 0.24, transform: "scale(1) rotate(0deg)" }, { offset: 0.8, transform: "scale(1.02) rotate(1deg)", opacity: 1 }, { transform: "scale(.2) rotate(15deg)", opacity: 0 }],
+    { duration: ms, delay: wait, easing: "ease-out", fill: "both" });
+  run(el.querySelector(".sfx-comic-burst")!, [{ transform: "rotate(0deg)" }, { transform: "rotate(25deg)" }], { duration: ms, delay: wait, easing: "linear", fill: "both" });
+  return wait + ms * 0.82;
+}
+
+/** The screen dims, a cone of light falls on the card, and the card rises into it. */
+function spotlight(layer: HTMLElement, run: Run, o: SplashOpts, wait: number, ms: number): number {
+  const z = ctr(o.at);
+  const h = Math.round(Math.min(innerHeight * (o.big ? 0.5 : 0.42), 480)), w = Math.round(h * 59 / 86);
+  const cx = Math.min(innerWidth - w / 2 - 16, Math.max(w / 2 + 16, z.x)), cy = Math.min(innerHeight - h / 2 - 70, Math.max(h / 2 + 16, z.y - h * 0.35));
+  const dim = bit(layer, "sfx-spot-dim", { "--x": `${cx}px`, "--y": `${cy}px`, "--r": `${h * 0.75}px` }, ms, wait);
+  run(dim, [{ opacity: 0 }, { offset: 0.15, opacity: 1 }, { offset: 0.8, opacity: 1 }, { opacity: 0 }], { duration: ms, delay: wait, fill: "both" });
+  const cone = bit(layer, "sfx-spot-cone", { left: `${cx - w * 1.1}px`, top: "0px", width: `${w * 2.2}px`, height: `${cy + h * 0.55}px`, "--c": o.tone }, ms, wait);
+  run(cone, [{ opacity: 0, transform: "scaleX(.2)" }, { offset: 0.18, opacity: 1, transform: "scaleX(1)" }, { offset: 0.8, opacity: 1 }, { opacity: 0 }], { duration: ms, delay: wait, easing: "ease-out", fill: "both" });
+  const el = bit(layer, `sfx-spot ${o.big ? "is-big" : ""}`, { left: `${cx - w / 2}px`, top: `${cy - h / 2}px`, width: `${w}px`, height: `${h}px`, "--c": o.tone }, ms, wait,
+    `<div class="sfx-spot-card"><img alt="" src="${cardImage(o.code, "full")}"></div><div class="sfx-spot-text"><small></small><b></b></div>`);
+  el.querySelector("small")!.textContent = o.kicker;
+  el.querySelector("b")!.textContent = o.name;
+  const dy = z.y - cy, s0 = Math.max(0.15, o.at.height / h);
+  run(el.querySelector(".sfx-spot-card")!, [{ transform: `translateY(${dy}px) scale(${s0})`, opacity: 0, filter: "brightness(2.2)" }, { offset: 0.25, transform: "translateY(0) scale(1)", opacity: 1, filter: "brightness(1.3)" },
+    { offset: 0.4, filter: "brightness(1)" }, { offset: 0.8, transform: "translateY(-6px) scale(1.02)", opacity: 1 }, { transform: `translateY(${dy}px) scale(${s0})`, opacity: 0 }],
+    { duration: ms, delay: wait, easing: "cubic-bezier(.3,.6,.3,1)", fill: "both" });
+  run(el.querySelector(".sfx-spot-text")!, [{ opacity: 0, transform: "translate(-50%, 8px)" }, { offset: 0.3, opacity: 0, transform: "translate(-50%, 8px)" }, { offset: 0.4, opacity: 1, transform: "translate(-50%, 0)" }, { offset: 0.78, opacity: 1, transform: "translate(-50%, 0)" }, { opacity: 0, transform: "translate(-50%, 0)" }],
     { duration: ms, delay: wait, easing: "ease-out", fill: "both" });
   return wait + ms * 0.85;
 }

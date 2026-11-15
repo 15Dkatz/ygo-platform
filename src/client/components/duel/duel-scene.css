@@ -476,7 +476,7 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 /* autopilot (demo) toggle in the top line */
 .duel-autopilot { display: inline-flex; align-items: center; gap: 4px; }
 .duel-autopilot button { font-size: 12px; padding: 4px 10px; }
-.duel-autopilot.is-on button { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); animation: duel-move-pulse 1.8s ease-in-out infinite; }
+.duel-autopilot.is-on button { position: relative; background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
 .duel-autopilot select { font-size: 12px; padding: 3px 4px; }
 
 /* ---------- distinct zones: frames, textures and emblems (empty or not; cards sit on top) ---------- */
@@ -505,8 +505,8 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 .duel-pile-banished { --zone-art: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 146'%3E%3Cg transform='translate(50 73)' fill='none' stroke-width='2.4'%3E%3Cpath d='M0-34 C26-34 34-8 22 8 C10 24-16 22-18 4 C-20-12-4-20 8-12 C18-5 12 10 2 10 C-6 10-8 2-4-2' stroke='%237fe3ff' stroke-opacity='.6'/%3E%3Ccircle r='38' stroke='%23b48bff' stroke-opacity='.35' stroke-dasharray='2 5'/%3E%3C/g%3E%3C/svg%3E"); border: 2px dashed color-mix(in srgb, #7fe3ff 55%, var(--zone-edge)); border-radius: 10px;
   --zone-tex: radial-gradient(circle at 50% 50%, rgb(127 227 255 / .14), rgb(120 70 220 / .14) 45%, transparent 72%);
   box-shadow: inset 0 0 16px rgb(127 227 255 / .2); }
-.duel-pile-banished::before { animation: zone-rift 14s linear infinite; }
-@keyframes zone-rift { to { filter: hue-rotate(60deg); } }
+.duel-pile-banished::before { animation: zone-rift 7s ease-in-out infinite alternate; }
+@keyframes zone-rift { to { opacity: .55; } }
 /* Field Spell Zone: a landscape */
 .duel-fieldzone { --zone-art: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 146'%3E%3Cg fill='none' stroke='%237fe0b0' stroke-opacity='.55' stroke-width='2.4' stroke-linejoin='round'%3E%3Cpath d='M14 104 L38 66 L52 84 L64 70 L86 104 Z' fill='%235fd39a' fill-opacity='.12'/%3E%3Ccircle cx='68' cy='50' r='7'/%3E%3Cpath d='M12 110 H88'/%3E%3C/g%3E%3C/svg%3E"); border: 2px solid color-mix(in srgb, var(--spell) 65%, var(--zone-edge)); border-radius: 10px;
   --zone-tex: linear-gradient(180deg, rgb(95 211 154 / .05), rgb(95 211 154 / .16)); }
@@ -1338,10 +1338,12 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 .duel-clock-bank { position: absolute; inset: 0; border-radius: 50%;
   background: conic-gradient(var(--c) calc(var(--bank) * 360deg), color-mix(in srgb, var(--fg) 12%, transparent) 0);
   -webkit-mask: radial-gradient(circle, transparent 66%, #000 67%); mask: radial-gradient(circle, transparent 66%, #000 67%); }
-/* inner ring: sweeps once a second */
+/* inner ring: a bright arc goes round once a second (a rotation: drawn once, turned on the GPU) */
 .duel-clock-sweep { position: absolute; inset: 12%; border-radius: 50%;
-  background: conic-gradient(color-mix(in srgb, var(--c) 85%, #fff) calc(var(--sec) * 360deg), transparent 0);
-  -webkit-mask: radial-gradient(circle, transparent 74%, #000 76%); mask: radial-gradient(circle, transparent 74%, #000 76%); opacity: .9; }
+  background: conic-gradient(transparent 0 55%, color-mix(in srgb, var(--c) 45%, transparent) 80%, color-mix(in srgb, var(--c) 85%, #fff) 99%, transparent 100%);
+  -webkit-mask: radial-gradient(circle, transparent 74%, #000 76%); mask: radial-gradient(circle, transparent 74%, #000 76%); opacity: .9; will-change: transform; }
+.duel-clockface.is-running .duel-clock-sweep { animation: clock-sweep 1s linear infinite; animation-delay: var(--sec-delay, 0s); }
+@keyframes clock-sweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 .duel-clockface.is-paused .duel-clock-sweep { opacity: .25; }
 .duel-clock-digits { position: relative; font-family: var(--font-num, inherit); font-size: clamp(15px, calc(2.3 * var(--vh, 1vh)), 22px); font-weight: 900; font-variant-numeric: tabular-nums;
   color: var(--fg); text-shadow: 0 0 10px color-mix(in srgb, var(--c) 60%, transparent); }
@@ -1384,18 +1386,27 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 .duel-secbar.is-running { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent), 0 0 10px color-mix(in srgb, var(--accent) 35%, transparent); }
 
 /* ---------- turn sign: a calm, slow glow (no more heartbeat) ---------- */
-@keyframes turn-calm { 0%, 100% { opacity: .78; filter: drop-shadow(0 0 4px color-mix(in srgb, var(--accent) 35%, transparent)); } 50% { opacity: 1; filter: drop-shadow(0 0 14px color-mix(in srgb, var(--accent) 75%, transparent)); } }
+/* opacity only (a filter animation repainted the big text every frame); the glow is a still drop-shadow */
+@keyframes turn-calm { 0%, 100% { opacity: .78; } 50% { opacity: 1; } }
+.duel-page .duel-turnsign.is-mine b, .duel-page .duel-turnsign.is-acting b { filter: drop-shadow(0 0 9px color-mix(in srgb, var(--accent) 55%, transparent)); }
 .duel-page .duel-turnsign.is-mine b, .duel-page .duel-turnsign.is-acting b { animation: turn-calm 3.2s ease-in-out infinite !important; transform: none; }
 .duel-page .duel-turnsign.is-acting b { animation-duration: 2.2s !important; }
 .duel-page .duel-turnsign.is-mine.is-waiting b { animation: none !important; }
 .duel-page.no-heartbeat .duel-turnsign b { animation: none !important; }
 
-/* the letters as the seconds bar: bright up to the time left in this second, dim after it */
+/* the letters as the seconds bar: dim letters, and a bright copy over them clipped shorter through each
+   second (a clip animation, synced to the clock by --sec-delay; no repaint of the letters per frame) */
 .duel-sectext {
   --fill: var(--accent); --dim: color-mix(in srgb, var(--fg) 22%, transparent);
-  background: linear-gradient(90deg, color-mix(in srgb, var(--fill) 75%, #fff) 0, var(--fill) calc(var(--sec) * 100%), var(--dim) calc(var(--sec) * 100%));
-  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent; text-shadow: none !important;
+  position: relative; color: var(--dim); -webkit-text-fill-color: var(--dim); text-shadow: none !important;
 }
+.duel-sectext::after {
+  content: attr(data-text); position: absolute; inset: 0; white-space: nowrap; pointer-events: none;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--fill) 75%, #fff), var(--fill));
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;
+}
+.duel-sectext.is-running::after { animation: sec-drain 1s linear infinite; animation-delay: var(--sec-delay, 0s); will-change: clip-path; }
+@keyframes sec-drain { from { clip-path: inset(0 0 0 0); } to { clip-path: inset(0 100% 0 0); } }
 .duel-turnsign.is-acting .duel-sectext { --fill: var(--warn, #ffb347); }
 .duel-turnsign.is-theirs .duel-sectext { --fill: #9aa4b1; }
 .duel-sectext.is-low { --fill: #ffb347; }
@@ -1554,3 +1565,21 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 .duel-page.is-live.is-scaled { width: 1920px; height: 1080px; right: auto; bottom: auto;
   left: max(0px, calc((100vw / var(--ui-zoom) - 1920px) / 2)); top: max(0px, calc((100vh / var(--ui-zoom) - 1080px) / 2)); }
 body:has(.duel-page.is-live.is-scaled) { background: #05060c; overflow: hidden; }
+
+
+/* ---------- smoothness: compositor-only ambient motion, contained panels ---------- */
+/* the light band over the field (was a repaint of every zone label each frame) */
+.duel-page.is-live .duel-field::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 3; border-radius: inherit; overflow: hidden;
+  background: linear-gradient(105deg, transparent 44%, color-mix(in srgb, var(--sheen, #fff) 16%, transparent) 50%, transparent 56%) 0 0 / 300% 100% no-repeat;
+  transform: translateX(-60%); animation: field-band var(--sheen-time, 7s) ease-in-out infinite; will-change: transform;
+}
+@keyframes field-band { 0%, 62% { transform: translateX(-70%); opacity: 0; } 66% { opacity: 1; } 96% { opacity: 1; } 100% { transform: translateX(70%); opacity: 0; } }
+.duel-page.no-shimmer .duel-field::after { display: none; }
+@media (prefers-reduced-motion: reduce) { .duel-page.is-live .duel-field::after { display: none; } }
+/* panels that change often don't make the board lay out again */
+.duel-rail, .duel-plate, .duel-status, .duel-corner, .duel-floatpreview, .duel-chatbox, .duel-reveal { contain: layout style; }
+.duel-anim-layer { contain: strict; }
+
+/* the page title's light sweep is for the site, not the duel (it repainted the title every frame) */
+.duel-page.is-live h1 { animation: none !important; }

@@ -12,33 +12,29 @@ const fmt = (ms: number) => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 };
 
-/** Re-render every animation frame while `on` (for smooth second sweeps). */
-function useFrame(on: boolean) {
-  const [, set] = useState(0);
-  useEffect(() => {
-    if (!on) return;
-    let id = 0;
-    const loop = () => { set((n) => (n + 1) % 1e9); id = requestAnimationFrame(loop); };
-    id = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(id);
-  }, [on]);
-}
-
-/** A seat's time left right now (ms), whether its clock runs, and how far into the current second it is. */
+/** A seat's time left right now (ms), whether its clock runs, how far into the current second it is, and
+ *  `secDelay`: a negative CSS animation-delay that keeps a 1s-per-cycle CSS animation in step with this
+ *  clock's seconds (so the smooth sweeps run on the compositor, with no re-render per frame). */
 export function useClockLeft(timer: TurnClock, seat: 0 | 1, smooth = false) {
   const receivedAt = useMemo(() => Date.now(), [timer]);
   const running = timer.running === seat;
-  useFrame(smooth && running);
+  void smooth;
   const [, tick] = useState(0);
   useEffect(() => {
-    if (!running || smooth) return;
+    if (!running) return;
     const t = setInterval(() => tick((n) => n + 1), 250);
     return () => clearInterval(t);
-  }, [running, smooth]);
+  }, [running]);
   const left = Math.max(0, timer.remaining[seat] - (running ? (timer.serverNow - timer.since) + (Date.now() - receivedAt) : 0));
   /** 1 at the start of a second, 0 at its end */
   const secondFrac = running ? (left % 1000) / 1000 : 1;
-  return { left, running, secondFrac };
+  // fixed per server update: the clock's phase within a second when it arrived
+  const secDelay = useMemo(() => {
+    const at = Math.max(0, timer.remaining[seat] - (running ? timer.serverNow - timer.since : 0));
+    return `${-((1000 - (at % 1000)) % 1000) / 1000 - (Date.now() - receivedAt) / 1000}s`;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timer, seat, running]);
+  return { left, running, secondFrac, secDelay };
 }
 
 const urgency = (left: number) => (left <= 10_000 ? "is-critical" : left <= 30_000 ? "is-low" : "");
@@ -89,7 +85,7 @@ export function SecondBar({ timer, seat }: { timer: TurnClock; seat: 0 | 1 }) {
 
 /** The big clock beside the turn sign: the time of whoever the duel is waiting on. */
 export function ClockFace({ timer, seat, label, mine }: { timer: TurnClock; seat: 0 | 1; label: string; mine: boolean }) {
-  const { left, running, secondFrac } = useClockLeft(timer, seat, true);
+  const { left, running, secDelay } = useClockLeft(timer, seat, true);
   const bonus = useIncrementPop(timer, seat);
   // a soft tick each second in your last ten
   const lastSec = useRef(-1);
@@ -104,10 +100,11 @@ export function ClockFace({ timer, seat, label, mine }: { timer: TurnClock; seat
   const bank = Math.min(1, left / total);
   return (
     <div key={seat} className={`duel-clockface ${mine ? "is-mine" : "is-theirs"} ${running ? "is-running" : "is-paused"} ${urgency(left)}`}
-      role="timer" aria-label={`${label}: ${fmt(left)}`} style={{ ["--sec" as string]: secondFrac, ["--bank" as string]: bank }}>
+      role="timer" aria-label={`${label}: ${fmt(left)}`} style={{ ["--sec-delay" as string]: secDelay, ["--bank" as string]: bank }}>
       <span className="duel-clock-dial" aria-hidden="true">
         <span className="duel-clock-bank" />
-        <span className="duel-clock-sweep" />
+        {/* re-mounted on each server update: its 1s animation restarts in step (--sec-delay) */}
+        <span key={`${timer.since}-${timer.serverNow}`} className="duel-clock-sweep" />
         <b className="duel-clock-digits">{fmt(left)}</b>
       </span>
       <small className="duel-clock-label">{label}</small>
@@ -119,9 +116,9 @@ export function ClockFace({ timer, seat, label, mine }: { timer: TurnClock; seat
 /** Text that is its own seconds bar: the bright fill drains across the letters every second while the
  *  clock runs (the turn sign uses it). */
 export function SecondsText({ timer, seat, children }: { timer: TurnClock; seat: 0 | 1; children: string }) {
-  const { left, running, secondFrac } = useClockLeft(timer, seat, true);
+  const { left, running, secDelay } = useClockLeft(timer, seat, true);
   return (
-    <b className={`duel-sectext ${running ? "is-running" : ""} ${urgency(left)}`} style={{ ["--sec" as string]: running ? secondFrac : 1 }} data-text={children}>
+    <b key={`${timer.since}-${timer.serverNow}`} className={`duel-sectext ${running ? "is-running" : ""} ${urgency(left)}`} style={{ ["--sec-delay" as string]: secDelay }} data-text={children}>
       {children}
     </b>
   );

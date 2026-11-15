@@ -52,6 +52,8 @@ export class BoardAnimator {
   /** Record the current layout for `intents`. Merges with a capture that hasn't been played yet. */
   capture(intents: Intent[], flipRest = false) {
     if (!this.root) { this.pending = null; return; }
+    // nothing to animate: don't measure (it forces a layout of the whole 3D board)
+    if (!intents.length && !flipRest && !this.pending) return;
     if (this.pending) {   // two updates before one render: the DOM still shows the first layout
       this.pending.intents.push(...intents);
       this.pending.flipRest ||= flipRest;

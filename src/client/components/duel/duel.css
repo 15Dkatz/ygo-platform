@@ -395,8 +395,10 @@ kbd { font: 11px/1 var(--font); border: 1px solid var(--border); border-bottom-w
 
 /* whose decision it is */
 .duel-move { font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2); color: var(--muted); }
-.duel-move.is-mine { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); animation: duel-move-pulse 1.8s ease-in-out infinite; }
-@keyframes duel-move-pulse { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 25%, transparent); } }
+.duel-move.is-mine { position: relative; background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.duel-move.is-mine::after, .duel-autopilot.is-on button::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 25%, transparent); opacity: 0; animation: duel-move-pulse 1.8s ease-in-out infinite; }
+@keyframes duel-move-pulse { 50% { opacity: 1; } }
 
 /* turn banner + phase ribbon */
 .duel-turnbanner {

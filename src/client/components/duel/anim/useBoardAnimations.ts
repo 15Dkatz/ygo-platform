@@ -8,8 +8,27 @@ import { refUid } from "../../engine/boardRefs.ts";
 import { BoardAnimator } from "./animator.ts";
 import { effectKind } from "./categories.ts";
 import { engineIntents, manualIntents, type EngineChain } from "./intents.ts";
-import { getCard } from "../useDuel.ts";
+import { boardCodes, getCard } from "../useDuel.ts";
+import { cardImage } from "../../../api.ts";
+import { duelSettings } from "../duelSettings.ts";
 import { unlockAudioOnGesture } from "./sfx.ts";
+
+/** The splash shows a card's full image / art the moment it's summoned or activated: fetch them ahead, for
+ *  every card the viewer can see (hands, field, Extra Deck and piles), once each, in idle time. */
+const preloaded = new Set<number>();
+function preloadSplashArt(b: BoardState) {
+  // only the image sizes the chosen splash styles show (full card: showcase, hologram, spotlight)
+  const s = duelSettings();
+  if (s.summonFx === "off") return;
+  const FULL = new Set(["showcase", "hologram", "spotlight"]);
+  const sizes = [...new Set([s.summonSplash, s.activateSplash].map((x) => (FULL.has(x) ? "full" : "crop") as "full" | "crop"))];
+  const todo = [...new Set(boardCodes(b))].filter((c) => c > 0 && !preloaded.has(c));
+  if (!todo.length) return;
+  todo.forEach((c) => preloaded.add(c));
+  const go = () => todo.forEach((c) => { for (const size of sizes) { const img = new Image(); img.decoding = "async"; img.src = cardImage(c, size); } });
+  const idle = (globalThis as { requestIdleCallback?: (f: () => void) => void }).requestIdleCallback;
+  if (idle) idle(go); else setTimeout(go, 200);
+}
 
 export function useBoardAnimations() {
   /** Set every render: the room is rules-enforced (boards name cards by position, so only events animate). */
@@ -22,6 +41,7 @@ export function useBoardAnimations() {
   const [chainBadges, setChainBadges] = useState<Map<string, string>>(() => new Map());
 
   const beforeState = useCallback((prev: BoardState | null, next: BoardState, events: EngineEvent[] | null) => {
+    preloadSplashArt(next);
     if (events?.length) {
       const intents = prev ? engineIntents(events, prev, next, chain.current, (code) => effectKind(getCard(code))) : [];
       if (!prev) {

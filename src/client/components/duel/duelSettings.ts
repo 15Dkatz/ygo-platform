@@ -54,10 +54,12 @@ export interface DuelSettings {
 export const RESOLVE_FX = ["rings", "sparkle", "fireworks", "aura", "powerup", "holy", "void", "electric", "circle", "frost", "minimal"] as const;
 export type ResolveFx = (typeof RESOLVE_FX)[number];
 export const RESOLVE_FX_LABEL: Record<ResolveFx, string> = { rings: "Shockwave rings", sparkle: "Sparkles", fireworks: "Fireworks", aura: "Flame aura", powerup: "Power-up aura (energy + lightning)", holy: "Holy light (pillar + halo)", void: "Dark vortex", electric: "Electric current", circle: "Summoning circle", frost: "Frost crystals", minimal: "Minimal outline" };
-export const SPLASH_STYLES = ["showcase", "portal", "banner"] as const;
+export const SPLASH_STYLES = ["showcase", "portal", "banner", "cutin", "hologram", "comic", "spotlight"] as const;
 export type SplashStyle = (typeof SPLASH_STYLES)[number];
 export const SPLASH_STYLE_LABEL: Record<SplashStyle, string> = {
   showcase: "Showcase (the card rises out of its zone)", portal: "Portal (its art opens over the zone)", banner: "Banner (its art sweeps across the board)",
+  cutin: "Cut-in (an art panel bursts in from the screen edge)", hologram: "Hologram (projected above the card)",
+  comic: "Comic (a starburst panel)", spotlight: "Spotlight (the room dims, the card rises into the light)",
 };
 export const SUMMON_FX = ["full", "short", "off"] as const;
 export type SummonFxMode = (typeof SUMMON_FX)[number];

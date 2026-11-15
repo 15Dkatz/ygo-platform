@@ -119,3 +119,60 @@
 .sfx-splash.is-big .sfx-splash-text b { font-size: clamp(28px, 3.6vw, 58px); background: linear-gradient(180deg, #fff, color-mix(in srgb, var(--c) 60%, #fff)); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 2px 8px rgb(0 0 0 / .8)); }
 .sfx-splash-edge { position: absolute; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, transparent, var(--c) 20%, #fff 50%, var(--c) 80%, transparent); box-shadow: 0 0 14px var(--c); }
 .sfx-splash-edge.t { top: 0; } .sfx-splash-edge.b { bottom: 0; }
+
+/* ---------- splash: cut-in (a slanted art panel from the screen edge) ---------- */
+.sfx-cutin { z-index: 3; filter: drop-shadow(0 18px 30px rgb(0 0 0 / .55)); }
+.sfx-cutin-frame { position: absolute; inset: 0; background: linear-gradient(135deg, #fff, var(--c) 40%, color-mix(in srgb, var(--c) 50%, #000)); padding: 5px; }
+.sfx-cutin.from-left .sfx-cutin-frame { clip-path: polygon(0 0, 100% 0, 88% 100%, 0 100%); }
+.sfx-cutin.from-right .sfx-cutin-frame { clip-path: polygon(0 0, 100% 0, 100% 100%, 12% 100%); }
+.sfx-cutin-art { position: absolute; inset: 5px; background: var(--art) center 35% / cover no-repeat, #0b0d14; clip-path: inherit; }
+.sfx-cutin-frame::after { content: ""; position: absolute; inset: 0; clip-path: inherit;
+  background: linear-gradient(0deg, rgb(5 6 14 / .85) 0, rgb(5 6 14 / .2) 45%, transparent 60%); }
+.sfx-cutin-lines { position: absolute; inset: -20% -30%; z-index: -1;
+  background: repeating-linear-gradient(0deg, transparent 0 9px, color-mix(in srgb, var(--c) 55%, transparent) 9px 11px, transparent 11px 23px);
+  mask-image: linear-gradient(90deg, transparent, #000 30%, #000 70%, transparent); }
+.sfx-cutin-text { position: absolute; bottom: 12%; display: grid; gap: 1px; text-shadow: 0 2px 8px rgb(0 0 0 / .9); }
+.sfx-cutin.from-left .sfx-cutin-text { left: 6%; }
+.sfx-cutin.from-right .sfx-cutin-text { right: 6%; text-align: right; }
+.sfx-cutin-text small { font-size: 11px; font-weight: 800; letter-spacing: .26em; text-transform: uppercase; color: var(--c); }
+.sfx-cutin-text b { font-family: var(--font-field, var(--font-display, inherit)); font-size: clamp(20px, 2.2vw, 34px); color: #fff; font-style: italic; letter-spacing: .02em; }
+
+/* ---------- splash: hologram (a projector beam and a flickering projection) ---------- */
+.sfx-holo { z-index: 3; }
+.sfx-holo-card { position: absolute; inset: 0; border-radius: 4%; overflow: hidden; transform-origin: 50% 100%;
+  box-shadow: 0 0 0 1px color-mix(in srgb, #7ff6ff 70%, var(--c)), 0 0 30px color-mix(in srgb, #7ff6ff 60%, var(--c)); }
+.sfx-holo-card img { width: 100%; height: 100%; display: block; object-fit: cover; filter: sepia(1) hue-rotate(150deg) saturate(2.4) brightness(1.15) contrast(1.1); mix-blend-mode: screen; }
+.sfx-holo-card::before { content: ""; position: absolute; inset: 0; z-index: 1;
+  background: repeating-linear-gradient(0deg, rgb(0 0 0 / .28) 0 1px, transparent 1px 4px); }
+.sfx-holo-scan { position: absolute; left: 0; right: 0; top: 0; height: 30%; z-index: 2; background: linear-gradient(0deg, transparent, rgb(180 250 255 / .4), transparent); }
+.sfx-holo-beam { z-index: 2; transform-origin: 50% 100%;
+  background: linear-gradient(0deg, color-mix(in srgb, #7ff6ff 55%, transparent), color-mix(in srgb, #7ff6ff 10%, transparent));
+  clip-path: polygon(0 0, 100% 0, calc(50% + var(--base)) 100%, calc(50% - var(--base)) 100%); filter: blur(2px); mix-blend-mode: screen; }
+.sfx-holo-text { position: absolute; left: 50%; top: calc(100% + 8px); transform: translateX(-50%); display: grid; justify-items: center; white-space: nowrap;
+  font-family: ui-monospace, "Consolas", monospace; color: #b8fbff; text-shadow: 0 0 8px #7ff6ff; }
+.sfx-holo-text small { font-size: 10px; letter-spacing: .3em; text-transform: uppercase; opacity: .8; }
+.sfx-holo-text b { font-size: 17px; letter-spacing: .08em; }
+
+/* ---------- splash: comic (a starburst with halftone) ---------- */
+.sfx-comic { z-index: 3; filter: drop-shadow(4px 6px 0 rgb(0 0 0 / .85)); }
+.sfx-comic-burst { position: absolute; inset: 0;
+  clip-path: polygon(50% 0, 58% 18%, 75% 5%, 72% 25%, 95% 20%, 80% 38%, 100% 50%, 80% 60%, 95% 80%, 72% 74%, 75% 95%, 58% 82%, 50% 100%, 42% 82%, 25% 95%, 28% 74%, 5% 80%, 20% 60%, 0 50%, 20% 38%, 5% 20%, 28% 25%, 25% 5%, 42% 18%);
+  background: radial-gradient(circle, rgb(0 0 0 / .22) 22%, transparent 24%) 0 0 / 9px 9px, radial-gradient(circle, #fff6c8, var(--c) 70%); }
+.sfx-comic-frame { position: absolute; left: 22%; top: 20%; width: 56%; height: 44%; background: #111; padding: 4px; transform: rotate(-4deg); box-shadow: 0 0 0 3px #fff; }
+.sfx-comic-art { width: 100%; height: 100%; background: var(--art) center 35% / cover no-repeat; }
+.sfx-comic-text { position: absolute; left: 50%; top: 67%; transform: translateX(-50%) rotate(-4deg); display: grid; justify-items: center; white-space: nowrap; text-align: center; }
+.sfx-comic-text small { font: 900 12px/1 "Arial Black", Impact, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: #111; background: #fff; padding: 2px 6px; transform: skewX(-10deg); }
+.sfx-comic-text b { font: italic 900 clamp(20px, 2vw, 30px)/1.1 "Arial Black", Impact, sans-serif; color: #fff; -webkit-text-stroke: 2px #111; paint-order: stroke fill; letter-spacing: .01em; }
+
+/* ---------- splash: spotlight (dim the room, light the card) ---------- */
+.sfx-spot-dim { position: fixed; inset: 0; z-index: 2; background: radial-gradient(circle var(--r) at var(--x) var(--y), transparent 0, rgb(0 0 0 / .25) 40%, rgb(0 0 0 / .72) 100%); }
+.sfx-spot-cone { z-index: 2; transform-origin: 50% 0;
+  background: linear-gradient(180deg, color-mix(in srgb, #fff 55%, var(--c)) 0, color-mix(in srgb, var(--c) 18%, transparent) 70%, transparent);
+  clip-path: polygon(44% 0, 56% 0, 100% 100%, 0 100%); filter: blur(6px); mix-blend-mode: screen; opacity: .8; }
+.sfx-spot { z-index: 3; }
+.sfx-spot-card { position: absolute; inset: 0; border-radius: 4%; overflow: hidden; box-shadow: 0 0 0 2px rgb(255 255 255 / .7), 0 0 40px color-mix(in srgb, var(--c) 70%, #fff), 0 30px 60px rgb(0 0 0 / .7); }
+.sfx-spot-card img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.sfx-spot-text { position: absolute; left: 50%; top: calc(100% + 12px); transform: translateX(-50%); display: grid; justify-items: center; gap: 2px; white-space: nowrap; text-shadow: 0 2px 10px #000; }
+.sfx-spot-text small { font-size: 10.5px; font-weight: 700; letter-spacing: .3em; text-transform: uppercase; color: color-mix(in srgb, var(--c) 70%, #fff); }
+.sfx-spot-text b { font-family: var(--font-field, var(--font-display, inherit)); font-size: 24px; color: #fff; letter-spacing: .04em; }
+.sfx-spot.is-big .sfx-spot-text b, .sfx-holo.is-big .sfx-holo-text b { font-size: 30px; }

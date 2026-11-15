@@ -7,7 +7,7 @@
 .duel-zone-label, .duel-pile-name, .duel-phasebtn, .duel-phasecell-end, .duel-turnbadge b, .duel-phasefx-text { font-family: var(--font-field); }
 .duel-lp-num, .duel-lp-hit b, .duel-pile-count, .duel-turnbadge b { font-family: var(--font-num); }
 
-/* a band of light that runs across the labels, column by column (a wave over the board) */
+/* a band of light that runs across the field now and then (duel-scene.css: .duel-field::after) */
 @keyframes field-sheen { 0%, 62% { background-position: 160% 0; } 100% { background-position: -60% 0; } }
 .duel-zone-label {
   /* the band, over a solid layer of the label's own colour (the band's box is narrower than the label) */
@@ -16,18 +16,16 @@
     linear-gradient(currentColor, currentColor);
   -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
   text-shadow: none; filter: drop-shadow(0 1px 0 var(--zone-hi, transparent));
-  animation: field-sheen var(--sheen-time, 7s) ease-in-out infinite;
 }
-.duel-zone[data-slot="1"] .duel-zone-label { animation-delay: .15s; }
-.duel-zone[data-slot="2"] .duel-zone-label { animation-delay: .3s; }
-.duel-zone[data-slot="3"] .duel-zone-label { animation-delay: .45s; }
-.duel-zone[data-slot="4"] .duel-zone-label { animation-delay: .6s; }
 
 /* ================= Arcane: runic letters that glow, a breathing aura on the current phase ================= */
 :root:not([data-skin]):not(#_) { --font-field: "Metamorphous", "Cinzel", Georgia, serif; --font-num: "Orbitron", "Segoe UI", sans-serif; --sheen: #e9dcff; }
 :root:not([data-skin]):not(#_) .duel-zone-label { letter-spacing: .1em; filter: drop-shadow(0 0 4px color-mix(in srgb, currentColor 55%, transparent)); }
 :root:not([data-skin]):not(#_) .duel-phasebtn { letter-spacing: .12em; }
-:root:not([data-skin]):not(#_) .duel-phasebtn.is-active { animation: arcane-aura 2.4s ease-in-out infinite; }
+:root:not([data-skin]):not(#_) .duel-phasebtn.is-active { position: relative; box-shadow: 0 0 10px color-mix(in srgb, currentColor 0%, var(--accent)), inset 0 0 0 1px rgb(255 255 255 / .25); }
+:root:not([data-skin]):not(#_) .duel-phasebtn.is-active::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  box-shadow: 0 0 26px 4px var(--accent), inset 0 0 12px rgb(255 255 255 / .35); opacity: 0; animation: arcane-aura-fade 2.4s ease-in-out infinite; }
+@keyframes arcane-aura-fade { 50% { opacity: 1; } }
 :root:not([data-skin]):not(#_) .duel-lp-num, :root:not([data-skin]):not(#_) .duel-turnbadge b { letter-spacing: .04em; font-weight: 900; }
 :root:not([data-skin]):not(#_) .duel-lp-num { text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 60%, transparent); }
 :root:not([data-skin]):not(#_) .duel-phasefx-text { letter-spacing: .14em; animation-name: arcane-banner; }
