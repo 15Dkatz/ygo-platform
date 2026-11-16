@@ -101,8 +101,11 @@ function DropZone({ at, ui, className, label, children, onClick }: { at: ZoneRef
 
 function Slot({ card, at, ui, label, className = "" }: { card: CardInstance | null; at: ZoneRef; ui: BoardUI; label: string; className?: string }) {
   const controller = at.zone === "extraMonster" ? (card?.controller ?? card?.owner) : at.player;
+  // classes instead of :has() (resolving card here; its Level / traits shown)
+  const source = !!card && ui.marks?.source === card.uid;
+  const traits = !!card && !ui.hideStats && (at.zone === "monster" || at.zone === "extraMonster") && card.faceUp && card.code > 0;
   return (
-    <DropZone at={at} ui={ui} className={`duel-slot ${className} ${at.zone === "extraMonster" && card && controller !== ui.me ? "is-opp-side" : ""}`} label={card ? undefined : label}>
+    <DropZone at={at} ui={ui} className={`duel-slot ${className} ${at.zone === "extraMonster" && card && controller !== ui.me ? "is-opp-side" : ""} ${source ? "has-source" : ""} ${traits ? "has-traits" : ""}`} label={card ? undefined : label}>
       {card && (
         <CardView
           // engine cards are named by zone: a different card landing here gets a fresh element (and animates as new)

@@ -121,7 +121,7 @@
 
 @media (min-width: 1001px) {
   /* one immersive scene: the site header and footer step aside */
-  body:has(.duel-page.is-live) .topbar, body:has(.duel-page.is-live) .site-footer { display: none; }
+  html.duel-live .topbar, html.duel-live .site-footer { display: none; }
   .duel-page.is-live {
     position: fixed; inset: 0; z-index: 20; padding: 6px 10px 10px; gap: 6px;
     display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--scene-bg); overflow: hidden;
@@ -148,7 +148,8 @@
     --h16: min(100cqh, 100cqw * .54);
     --base: calc((var(--h16) - 24px) / 8.15);
     --fit-h: calc((var(--h16) - 16px) / (8.5 * var(--proj, 1) + 0.71 * var(--hand-scale, 1) + 0.37));
-    --cw: max(44px, min(calc(var(--field-scale, 1) * var(--base)), var(--fit-h), calc((100cqw - 40px) / 9.2)));
+    /* ...and never into the corner columns (the LP plates, the log): the width left between them / ~7.4 cards */
+    --cw: max(44px, min(calc(var(--field-scale, 1) * var(--base)), var(--fit-h), calc((100cqw - 40px) / 9.2), calc((100cqw - 2 * var(--side) - 60px) / 7.4)));
   }
   .duel-page.is-live .duel-field {
     --cw: inherit; --gap: calc(var(--cw) * .1);
@@ -245,19 +246,19 @@
   .duel-page.is-live .duel-toasts { top: 52px; }
 }
 /* scaled-copy:start */
-body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .site-footer { display: none; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live {
+html:where(.duel-scaled).duel-live .topbar, html:where(.duel-scaled).duel-live .site-footer { display: none; }
+:where(html.duel-scaled) .duel-page.is-live {
     position: fixed; inset: 0; z-index: 20; padding: 6px 10px 10px; gap: 6px;
     display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--scene-bg); overflow: hidden;
   }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-topline { min-height: 32px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-topline h1 { font-size: 15px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-drawer-btn { display: inline-block; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-layout { display: block; position: relative; min-height: 0; height: 100%; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-main { height: 100%; display: flex; flex-direction: column; gap: 0; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-pendulum { display: none; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-finished { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); z-index: 30; max-width: 640px; width: 90%; border-top: 0; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-board-wrap {
+:where(html.duel-scaled) .duel-page.is-live .duel-topline { min-height: 32px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-topline h1 { font-size: 15px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-drawer-btn { display: inline-block; }
+:where(html.duel-scaled) .duel-page.is-live .duel-layout { display: block; position: relative; min-height: 0; height: 100%; }
+:where(html.duel-scaled) .duel-page.is-live .duel-main { height: 100%; display: flex; flex-direction: column; gap: 0; }
+:where(html.duel-scaled) .duel-page.is-live .duel-pendulum { display: none; }
+:where(html.duel-scaled) .duel-page.is-live .duel-finished { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); z-index: 30; max-width: 640px; width: 90%; border-top: 0; }
+:where(html.duel-scaled) .duel-page.is-live .duel-board-wrap {
     flex: 1; min-height: 0; container-type: size; padding: 0; border-radius: 14px;
     display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
     --side: clamp(150px, 15cqw, 230px);
@@ -271,85 +272,89 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
     --h16: min(100cqh, 100cqw * .54);
     --base: calc((var(--h16) - 24px) / 8.15);
     --fit-h: calc((var(--h16) - 16px) / (8.5 * var(--proj, 1) + 0.71 * var(--hand-scale, 1) + 0.37));
-    --cw: max(44px, min(calc(var(--field-scale, 1) * var(--base)), var(--fit-h), calc((100cqw - 40px) / 9.2)));
+    /* ...and never into the corner columns (the LP plates, the log): the width left between them / ~7.4 cards */
+    --cw: max(44px, min(calc(var(--field-scale, 1) * var(--base)), var(--fit-h), calc((100cqw - 40px) / 9.2), calc((100cqw - 2 * var(--side) - 60px) / 7.4)));
   }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-field {
+:where(html.duel-scaled) .duel-page.is-live .duel-field {
     --cw: inherit; --gap: calc(var(--cw) * .1);
     /* sits just above your hand's peek line; grows upward (into the tilt) */
     margin-top: 0; margin-bottom: calc(var(--cw) * 0.71 * var(--hand-scale, 1) + 8px);
   }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-hand { position: absolute; left: 50%; transform: translateX(-50%); width: min(70%, calc(var(--cw) * 8)); min-height: 0; z-index: 3; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-hand.is-opp { top: 0; --hw: calc(var(--cw) * .72); transform: translate(-50%, -65%); }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-hand.is-own { bottom: 0; --hw: calc(var(--cw) * 1.08 * var(--hand-scale, 1)); transform: translate(-50%, 55%); width: min(76%, calc(var(--hw) * 7.6)); }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-hand.is-own .duel-card:hover { translate: 0 -52%; z-index: 8; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-hand.is-own .duel-card.is-actionable { translate: 0 -12%; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-hand .duel-zone-label { display: none; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-field { position: relative; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-board-wrap > .duel-plate, :where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-board-wrap > .duel-rail, :where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-board-wrap > .duel-status, :where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-board-wrap > .duel-corner { position: absolute; width: var(--side); z-index: 5; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-board-wrap > .duel-rail, :where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-board-wrap > .duel-status:not(:empty) {
+:where(html.duel-scaled) .duel-page.is-live .duel-hand { position: absolute; left: 50%; transform: translateX(-50%); width: min(70%, calc(var(--cw) * 8)); min-height: 0; z-index: 3; }
+:where(html.duel-scaled) .duel-page.is-live .duel-hand.is-opp { top: 0; --hw: calc(var(--cw) * .72); transform: translate(-50%, -65%); }
+:where(html.duel-scaled) .duel-page.is-live .duel-hand.is-own { bottom: 0; --hw: calc(var(--cw) * 1.08 * var(--hand-scale, 1)); transform: translate(-50%, 55%); width: min(76%, calc(var(--hw) * 7.6)); }
+:where(html.duel-scaled) .duel-page.is-live .duel-hand.is-own .duel-card:hover { translate: 0 -52%; z-index: 8; }
+:where(html.duel-scaled) .duel-page.is-live .duel-hand.is-own .duel-card.is-actionable { translate: 0 -12%; }
+:where(html.duel-scaled) .duel-page.is-live .duel-hand .duel-zone-label { display: none; }
+:where(html.duel-scaled) .duel-page.is-live .duel-field { position: relative; }
+:where(html.duel-scaled) .duel-page.is-live .duel-board-wrap > .duel-plate, :where(html.duel-scaled) .duel-page.is-live .duel-board-wrap > .duel-rail, :where(html.duel-scaled) .duel-page.is-live .duel-board-wrap > .duel-status, :where(html.duel-scaled) .duel-page.is-live .duel-board-wrap > .duel-corner { position: absolute; width: var(--side); z-index: 5; }
+:where(html.duel-scaled) .duel-page.is-live .duel-board-wrap > .duel-rail, :where(html.duel-scaled) .duel-page.is-live .duel-board-wrap > .duel-status:not(:empty) {
     padding: 8px; border-radius: 12px; border: 1px solid rgb(255 255 255 / .08);
     background: color-mix(in srgb, var(--surface) 38%, transparent); backdrop-filter: blur(6px);
   }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-board-wrap > .duel-plate { left: 16px; width: min(var(--side), 180px); }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-plate-top { top: 12px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-plate-bottom { bottom: 14px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-plate .duel-playerbar {
+:where(html.duel-scaled) .duel-page.is-live .duel-board-wrap > .duel-plate { left: 16px; width: min(var(--side), 180px); }
+:where(html.duel-scaled) .duel-page.is-live .duel-plate-top { top: 12px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-plate-bottom { bottom: 14px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-plate .duel-playerbar {
     background: none; border: 0; box-shadow: none; backdrop-filter: none; padding: 0; border-radius: 0;
     flex-wrap: wrap; gap: 4px 8px; text-shadow: 0 1px 3px rgb(0 0 0 / .35);
   }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-plate .duel-playerbar.is-turn .duel-pname { color: var(--accent); }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-playerbar .duel-avatar { width: 26px; height: 26px; font-size: 12px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-plate .duel-pinfo { flex: 1 1 100%; min-width: 0; order: 1; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-plate .duel-pname { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-plate .duel-lpbar { height: 3px; margin: 2px 0; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-plate .duel-pcounts { gap: 8px; font-size: 11px; flex-wrap: nowrap; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-plate .duel-pcounts .duel-chip.is-turn { display: none; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-plate .duel-playerbar .duel-lp {
+:where(html.duel-scaled) .duel-page.is-live .duel-plate .duel-playerbar.is-turn .duel-pname { color: var(--accent); }
+:where(html.duel-scaled) .duel-page.is-live .duel-playerbar .duel-avatar { width: 26px; height: 26px; font-size: 12px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-plate .duel-pinfo { flex: 1 1 100%; min-width: 0; order: 1; }
+:where(html.duel-scaled) .duel-page.is-live .duel-plate .duel-pname { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+:where(html.duel-scaled) .duel-page.is-live .duel-plate .duel-lpbar { height: 3px; margin: 2px 0; }
+:where(html.duel-scaled) .duel-page.is-live .duel-plate .duel-pcounts { gap: 8px; font-size: 11px; flex-wrap: nowrap; }
+:where(html.duel-scaled) .duel-page.is-live .duel-plate .duel-pcounts .duel-chip.is-turn { display: none; }
+:where(html.duel-scaled) .duel-page.is-live .duel-plate .duel-playerbar .duel-lp {
     margin: 0; width: auto; min-width: 0; padding: 0; background: none; border: 0; text-align: left;
     font-size: clamp(26px, calc(var(--cw) * .38), 44px); line-height: 1; font-weight: 900;
   }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-plate .duel-playerbar.is-hit .duel-lp { color: var(--danger); }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-plate .duel-playerbar.is-heal .duel-lp { color: var(--ok); }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-board-wrap > .duel-rail {
+:where(html.duel-scaled) .duel-page.is-live .duel-plate .duel-playerbar.is-hit .duel-lp { color: var(--danger); }
+:where(html.duel-scaled) .duel-page.is-live .duel-plate .duel-playerbar.is-heal .duel-lp { color: var(--ok); }
+:where(html.duel-scaled) .duel-page.is-live .duel-board-wrap > .duel-rail {
     left: 12px; top: 50%; transform: translateY(-50%); width: min(var(--side), 160px);
     display: flex; flex-direction: column; align-items: stretch; gap: 10px;
   }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-rail .duel-phasetrack { flex-direction: column; gap: 3px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-phasetrack-turn { font-size: 14px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-phasetrack button { height: 26px; font-size: 13px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-next-phase { padding: 10px 6px; font-size: 15px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-next-phase small { font-size: 12px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-board-wrap > .duel-status { right: 16px; top: 12px; font-size: 12px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-status .duel-engine-status, :where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-status .duel-engine-wait { background: var(--plate-bg); padding: 6px 8px; font-size: 12px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-board-wrap > .duel-corner {
+:where(html.duel-scaled) .duel-page.is-live .duel-rail .duel-phasetrack { flex-direction: column; gap: 3px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-phasetrack-turn { font-size: 14px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-phasetrack button { height: 26px; font-size: 13px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-next-phase { padding: 10px 6px; font-size: 15px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-next-phase small { font-size: 12px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-board-wrap > .duel-status { right: 16px; top: 12px; font-size: 12px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-status .duel-engine-status, :where(html.duel-scaled) .duel-page.is-live .duel-status .duel-engine-wait { background: var(--plate-bg); padding: 6px 8px; font-size: 12px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-board-wrap > .duel-corner {
     right: 12px; bottom: 8px; width: min(var(--side), 164px); flex-direction: column; align-items: stretch; gap: 6px;
   }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-corner .duel-next-phase { height: auto; padding: 8px 6px; margin-bottom: 10px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-corner .duel-tools { gap: 4px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-corner .duel-tools button { font-size: 11px; padding: 3px 7px; flex: 1 1 auto; background: var(--plate-bg); }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-end-turn { padding: 10px; font-size: 16px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-concede { display: inline-block; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-concede-narrow { display: none; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-side {
+:where(html.duel-scaled) .duel-page.is-live .duel-corner .duel-next-phase { height: auto; padding: 8px 6px; margin-bottom: 10px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-corner .duel-tools { gap: 4px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-corner .duel-tools button { font-size: 11px; padding: 3px 7px; flex: 1 1 auto; background: var(--plate-bg); }
+:where(html.duel-scaled) .duel-page.is-live .duel-end-turn { padding: 10px; font-size: 16px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-concede { display: inline-block; }
+:where(html.duel-scaled) .duel-page.is-live .duel-concede-narrow { display: none; }
+:where(html.duel-scaled) .duel-page.is-live .duel-side {
     position: absolute; top: 0; right: 0; bottom: 0; width: 340px; z-index: 25; max-height: none;
     background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 8px;
     transform: translateX(calc(100% + 16px)); transition: transform .25s ease; visibility: hidden;
   }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live.is-drawer-open .duel-side { transform: none; visibility: visible; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-side .duel-preview { display: none; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-side .duel-loglist { max-height: none; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-side .duel-logchat { height: 100%; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-floatpreview {
+:where(html.duel-scaled) .duel-page.is-live.is-drawer-open .duel-side { transform: none; visibility: visible; }
+:where(html.duel-scaled) .duel-page.is-live .duel-side .duel-preview { display: none; }
+:where(html.duel-scaled) .duel-page.is-live .duel-side .duel-loglist { max-height: none; }
+:where(html.duel-scaled) .duel-page.is-live .duel-side .duel-logchat { height: 100%; }
+:where(html.duel-scaled) .duel-page.is-live .duel-floatpreview {
     display: block; position: absolute; left: 12px; top: 50%; z-index: 24; width: 280px;
     transform: translate(-12px, -50%); opacity: 0; pointer-events: none; transition: opacity .15s ease, transform .15s ease;
   }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-floatpreview.is-shown { opacity: 1; transform: translate(0, -50%); pointer-events: auto; }
-:where(body:has(.duel-page.is-scaled)) .duel-floatpreview .duel-preview { flex-direction: column; align-items: center; box-shadow: var(--shadow); }
-:where(body:has(.duel-page.is-scaled)) .duel-floatpreview .duel-preview img { width: 220px; }
-:where(body:has(.duel-page.is-scaled)) .duel-floatpreview .duel-preview-text { max-height: 200px; font-size: 13px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-engine-bar { top: 52px; bottom: auto; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-toasts { top: 52px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-floatpreview.is-shown { opacity: 1; transform: translate(0, -50%); pointer-events: auto; }
+:where(html.duel-scaled) .duel-floatpreview .duel-preview { flex-direction: column; align-items: center; box-shadow: var(--shadow); }
+:where(html.duel-scaled) .duel-floatpreview .duel-preview img { width: 220px; }
+:where(html.duel-scaled) .duel-floatpreview .duel-preview-text { max-height: 200px; font-size: 13px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar { top: 52px; bottom: auto; }
+:where(html.duel-scaled) .duel-page.is-live .duel-toasts { top: 52px; }
 /* scaled-copy:end */
+
+
+
 
 
 
@@ -456,7 +461,7 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 @keyframes phasefx-lines { from { background-position: 0 0; } to { background-position: 220px 0; } }
 @keyframes phasefx-glyph { 0% { transform: scale(2.4) rotate(-30deg); opacity: 0; } 25% { transform: none; opacity: 1; } 85% { opacity: 1; } 100% { opacity: 0; } }
 /* Battle Phase hits harder: the board shakes once */
-.duel-page:has(.duel-phasefx.ph-battle) .duel-board-wrap { animation: phasefx-quake .45s .1s ease-out; }
+.duel-page[data-fx-battle] .duel-board-wrap { animation: phasefx-quake .45s .1s ease-out; }
 @keyframes phasefx-quake { 20% { translate: -6px 2px; } 40% { translate: 5px -2px; } 60% { translate: -3px 1px; } 80% { translate: 2px 0; } }
 
 /* lasting mood: the mat's rim glows in the current phase's colour; Battle Phase turns the table red */
@@ -479,7 +484,7 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 
 @media (prefers-reduced-motion: reduce) {
   .duel-phasefx::before, .duel-phasefx-band, .duel-phasefx-band::after, .duel-phasefx-band::before, .duel-phasefx-text, .duel-phasefx-glyph,
-  .duel-page:has(.duel-phasefx.ph-battle) .duel-board-wrap { animation: none; }
+  .duel-page[data-fx-battle] .duel-board-wrap { animation: none; }
   .duel-phasefx-band::after { display: none; }
 }
 
@@ -536,9 +541,12 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
   .duel-page.is-live .duel-floatpreview.is-right.is-shown { transform: translate(0, -50%); }
 }
 /* scaled-copy:start */
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-floatpreview.is-right { left: auto; right: 12px; transform: translate(12px, -50%); }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-floatpreview.is-right.is-shown { transform: translate(0, -50%); }
+:where(html.duel-scaled) .duel-page.is-live .duel-floatpreview.is-right { left: auto; right: 12px; transform: translate(12px, -50%); }
+:where(html.duel-scaled) .duel-page.is-live .duel-floatpreview.is-right.is-shown { transform: translate(0, -50%); }
 /* scaled-copy:end */
+
+
+
 
 
 
@@ -590,18 +598,21 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
   .duel-page.is-live.is-tilt .duel-field .duel-card-inner { box-shadow: 0 6px 10px -4px rgb(0 0 0 / .55); }
 }
 /* scaled-copy:start */
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live.is-tilt:not([style*="--tilt"]) {
+:where(html.duel-scaled) .duel-page.is-live.is-tilt:not([style*="--tilt"]) {
     --tilt: 20deg;
   }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live.is-tilt .duel-board-wrap {
+:where(html.duel-scaled) .duel-page.is-live.is-tilt .duel-board-wrap {
     perspective: 1500px; perspective-origin: 50% 100%;
   }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live.is-tilt .duel-field {
+:where(html.duel-scaled) .duel-page.is-live.is-tilt .duel-field {
     transform-style: preserve-3d; transform-origin: 50% 100%;
     transform: rotateX(var(--tilt));
   }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live.is-tilt .duel-field .duel-card-inner { box-shadow: 0 6px 10px -4px rgb(0 0 0 / .55); }
+:where(html.duel-scaled) .duel-page.is-live.is-tilt .duel-field .duel-card-inner { box-shadow: 0 6px 10px -4px rgb(0 0 0 / .55); }
 /* scaled-copy:end */
+
+
+
 
 
 
@@ -650,27 +661,30 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
   .duel-page.is-live .duel-engine-bar-buttons > button { width: 100%; padding: 8px 10px; font-weight: 700; }
   .duel-page.is-live .duel-engine-bar-list { font-size: 12px; font-weight: 500 !important; padding: 4px !important; background: none; border-color: transparent; color: var(--muted); }
   /* the dock covers the status column while open: keep only its "Your move" pill */
-  .duel-page.is-live:has(.duel-engine-bar) .duel-status .duel-engine { display: none; }
+  .duel-page.is-live[data-engine-bar] .duel-status .duel-engine { display: none; }
 
 }
 /* scaled-copy:start */
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-engine-bar {
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar {
     left: auto; right: 12px; top: auto; bottom: 164px; transform: none; max-height: calc(calc(100 * var(--vh, 1vh)) - 240px); overflow: auto;   /* 8px above the action cluster (Next phase, ⋯ More, End turn) */
     width: 176px; max-width: none; border-radius: 14px; padding: 10px; gap: 6px;
     flex-direction: column; align-items: stretch; flex-wrap: nowrap;
     border: 2px solid var(--accent); box-shadow: 0 0 0 4px var(--accent-soft), var(--shadow);
     animation: dock-in .22s ease-out;
   }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-engine-bar.is-chain { border-color: var(--warn); box-shadow: 0 0 0 4px color-mix(in srgb, var(--warn) 25%, transparent), var(--shadow); }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-engine-bar-kicker { display: block; font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-engine-bar.is-chain .duel-engine-bar-kicker { color: var(--warn); }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-engine-bar-hint { font-size: 14px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-engine-bar-count { align-self: flex-start; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-engine-bar-buttons { display: flex; flex-direction: column; gap: 6px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-engine-bar-buttons > button { width: 100%; padding: 8px 10px; font-weight: 700; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-engine-bar-list { font-size: 12px; font-weight: 500 !important; padding: 4px !important; background: none; border-color: transparent; color: var(--muted); }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live:has(.duel-engine-bar) .duel-status .duel-engine { display: none; }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar.is-chain { border-color: var(--warn); box-shadow: 0 0 0 4px color-mix(in srgb, var(--warn) 25%, transparent), var(--shadow); }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar-kicker { display: block; font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar.is-chain .duel-engine-bar-kicker { color: var(--warn); }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar-hint { font-size: 14px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar-count { align-self: flex-start; }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar-buttons { display: flex; flex-direction: column; gap: 6px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar-buttons > button { width: 100%; padding: 8px 10px; font-weight: 700; }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar-list { font-size: 12px; font-weight: 500 !important; padding: 4px !important; background: none; border-color: transparent; color: var(--muted); }
+:where(html.duel-scaled) .duel-page.is-live[data-engine-bar] .duel-status .duel-engine { display: none; }
 /* scaled-copy:end */
+
+
+
 
 
 
@@ -703,7 +717,7 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 .duel-toggle input:checked + .duel-toggle-track i { transform: translateX(14px); background: var(--accent-fg); }
 .duel-toggle input:focus-visible + .duel-toggle-track { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (max-width: 600px) {
-  :where(body:not(:has(.duel-page.is-scaled))) .duel-settings-panel { position: fixed; left: 8px; right: 8px; top: 56px; width: auto; }
+  :where(html:not(.duel-scaled)) .duel-settings-panel { position: fixed; left: 8px; right: 8px; top: 56px; width: auto; }
 }
 
 /* menus: the way out is always the last row */
@@ -735,7 +749,7 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 @media (prefers-reduced-motion: reduce) { .duel-recent li.is-new { animation: none; } }
 /* phones / narrow: the full log sits under the board, so the on-board feed would only squeeze the phase row */
 @media (max-width: 1000px) {
-  :where(body:not(:has(.duel-page.is-scaled))) .duel-recent { display: none; }
+  :where(html:not(.duel-scaled)) .duel-recent { display: none; }
 }
 
 /* "nothing left to play": point at the way forward */
@@ -753,8 +767,11 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
   .duel-page.is-live .duel-engine-bar-list { order: -1; }
 }
 /* scaled-copy:start */
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-engine-bar-list { order: -1; }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar-list { order: -1; }
 /* scaled-copy:end */
+
+
+
 
 
 
@@ -788,7 +805,7 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 }
 .duel-more-panel button { text-align: left; font-size: 12px; padding: 5px 10px; }
 @media (max-width: 1000px) {
-  :where(body:not(:has(.duel-page.is-scaled))) .duel-more-panel { position: static; width: auto; max-width: none; }
+  :where(html:not(.duel-scaled)) .duel-more-panel { position: static; width: auto; max-width: none; }
 }
 
 /* ---------- Recent: folds away ---------- */
@@ -804,15 +821,18 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
   .duel-page.is-live .duel-floatpreview.is-shown { transform: none; }
   .duel-page.is-live .duel-floatpreview.is-right { transform: translate(12px, 0); }
   .duel-page.is-live .duel-floatpreview.is-right.is-shown { transform: none; }
-  .duel-page.is-live:has(.duel-engine-bar) .duel-floatpreview.is-right { left: 12px; right: auto; }
+  .duel-page.is-live[data-engine-bar] .duel-floatpreview.is-right { left: 12px; right: auto; }
 }
 /* scaled-copy:start */
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-floatpreview { top: 56px; transform: translate(-12px, 0); max-height: calc(calc(100 * var(--vh, 1vh)) - 260px); overflow: hidden; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-floatpreview.is-shown { transform: none; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-floatpreview.is-right { transform: translate(12px, 0); }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-floatpreview.is-right.is-shown { transform: none; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live:has(.duel-engine-bar) .duel-floatpreview.is-right { left: 12px; right: auto; }
+:where(html.duel-scaled) .duel-page.is-live .duel-floatpreview { top: 56px; transform: translate(-12px, 0); max-height: calc(calc(100 * var(--vh, 1vh)) - 260px); overflow: hidden; }
+:where(html.duel-scaled) .duel-page.is-live .duel-floatpreview.is-shown { transform: none; }
+:where(html.duel-scaled) .duel-page.is-live .duel-floatpreview.is-right { transform: translate(12px, 0); }
+:where(html.duel-scaled) .duel-page.is-live .duel-floatpreview.is-right.is-shown { transform: none; }
+:where(html.duel-scaled) .duel-page.is-live[data-engine-bar] .duel-floatpreview.is-right { left: 12px; right: auto; }
 /* scaled-copy:end */
+
+
+
 
 
 
@@ -827,11 +847,14 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
   .duel-page.is-live .duel-engine-bar-hint { font-size: 13px; }
 }
 /* scaled-copy:start */
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-engine-bar .duel-chain-options button { grid-template-columns: 30px 1fr; padding: 5px 6px; gap: 6px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-engine-bar .duel-chain-thumb { --cw: 30px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-engine-bar .duel-chain-go { display: none; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-engine-bar-hint { font-size: 13px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar .duel-chain-options button { grid-template-columns: 30px 1fr; padding: 5px 6px; gap: 6px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar .duel-chain-thumb { --cw: 30px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar .duel-chain-go { display: none; }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar-hint { font-size: 13px; }
 /* scaled-copy:end */
+
+
+
 
 
 
@@ -845,12 +868,15 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
   .duel-page.is-live .duel-engine-bar .duel-chain-go { display: inline; }
 }
 /* scaled-copy:start */
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-engine-bar { width: 260px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-board-wrap > .duel-corner { width: 260px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-engine-bar .duel-chain-options button { grid-template-columns: 38px 1fr auto; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-engine-bar .duel-chain-thumb { --cw: 38px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-engine-bar .duel-chain-go { display: inline; }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar { width: 260px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-board-wrap > .duel-corner { width: 260px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar .duel-chain-options button { grid-template-columns: 38px 1fr auto; }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar .duel-chain-thumb { --cw: 38px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar .duel-chain-go { display: inline; }
 /* scaled-copy:end */
+
+
+
 
 
 
@@ -869,7 +895,7 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 }
 .duel-decision-pill kbd { font-size: 10px; padding: 1px 4px; border: 1px solid currentColor; border-radius: 4px; margin-left: 4px; opacity: .8; }
 @media (max-width: 1000px) {
-  :where(body:not(:has(.duel-page.is-scaled))) .duel-decision-pill { left: 8px; right: 8px; bottom: 8px; max-width: none; }
+  :where(html:not(.duel-scaled)) .duel-decision-pill { left: 8px; right: 8px; bottom: 8px; max-width: none; }
 }
 @media (prefers-reduced-motion: reduce) { .duel-decision-pill { animation: none; } }
 /* recent: the newest line is "now" */
@@ -882,9 +908,12 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
   .duel-page.is-live .duel-topline { position: relative; z-index: 30; }
 }
 /* scaled-copy:start */
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-board-wrap { overflow: clip; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-topline { position: relative; z-index: 30; }
+:where(html.duel-scaled) .duel-page.is-live .duel-board-wrap { overflow: clip; }
+:where(html.duel-scaled) .duel-page.is-live .duel-topline { position: relative; z-index: 30; }
 /* scaled-copy:end */
+
+
+
 
 
 
@@ -929,11 +958,14 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
   .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail:hover { background: var(--plate-bg); }
 }
 /* scaled-copy:start */
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail, :where(body:has(.duel-page.is-scaled)) .duel-page.is-live.is-calm .duel-board-wrap > .duel-plate .duel-pcounts, :where(body:has(.duel-page.is-scaled)) .duel-page.is-live.is-calm .duel-board-wrap > .duel-plate .duel-pinfo, :where(body:has(.duel-page.is-scaled)) .duel-page.is-live.is-calm .duel-more-btn { opacity: .5; transition: opacity .2s ease; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail:hover, :where(body:has(.duel-page.is-scaled)) .duel-page.is-live.is-calm .duel-board-wrap > .duel-plate:hover .duel-pcounts, :where(body:has(.duel-page.is-scaled)) .duel-page.is-live.is-calm .duel-board-wrap > .duel-plate:hover .duel-pinfo, :where(body:has(.duel-page.is-scaled)) .duel-page.is-live.is-calm .duel-more-btn:hover, :where(body:has(.duel-page.is-scaled)) .duel-page.is-live.is-calm .duel-more-btn[aria-expanded="true"] { opacity: 1; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail { background: transparent; border-color: transparent; box-shadow: none; backdrop-filter: none; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail:hover { background: var(--plate-bg); }
+:where(html.duel-scaled) .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail, :where(html.duel-scaled) .duel-page.is-live.is-calm .duel-board-wrap > .duel-plate .duel-pcounts, :where(html.duel-scaled) .duel-page.is-live.is-calm .duel-board-wrap > .duel-plate .duel-pinfo, :where(html.duel-scaled) .duel-page.is-live.is-calm .duel-more-btn { opacity: .5; transition: opacity .2s ease; }
+:where(html.duel-scaled) .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail:hover, :where(html.duel-scaled) .duel-page.is-live.is-calm .duel-board-wrap > .duel-plate:hover .duel-pcounts, :where(html.duel-scaled) .duel-page.is-live.is-calm .duel-board-wrap > .duel-plate:hover .duel-pinfo, :where(html.duel-scaled) .duel-page.is-live.is-calm .duel-more-btn:hover, :where(html.duel-scaled) .duel-page.is-live.is-calm .duel-more-btn[aria-expanded="true"] { opacity: 1; }
+:where(html.duel-scaled) .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail { background: transparent; border-color: transparent; box-shadow: none; backdrop-filter: none; }
+:where(html.duel-scaled) .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail:hover { background: var(--plate-bg); }
 /* scaled-copy:end */
+
+
+
 
 
 
@@ -945,8 +977,11 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
   .duel-page.is-live .duel-board-wrap > .duel-status:not(:has(> :not(.duel-engine:empty))) { background: none; border-color: transparent; box-shadow: none; backdrop-filter: none; padding: 0; }
 }
 /* scaled-copy:start */
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-board-wrap > .duel-status:not(:has(> :not(.duel-engine:empty))) { background: none; border-color: transparent; box-shadow: none; backdrop-filter: none; padding: 0; }
+:where(html.duel-scaled) .duel-page.is-live .duel-board-wrap > .duel-status:not(:has(> :not(.duel-engine:empty))) { background: none; border-color: transparent; box-shadow: none; backdrop-filter: none; padding: 0; }
 /* scaled-copy:end */
+
+
+
 
 
 
@@ -989,11 +1024,14 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
   .duel-page.is-live .duel-hand.is-opp { transform: translate(-50%, var(--opp-hand-drop, -65%)); --hw: calc(var(--cw) * .72 * var(--opp-hand-scale, 1)); }
 }
 /* scaled-copy:start */
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-field { translate: 0 calc(var(--field-y, 0) * var(--cw)); }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live.is-tilt .duel-board-wrap { perspective: var(--persp, 1500px); perspective-origin: 50% var(--persp-y, 100%); }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-hand.is-own { transform: translate(-50%, var(--hand-drop, 55%)); }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-hand.is-opp { transform: translate(-50%, var(--opp-hand-drop, -65%)); --hw: calc(var(--cw) * .72 * var(--opp-hand-scale, 1)); }
+:where(html.duel-scaled) .duel-page.is-live .duel-field { translate: 0 calc(var(--field-y, 0) * var(--cw)); }
+:where(html.duel-scaled) .duel-page.is-live.is-tilt .duel-board-wrap { perspective: var(--persp, 1500px); perspective-origin: 50% var(--persp-y, 100%); }
+:where(html.duel-scaled) .duel-page.is-live .duel-hand.is-own { transform: translate(-50%, var(--hand-drop, 55%)); }
+:where(html.duel-scaled) .duel-page.is-live .duel-hand.is-opp { transform: translate(-50%, var(--opp-hand-drop, -65%)); --hw: calc(var(--cw) * .72 * var(--opp-hand-scale, 1)); }
 /* scaled-copy:end */
+
+
+
 
 
 
@@ -1008,8 +1046,11 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 .duel-settings-panel { max-height: calc(calc(100 * var(--vh, 1vh)) - 70px); overflow-y: auto; overscroll-behavior: contain; }
 @media (min-width: 1001px) { .duel-page.is-live { overflow: clip; } }
 /* scaled-copy:start */
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live { overflow: clip; }
+:where(html.duel-scaled) .duel-page.is-live { overflow: clip; }
 /* scaled-copy:end */
+
+
+
 
 
 
@@ -1037,13 +1078,16 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
   .duel-page.is-live .duel-rail .duel-recent li { font-size: 12px; line-height: 1.35; }
 }
 /* scaled-copy:start */
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-board-wrap > .duel-rail {
+:where(html.duel-scaled) .duel-page.is-live .duel-board-wrap > .duel-rail {
     top: var(--rail-top, 118px); transform: none; bottom: auto; width: min(var(--side), 220px);
     max-height: calc(100% - var(--rail-top, 118px) - 150px); overflow: auto;
   }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-rail .duel-recent ol { max-height: none; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-rail .duel-recent li { font-size: 12px; line-height: 1.35; }
+:where(html.duel-scaled) .duel-page.is-live .duel-rail .duel-recent ol { max-height: none; }
+:where(html.duel-scaled) .duel-page.is-live .duel-rail .duel-recent li { font-size: 12px; line-height: 1.35; }
 /* scaled-copy:end */
+
+
+
 
 
 
@@ -1055,8 +1099,11 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
   .duel-page.is-live .duel-board-wrap > .duel-corner { right: 16px; bottom: 14px; width: auto; min-width: 150px; align-items: flex-end; }
 }
 /* scaled-copy:start */
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-board-wrap > .duel-corner { right: 16px; bottom: 14px; width: auto; min-width: 150px; align-items: flex-end; }
+:where(html.duel-scaled) .duel-page.is-live .duel-board-wrap > .duel-corner { right: 16px; bottom: 14px; width: auto; min-width: 150px; align-items: flex-end; }
 /* scaled-copy:end */
+
+
+
 
 
 
@@ -1118,7 +1165,7 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
   content: ""; position: absolute; inset: -14px; border-radius: 16px; pointer-events: none;
   box-shadow: 0 0 26px 6px color-mix(in srgb, var(--accent) 65%, transparent); animation: src-pulse 1.2s ease-in-out infinite;
 }
-.duel-page:has(.duel-now.is-peeking) .duel-card.is-source { cursor: pointer; }
+.duel-page[data-peeking] .duel-card.is-source { cursor: pointer; }
 .duel-source-tag {
   position: absolute; left: 50%; top: -10px; translate: -50% 0; z-index: 7; padding: 1px 7px; border-radius: 999px; white-space: nowrap;
   font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; background: var(--accent); color: var(--accent-fg); box-shadow: 0 2px 8px rgb(0 0 0 / .4);
@@ -1196,7 +1243,7 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 .duel-turnno small { font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
 .duel-turnno b { font-family: var(--font-num, inherit); font-size: clamp(30px, calc(5 * var(--vh, 1vh)), 52px); font-weight: 900; color: var(--fg); }
 @media (max-width: 1000px) {
-  :where(body:not(:has(.duel-page.is-scaled))) .duel-rightmid { display: none; }
+  :where(html:not(.duel-scaled)) .duel-rightmid { display: none; }
 }
 
 /* ---------- resolving card: impossible to miss (spills past its zone) ---------- */
@@ -1218,7 +1265,7 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 @keyframes src-lift { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-4%) scale(1.07); } }
 @keyframes src-wave { 0% { opacity: .95; transform: scale(1); } 100% { opacity: 0; transform: scale(1.9); } }
 @keyframes src-tag { 50% { transform: scale(1.12); } }
-.duel-zone:has(> .duel-card.is-source), .duel-slot:has(.duel-card.is-source) { z-index: 7; overflow: visible; }
+.duel-zone.has-source, .duel-slot.has-source { z-index: 7; overflow: visible; }
 @media (prefers-reduced-motion: reduce) { .duel-card.is-source, .duel-card.is-source .duel-source-tag { animation: none; } }
 
 /* ---------- reveal strip: excavated / revealed cards, and where each one goes ---------- */
@@ -1318,7 +1365,7 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 .duel-trait.is-up { color: #7dffa0; } .duel-trait.is-down { color: #ff8a8a; }
 .duel-zone.is-opp-side .duel-traits { top: auto; bottom: 2px; }
 /* the separate Xyz material badge is now part of the strip on field monsters */
-.duel-slot:has(.duel-traits) .duel-card .duel-badge-mat { display: none; }
+.duel-slot.has-traits .duel-card .duel-badge-mat { display: none; }
 
 /* hover preview size (settings > Layout > Card preview) */
 @media (min-width: 1001px) {
@@ -1329,12 +1376,15 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
   .duel-page.is-live .duel-floatpreview .duel-preview-text h3 { font-size: calc(14px * clamp(.9, var(--preview-scale, 1), 1.4)); }
 }
 /* scaled-copy:start */
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-floatpreview { width: calc(280px * var(--preview-scale, 1)); max-height: calc(calc(100 * var(--vh, 1vh)) - 70px); }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-floatpreview .duel-preview img { width: calc(220px * var(--preview-scale, 1)); }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-floatpreview .duel-preview-text { max-height: calc(200px * var(--preview-scale, 1)); font-size: calc(13px * clamp(.85, var(--preview-scale, 1), 1.35)); }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-floatpreview .duel-preview-text .card-text { font-size: inherit; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-floatpreview .duel-preview-text h3 { font-size: calc(14px * clamp(.9, var(--preview-scale, 1), 1.4)); }
+:where(html.duel-scaled) .duel-page.is-live .duel-floatpreview { width: calc(280px * var(--preview-scale, 1)); max-height: calc(calc(100 * var(--vh, 1vh)) - 70px); }
+:where(html.duel-scaled) .duel-page.is-live .duel-floatpreview .duel-preview img { width: calc(220px * var(--preview-scale, 1)); }
+:where(html.duel-scaled) .duel-page.is-live .duel-floatpreview .duel-preview-text { max-height: calc(200px * var(--preview-scale, 1)); font-size: calc(13px * clamp(.85, var(--preview-scale, 1), 1.35)); }
+:where(html.duel-scaled) .duel-page.is-live .duel-floatpreview .duel-preview-text .card-text { font-size: inherit; }
+:where(html.duel-scaled) .duel-page.is-live .duel-floatpreview .duel-preview-text h3 { font-size: calc(14px * clamp(.9, var(--preview-scale, 1), 1.4)); }
 /* scaled-copy:end */
+
+
+
 
 
 
@@ -1347,10 +1397,13 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
   .duel-page.is-live .duel-floatpreview .duel-preview-text { max-height: max(90px, min(calc(200px * var(--preview-scale, 1)), calc(calc(100 * var(--vh, 1vh)) - 170px - var(--pw) * 1.458))); }
 }
 /* scaled-copy:start */
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-floatpreview { --pw: min(calc(220px * var(--preview-scale, 1)), calc((calc(100 * var(--vh, 1vh)) - 250px) / 1.458)); width: max(260px, calc(var(--pw) + 60px)); top: 56px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-floatpreview .duel-preview img { width: var(--pw); }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-floatpreview .duel-preview-text { max-height: max(90px, min(calc(200px * var(--preview-scale, 1)), calc(calc(100 * var(--vh, 1vh)) - 170px - var(--pw) * 1.458))); }
+:where(html.duel-scaled) .duel-page.is-live .duel-floatpreview { --pw: min(calc(220px * var(--preview-scale, 1)), calc((calc(100 * var(--vh, 1vh)) - 250px) / 1.458)); width: max(260px, calc(var(--pw) + 60px)); top: 56px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-floatpreview .duel-preview img { width: var(--pw); }
+:where(html.duel-scaled) .duel-page.is-live .duel-floatpreview .duel-preview-text { max-height: max(90px, min(calc(200px * var(--preview-scale, 1)), calc(calc(100 * var(--vh, 1vh)) - 170px - var(--pw) * 1.458))); }
 /* scaled-copy:end */
+
+
+
 
 
 
@@ -1440,11 +1493,14 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 .duel-clock-dial { width: clamp(58px, calc(8 * var(--vh, 1vh)), 78px); }
 .duel-clock-label { order: -1; }
 @media (min-width: 1001px) {
-  .duel-page.is-live:has(.duel-clockface) .duel-engine-bar, .duel-page.is-live:has(.duel-clockface) .duel-decision-pill { bottom: 250px; max-height: calc(calc(100 * var(--vh, 1vh)) - 330px); }
+  .duel-page.is-live[data-clock] .duel-engine-bar, .duel-page.is-live[data-clock] .duel-decision-pill { bottom: 250px; max-height: calc(calc(100 * var(--vh, 1vh)) - 330px); }
 }
 /* scaled-copy:start */
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live:has(.duel-clockface) .duel-engine-bar, :where(body:has(.duel-page.is-scaled)) .duel-page.is-live:has(.duel-clockface) .duel-decision-pill { bottom: 250px; max-height: calc(calc(100 * var(--vh, 1vh)) - 330px); }
+:where(html.duel-scaled) .duel-page.is-live[data-clock] .duel-engine-bar, :where(html.duel-scaled) .duel-page.is-live[data-clock] .duel-decision-pill { bottom: 250px; max-height: calc(calc(100 * var(--vh, 1vh)) - 330px); }
 /* scaled-copy:end */
+
+
+
 
 
 
@@ -1455,8 +1511,11 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
   .duel-page.is-live .duel-hand.is-own { width: min(76%, calc(var(--hw) * 7.6), calc(100% - 2 * clamp(250px, 19%, 300px))); }
 }
 /* scaled-copy:start */
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-hand.is-own { width: min(76%, calc(var(--hw) * 7.6), calc(100% - 2 * clamp(250px, 19%, 300px))); }
+:where(html.duel-scaled) .duel-page.is-live .duel-hand.is-own { width: min(76%, calc(var(--hw) * 7.6), calc(100% - 2 * clamp(250px, 19%, 300px))); }
 /* scaled-copy:end */
+
+
+
 
 
 
@@ -1552,11 +1611,14 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 
 /* a question while revealed cards are up: the question moves below the reveal strip instead of over it */
 @media (min-width: 1001px) {
-  .duel-page:has(.duel-reveal) .duel-engine-dialog { top: auto; bottom: calc(16 * var(--vh, 1vh)); transform: translateX(-50%); max-height: calc(calc(100 * var(--vh, 1vh)) - 360px); }
+  .duel-page[data-reveal] .duel-engine-dialog { top: auto; bottom: calc(16 * var(--vh, 1vh)); transform: translateX(-50%); max-height: calc(calc(100 * var(--vh, 1vh)) - 360px); }
 }
 /* scaled-copy:start */
-:where(body:has(.duel-page.is-scaled)) .duel-page:has(.duel-reveal) .duel-engine-dialog { top: auto; bottom: calc(16 * var(--vh, 1vh)); transform: translateX(-50%); max-height: calc(calc(100 * var(--vh, 1vh)) - 360px); }
+:where(html.duel-scaled) .duel-page[data-reveal] .duel-engine-dialog { top: auto; bottom: calc(16 * var(--vh, 1vh)); transform: translateX(-50%); max-height: calc(calc(100 * var(--vh, 1vh)) - 360px); }
 /* scaled-copy:end */
+
+
+
 
 
 
@@ -1567,8 +1629,11 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
   .duel-page.is-live .duel-hand.is-own .duel-hand-fan { container-type: inline-size; }
 }
 /* scaled-copy:start */
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-hand.is-own .duel-hand-fan { container-type: inline-size; }
+:where(html.duel-scaled) .duel-page.is-live .duel-hand.is-own .duel-hand-fan { container-type: inline-size; }
 /* scaled-copy:end */
+
+
+
 
 
 
@@ -1590,14 +1655,17 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
   .duel-fulllog-close { align-self: flex-start; padding: 2px 8px; font-size: 12px; background: none; border: 1px solid var(--border); }
 }
 /* scaled-copy:start */
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live.is-drawer-open .duel-side { display: none; }
-:where(body:has(.duel-page.is-scaled)) .duel-fulllog { display: flex; flex-direction: column; gap: 6px; height: min(calc(62 * var(--vh, 1vh)), 640px); padding: 8px; border-radius: 12px;
+:where(html.duel-scaled) .duel-page.is-live.is-drawer-open .duel-side { display: none; }
+:where(html.duel-scaled) .duel-fulllog { display: flex; flex-direction: column; gap: 6px; height: min(calc(62 * var(--vh, 1vh)), 640px); padding: 8px; border-radius: 12px;
     background: color-mix(in srgb, var(--surface) 82%, transparent); border: 1px solid var(--border); box-shadow: var(--shadow); backdrop-filter: blur(6px);
     animation: fulllog-in .2s ease-out both; }
-:where(body:has(.duel-page.is-scaled)) .duel-fulllog .duel-logchat { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-:where(body:has(.duel-page.is-scaled)) .duel-fulllog .duel-loglist { flex: 1; min-height: 0; overflow-y: auto; font-size: 12.5px; }
-:where(body:has(.duel-page.is-scaled)) .duel-fulllog-close { align-self: flex-start; padding: 2px 8px; font-size: 12px; background: none; border: 1px solid var(--border); }
+:where(html.duel-scaled) .duel-fulllog .duel-logchat { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+:where(html.duel-scaled) .duel-fulllog .duel-loglist { flex: 1; min-height: 0; overflow-y: auto; font-size: 12.5px; }
+:where(html.duel-scaled) .duel-fulllog-close { align-self: flex-start; padding: 2px 8px; font-size: 12px; background: none; border: 1px solid var(--border); }
 /* scaled-copy:end */
+
+
+
 
 
 
@@ -1607,7 +1675,7 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 
 /* ---------- wide screens (1700px+): the side columns grow into the space beside the field ---------- */
 @media (min-width: 1700px) {
-  .duel-page.is-live .duel-board-wrap { --side: clamp(230px, 15cqw, 340px); }
+  .duel-page.is-live .duel-board-wrap { --side: clamp(180px, 15cqw, 340px); }   /* 180: room for the field on a narrower (small-window) layout */
   .duel-page.is-live .duel-board-wrap > .duel-plate { width: min(var(--side), 300px); left: 20px; }
   .duel-page.is-live .duel-plate .duel-playerbar .duel-lp { font-size: clamp(32px, calc(var(--cw) * .42), 54px); }
   .duel-page.is-live .duel-plate .duel-pname { font-size: 15px; }
@@ -1624,22 +1692,25 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
   .duel-turnno b { font-size: clamp(40px, calc(6 * var(--vh, 1vh)), 64px); }
 }
 /* scaled-copy:start */
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-board-wrap { --side: clamp(230px, 15cqw, 340px); }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-board-wrap > .duel-plate { width: min(var(--side), 300px); left: 20px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-plate .duel-playerbar .duel-lp { font-size: clamp(32px, calc(var(--cw) * .42), 54px); }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-plate .duel-pname { font-size: 15px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-board-wrap > .duel-rail { width: min(var(--side), 300px); left: 20px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-rail .duel-recent li { font-size: 13.5px; line-height: 1.4; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-rail .duel-recent-title, :where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-rail .duel-recent-log { font-size: 12px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live.is-drawer-open .duel-board-wrap > .duel-rail { width: min(var(--side), 360px); }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-board-wrap > .duel-status { width: min(var(--side), 320px); right: 20px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-now-text { font-size: 13px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-now-thumb { width: 52px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-engine-bar { width: min(var(--side), 320px); }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-floatpreview { --pw: min(calc(270px * var(--preview-scale, 1)), calc((calc(100 * var(--vh, 1vh)) - 250px) / 1.458)); }
-:where(body:has(.duel-page.is-scaled)) .duel-turnbtns button { font-size: 15px; padding: 10px 16px; }
-:where(body:has(.duel-page.is-scaled)) .duel-turnno b { font-size: clamp(40px, calc(6 * var(--vh, 1vh)), 64px); }
+:where(html.duel-scaled) .duel-page.is-live .duel-board-wrap { --side: clamp(180px, 15cqw, 340px); }
+:where(html.duel-scaled) .duel-page.is-live .duel-board-wrap > .duel-plate { width: min(var(--side), 300px); left: 20px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-plate .duel-playerbar .duel-lp { font-size: clamp(32px, calc(var(--cw) * .42), 54px); }
+:where(html.duel-scaled) .duel-page.is-live .duel-plate .duel-pname { font-size: 15px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-board-wrap > .duel-rail { width: min(var(--side), 300px); left: 20px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-rail .duel-recent li { font-size: 13.5px; line-height: 1.4; }
+:where(html.duel-scaled) .duel-page.is-live .duel-rail .duel-recent-title, :where(html.duel-scaled) .duel-page.is-live .duel-rail .duel-recent-log { font-size: 12px; }
+:where(html.duel-scaled) .duel-page.is-live.is-drawer-open .duel-board-wrap > .duel-rail { width: min(var(--side), 360px); }
+:where(html.duel-scaled) .duel-page.is-live .duel-board-wrap > .duel-status { width: min(var(--side), 320px); right: 20px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-now-text { font-size: 13px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-now-thumb { width: 52px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar { width: min(var(--side), 320px); }
+:where(html.duel-scaled) .duel-page.is-live .duel-floatpreview { --pw: min(calc(270px * var(--preview-scale, 1)), calc((calc(100 * var(--vh, 1vh)) - 250px) / 1.458)); }
+:where(html.duel-scaled) .duel-turnbtns button { font-size: 15px; padding: 10px 16px; }
+:where(html.duel-scaled) .duel-turnno b { font-size: clamp(40px, calc(6 * var(--vh, 1vh)), 64px); }
 /* scaled-copy:end */
+
+
+
 
 
 
@@ -1662,7 +1733,7 @@ body:where(:has(.duel-page.is-scaled)):has(.duel-page.is-live) .topbar, body:whe
 /* the whole window: at least the design size in both directions (1920 x 1080), more in one when the window
    is a different shape; the field keeps its 16:9 size (--h16) and the corners keep their places */
 .duel-page.is-live.is-scaled { width: calc(100vw / var(--ui-zoom)); height: calc(100vh / var(--ui-zoom)); right: auto; bottom: auto; left: 0; top: 0; }
-body:has(.duel-page.is-live.is-scaled) { overflow: hidden; }
+html.duel-scaled body { overflow: hidden; }
 
 
 /* ---------- smoothness: compositor-only ambient motion, contained panels ---------- */
@@ -1688,6 +1759,45 @@ body:has(.duel-page.is-live.is-scaled) { overflow: hidden; }
   .duel-page.is-live .duel-hand.is-opp { top: calc(100cqh - var(--h16, 100cqh)); }
 }
 /* scaled-copy:start */
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-hand.is-opp { top: calc(100cqh - var(--h16, 100cqh)); }
+:where(html.duel-scaled) .duel-page.is-live .duel-hand.is-opp { top: calc(100cqh - var(--h16, 100cqh)); }
 /* scaled-copy:end */
 
+
+
+
+
+
+/* ---------- the open chain: art-forward rows, a gold spine through the link numbers, newest on top ---------- */
+.duel-chainstack { --gold: #e6b84f; gap: 6px; padding: 10px; border-radius: 14px; border-color: color-mix(in srgb, var(--gold) 55%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--gold) 10%, transparent), transparent 40%), color-mix(in srgb, var(--surface) 72%, transparent);
+  box-shadow: 0 12px 30px rgb(0 0 0 / .35), 0 0 24px color-mix(in srgb, var(--gold) 18%, transparent); }
+.duel-chainstack-title { display: flex; align-items: baseline; gap: 6px; color: var(--gold); }
+.duel-chainstack-title b { font-family: var(--font-num, inherit); font-size: 18px; line-height: 1; }
+.duel-chainstack-title small { font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: none; color: var(--muted); }
+.duel-chainstack ol { position: relative; gap: 6px; max-height: calc(42 * var(--vh, 1vh)); padding-left: 2px; }
+/* the spine */
+.duel-chainstack ol::before { content: ""; position: absolute; left: 11px; top: 14px; bottom: 14px; width: 2px; border-radius: 2px;
+  background: linear-gradient(180deg, var(--gold), color-mix(in srgb, var(--gold) 30%, transparent)); box-shadow: 0 0 8px var(--gold); }
+.duel-chainstack li { position: relative; grid-template-columns: 22px 40px 1fr; gap: 8px; padding: 5px 8px 5px 0; border-left: 0; border-radius: 10px; overflow: hidden;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--surface) 92%, transparent) 35%, color-mix(in srgb, var(--surface) 55%, transparent)), var(--art, none) right center / 60% auto no-repeat;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 8%, transparent); animation: chain-in .4s cubic-bezier(.2,.9,.3,1.2) both; }
+.duel-chainstack li.is-mine { box-shadow: inset 3px 0 0 var(--accent), inset 0 0 0 1px color-mix(in srgb, var(--fg) 8%, transparent); }
+.duel-chainstack li.is-theirs { box-shadow: inset 3px 0 0 #ef6a7e, inset 0 0 0 1px color-mix(in srgb, var(--fg) 8%, transparent); }
+.duel-chainstack-n { position: relative; z-index: 1; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; font-size: 12px; font-weight: 900; color: #1c1405;
+  background: radial-gradient(circle at 35% 30%, #fff3c4, var(--gold) 60%, #a77b1e); box-shadow: 0 0 0 2px rgb(20 14 4 / .6), 0 0 10px var(--gold); }
+.duel-chainstack-thumb { --cw: 40px; }
+.duel-chainstack-text b { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.duel-chainstack-res { font-style: normal; font-size: 9.5px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; padding: 1px 6px; border-radius: 999px; color: #1c1405; background: var(--gold); }
+.duel-chainstack li.is-resolving { animation: chain-in .4s both, chain-resolving 1.1s ease-in-out infinite alternate; }
+@keyframes chain-in { from { opacity: 0; transform: translateX(24px) scale(.96); filter: brightness(1.8); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes chain-resolving { from { outline: 2px solid color-mix(in srgb, var(--gold) 30%, transparent); } to { outline: 2px solid var(--gold); } }
+@media (prefers-reduced-motion: reduce) { .duel-chainstack li, .duel-chainstack li.is-resolving { animation: none; } }
+
+/* ---------- replay page ---------- */
+.replay-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.replay-bar h1 { margin: 0; }
+.replay-controls { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.replay-controls input[type=range] { width: 260px; accent-color: var(--accent); }
+.replay-pos { font-size: 12px; white-space: nowrap; }
+.replay-done { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 45; display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-radius: 14px;
+  background: color-mix(in srgb, var(--surface) 80%, transparent); border: 1px solid var(--border); backdrop-filter: blur(10px); box-shadow: var(--shadow); }

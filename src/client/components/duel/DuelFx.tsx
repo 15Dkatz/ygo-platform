@@ -1,7 +1,9 @@
 // Duel "moments": turn banner + phase ribbon, the end-of-duel overlay, the reconnecting
 // overlay and the sound toggle. Pure presentation; the page decides when they show.
 
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { usePageFlag } from "./pageFlag.ts";
+import { Fragment, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { SleeveBack } from "./Sleeve.tsx";
 import { Link } from "react-router-dom";
 import type { BoardState, SessionInfo } from "../../../shared/duel.ts";
 import { PHASE_LABEL, type Seat } from "../../../shared/duelActions.ts";
@@ -38,6 +40,7 @@ export function TurnBanner({ board, you }: { board: BoardState; you: Seat | null
 
 /** The banner itself (the duel page and the /dev/summons lab show it). */
 export function PhaseBanner({ big, small, mine, phase, turn }: { big: string; small: string; mine: boolean; phase: string; turn: boolean }) {
+  usePageFlag("fx-battle", phase === "battle");
   return (
     <div className={`duel-phasefx ph-${phase} ${turn ? "is-turn" : "is-phase"} ${mine ? "is-mine" : "is-theirs"}`} aria-live="polite">
       <div className="duel-phasefx-band">
@@ -52,26 +55,59 @@ export function PhaseBanner({ big, small, mine, phase, turn }: { big: string; sm
 }
 
 /** Full-screen Victory / Defeat / Draw when a duel ends, with Rematch / Back to lobby. */
-export function EndOverlay({ session, you, onRematch, onClose, children }: { session: SessionInfo; you: Seat | null; onRematch(): void; onClose(): void; children?: ReactNode }) {
+export function EndOverlay({ session, you, onRematch, onClose, children, lp, stats, replayId }: {
+  session: SessionInfo; you: Seat | null; onRematch(): void; onClose(): void; children?: ReactNode;
+  /** final Life Points [seat 0, seat 1] */
+  lp?: [number, number];
+  /** the duel's numbers (DuelStats) */
+  stats?: ReactNode;
+  /** this duel's replay, saved in this browser */
+  replayId?: string | null;
+}) {
   const w = session.winner;
   const result = w === null ? "draw" : you === null ? "watch" : w === you ? "win" : "lose";
   const title = result === "draw" ? "Draw" : result === "win" ? "Victory" : result === "lose" ? "Defeat" : `${session.seats[w!]?.name ?? "Player"} wins`;
   useEffect(() => { play(result === "lose" ? "lose" : "win"); }, [result]);
   const opp = you === null ? null : session.seats[you === 0 ? 1 : 0];
   const asked = you !== null && session.rematch[you];
+  const theyAsked = you !== null && !!opp && session.rematch[you === 0 ? 1 : 0];
+  // you first (left), then the opponent
+  const order: (0 | 1)[] = you === 1 ? [1, 0] : [0, 1];
   return (
-    <div className={`duel-end is-${result}`} role="dialog" aria-modal="true" aria-label={title}>
+    <div className={`duel-end is-${result} ${children ? "has-setup" : ""}`} role="dialog" aria-modal="true" aria-label={title}>
       <div className="duel-end-card">
-        <div className="duel-end-title">{title}</div>
-        {session.endReason && <p className="duel-end-reason">{session.endReason}</p>}
-        <div className="duel-end-actions">
-          {you !== null && opp && (
-            <button className="primary" disabled={asked} onClick={onRematch}>{asked ? "Waiting for opponent…" : "Rematch"}</button>
-          )}
-          <Link className="button" to="/lobby">Back to lobby</Link>
-          <button onClick={onClose}>View the board</button>
+        <div className="duel-end-hero">
+          <div className="duel-end-title">{title}</div>
+          {session.endReason && <p className="duel-end-reason">{session.endReason}</p>}
+          <div className="duel-end-vs">
+            {order.map((s, i) => {
+              const seat = session.seats[s];
+              const won = session.winner === s;
+              return (
+                <Fragment key={s}>
+                  {i === 1 && <span className="duel-end-vs-x">VS</span>}
+                  <div className={`duel-end-duelist ${won ? "is-winner" : session.winner === null ? "" : "is-loser"}`}>
+                    <span className="duel-end-pile" aria-hidden="true"><SleeveBack sleeve={seat?.sleeve} /></span>
+                    <b>{seat?.name ?? "Player"}{you === s ? " (you)" : ""}</b>
+                    {seat?.profile?.title && <span className="pf-title">{seat.profile.title}</span>}
+                    {lp && <span className="duel-end-lp">{lp[s].toLocaleString()} LP</span>}
+                    {won && <span className="duel-end-crown">Winner</span>}
+                  </div>
+                </Fragment>
+              );
+            })}
+          </div>
+          {stats && <div className="duel-end-stats">{stats}</div>}
+          <div className="duel-end-actions">
+            {you !== null && opp && (
+              <button className="primary duel-end-rematch" disabled={asked} onClick={onRematch}>{asked ? "Waiting for opponent…" : theyAsked ? "Accept rematch" : "Rematch"}</button>
+            )}
+            <Link className="button" to="/lobby">Back to lobby</Link>
+            <button onClick={onClose}>View the board</button>
+            {replayId && <Link className="button duel-end-replay" to={`/replay/${replayId}`} target="_blank">▶ Watch replay</Link>}
+          </div>
+          {theyAsked && !asked && <p className="duel-end-note">{opp!.name} wants a rematch.</p>}
         </div>
-        {you !== null && opp && session.rematch[you === 0 ? 1 : 0] && !asked && <p className="muted">{opp.name} wants a rematch.</p>}
         {children && <div className="duel-end-setup">{children}</div>}
       </div>
     </div>

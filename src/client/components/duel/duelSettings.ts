@@ -25,6 +25,13 @@ export interface DuelSettings {
   /** Summons and activations: "full" (signature effects + card-art splash), "short" (effects, splash only for
    *  big moments), "off" (a plain glow). */
   summonFx: SummonFxMode;
+  /** Animation speed: 1 (normal), 1.5, 2. */
+  animSpeed: number;
+  /** Interface size on a scaled duel: "auto" keeps text readable on small windows; the others pick the layout's
+   *  design width (smaller = everything bigger). */
+  uiSize: UiSize;
+  /** Blue / orange instead of green / red and the you-vs-opponent colours (colour-blind friendly). */
+  colorblind: boolean;
   /** How the card itself is shown before its summon, and before its activation (different on purpose). */
   summonSplash: SplashStyle;
   activateSplash: SplashStyle;
@@ -61,6 +68,10 @@ export const SPLASH_STYLE_LABEL: Record<SplashStyle, string> = {
   cutin: "Cut-in (an art panel bursts in from the screen edge)", hologram: "Hologram (projected above the card)",
   comic: "Comic (a starburst panel)", spotlight: "Spotlight (the room dims, the card rises into the light)",
 };
+export const ANIM_SPEEDS = [1, 1.5, 2];
+export const UI_SIZES = ["auto", "compact", "medium", "large", "xl"] as const;
+export type UiSize = (typeof UI_SIZES)[number];
+export const UI_SIZE_LABEL: Record<UiSize, string> = { auto: "Auto (readable on small windows)", compact: "Compact (full layout)", medium: "Medium", large: "Large", xl: "Extra large" };
 export const SUMMON_FX = ["full", "short", "off"] as const;
 export type SummonFxMode = (typeof SUMMON_FX)[number];
 export const SUMMON_FX_LABEL: Record<SummonFxMode, string> = { full: "Full (effects + card art splash)", short: "Short (splash only for big moments)", off: "Off (a simple glow)" };
@@ -85,7 +96,7 @@ export const TILT_MAX = 60;
 export const DEFAULT_SCALE = { field: 1.25, hand: 1.2 } as const;
 export const DEFAULT_TILT = 28;
 const DEFAULTS: DuelSettings = { tilt: DEFAULT_TILT, stats: true, matchup: true, confirmEnd: true, fieldScale: DEFAULT_SCALE.field, handScale: DEFAULT_SCALE.hand, autoPlace: true, dragAttack: true, calmPanels: true,
-  resolveFx: "rings", resolveColor: "theme", summonFx: "full", summonSplash: "showcase", activateSplash: "portal", callouts: true, edgeFlash: true, labelShimmer: true, heartbeat: true,
+  resolveFx: "rings", resolveColor: "theme", summonFx: "full", animSpeed: 1, uiSize: "auto", colorblind: false, summonSplash: "showcase", activateSplash: "portal", callouts: true, edgeFlash: true, labelShimmer: true, heartbeat: true,
   ...(Object.fromEntries(Object.entries(LAYOUT).map(([k, v]) => [k, v.def])) as Record<LayoutKey, number>) };
 const KEY = "ygo.duelSettings";
 
@@ -103,6 +114,8 @@ function load(): DuelSettings {
     if (!(RESOLVE_FX as readonly string[]).includes(s.resolveFx)) s.resolveFx = DEFAULTS.resolveFx;
     if (!(RESOLVE_COLORS as readonly string[]).includes(s.resolveColor)) s.resolveColor = DEFAULTS.resolveColor;
     if (!(SUMMON_FX as readonly string[]).includes(s.summonFx)) s.summonFx = DEFAULTS.summonFx;
+    if (!ANIM_SPEEDS.includes(Number(s.animSpeed))) s.animSpeed = DEFAULTS.animSpeed;
+    if (!(UI_SIZES as readonly string[]).includes(s.uiSize)) s.uiSize = DEFAULTS.uiSize;
     if (!(SPLASH_STYLES as readonly string[]).includes(s.summonSplash)) s.summonSplash = DEFAULTS.summonSplash;
     if (!(SPLASH_STYLES as readonly string[]).includes(s.activateSplash)) s.activateSplash = DEFAULTS.activateSplash;
     return { ...s, tilt: Math.min(TILT_MAX, Math.max(0, Number(s.tilt) || 0)), fieldScale: clamp(s.fieldScale, SCALE_RANGE.field, DEFAULT_SCALE.field), handScale: clamp(s.handScale, SCALE_RANGE.hand, DEFAULT_SCALE.hand) };

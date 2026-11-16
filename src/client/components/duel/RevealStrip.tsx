@@ -1,5 +1,6 @@
 // What was just shown face-up (excavated, revealed from a hand, looked at), for both players to follow:
 // the cards stay up in a strip, and each one is tagged with where it goes next (Hand, GY, Deck...).
+import { usePageFlag } from "./pageFlag.ts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Seat } from "../../../shared/duelActions.ts";
 import type { EngineEvent } from "../../../shared/enginePrompts.ts";
@@ -57,6 +58,7 @@ export function useReveals(names: [string, string], you: Seat | null) {
 export const REVEAL_MS = 8_000;
 
 export function RevealStrip({ reveal, onHover, onZoom, onClose }: { reveal: Reveal; onHover(code: number | null): void; onZoom(code: number): void; onClose(): void }) {
+  usePageFlag("reveal");
   const [held, setHeld] = useState(false);
   // the countdown restarts whenever the reveal changes (a card's destination arrives) or the pointer leaves
   const [round, setRound] = useState(0);

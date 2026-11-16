@@ -92,7 +92,7 @@ button:hover > .card-img, a:hover > .card-img, .db-card:hover .card-img {
   animation: site-drift 18s ease-in-out infinite alternate;
 }
 .app { position: relative; isolation: isolate; }
-.app:has(.duel-page.is-live)::before { display: none; }
+html.duel-live .app::before { display: none; }
 :root[data-skin="vintage"] .app::before { opacity: .55; }
 :root[data-skin="felt"] .app::before { background: radial-gradient(50% 40% at 50% 10%, rgb(255 220 140 / .12), transparent 70%); }
 :root[data-skin="stone"] .app::before { background: radial-gradient(45% 35% at 50% 0%, rgb(255 170 80 / .1), transparent 70%), radial-gradient(30% 25% at 90% 90%, rgb(255 140 60 / .07), transparent 70%); }

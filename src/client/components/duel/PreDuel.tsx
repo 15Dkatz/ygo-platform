@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { avatarStyle, getProfile } from "./profileStore.ts";
+import "./profile.css";
 import { Link } from "react-router-dom";
 import type { ClientMsg, RpsChoice, SessionInfo, SeatInfo } from "../../../shared/duel.ts";
 import type { Seat } from "../../../shared/duelActions.ts";
@@ -59,7 +61,7 @@ export function PreDuel({ session, you, hasIdentity, decks, deckId, setDeckId, d
   const sendDeck = () => {
     if (!deck) return;
     seatedDeckId = deck.id;
-    send({ t: "join", deckId: deck.id, main: deck.main, extra: deck.extra, side: deck.side, rarity: deck.rarity, sleeve: deck.sleeve });
+    send({ t: "join", deckId: deck.id, main: deck.main, extra: deck.extra, side: deck.side, rarity: deck.rarity, sleeve: deck.sleeve, profile: getProfile() });
   };
   const opp = you === null ? null : seats[you === 0 ? 1 : 0];
   const between = stage === "lobby" || stage === "finished";
@@ -83,10 +85,7 @@ export function PreDuel({ session, you, hasIdentity, decks, deckId, setDeckId, d
   };
 
   const showSetup = between && hasIdentity && (seated || freeSeat);
-  const panels = (
-      <div className="pd-grid">
-        {showSetup && (
-          <section className="pd-panel pd-deck">
+  const deckPanel = <section className="pd-panel pd-deck">
             <h3>Your deck</h3>
             <div className="duel-deckrow">
               <DeckSelect decks={decks} deckId={deckId} onChange={setDeckId} />
@@ -106,11 +105,8 @@ export function PreDuel({ session, you, hasIdentity, decks, deckId, setDeckId, d
                     : <Link className="pd-link" to={`/decks/${deck.id}`}>Edit in the deck builder →</Link>}
               </div>
             )}
-          </section>
-        )}
-
-        {showSetup && deck && (
-          <section className="pd-panel pd-sleeve">
+          </section>;
+  const sleevePanel = deck ? <section className="pd-panel pd-sleeve">
             <h3>Sleeve</h3>
             <button type="button" className="pd-sleeve-fan" onClick={() => setPicking(true)} title="Change sleeve" aria-label="Change sleeve">
               <span><SleeveBack sleeve={deck.sleeve} /></span>
@@ -121,22 +117,28 @@ export function PreDuel({ session, you, hasIdentity, decks, deckId, setDeckId, d
             <QuickSleeves deck={deck} onPick={pickSleeve} />
             <button type="button" onClick={() => setPicking(true)}>All sleeves…</button>
             <small className="muted">{isStarterDeck(deck.id) ? "Remembered for this starter deck in this browser." : "Saved with this deck."} Both players see it.</small>
-          </section>
-        )}
-
-        {(between || stage === "rps" || stage === "choose") && (
-          <section className="pd-panel pd-rules">
+          </section> : null;
+  const rulesPanel = <section className="pd-panel pd-rules">
             <h3>Room rules {!isHost && <small className="muted">· set by {seats[0]?.bot ? "the host" : seats[0]?.name ?? "the host"}</small>}</h3>
             <RoomRules value={settings} readOnly={!isHost} onChange={(next) => send({ t: "settings", settings: next })} />
             {isHost && <small className="muted">Changes are announced in the chat.</small>}
             {seated && !opp && stage === "lobby" && <InviteLink />}
-          </section>
-        )}
-
+          </section>;
+  const panels = (
+      <div className="pd-grid">
+        {showSetup && deckPanel}
+        {showSetup && sleevePanel}
+        {(between || stage === "rps" || stage === "choose") && rulesPanel}
         {seated && between && <ViewPanel />}
       </div>
-
   );
+  // the end-of-duel screen: the same panels as tabs (one at a time, so nothing needs scrolling)
+  const endTabs: EndTab[] = [
+    ...(showSetup ? [{ id: "deck", label: "Deck", node: deckPanel }] : []),
+    ...(showSetup && sleevePanel ? [{ id: "sleeve", label: "Sleeve", node: sleevePanel }] : []),
+    { id: "rules", label: "Rules", node: rulesPanel },
+    ...(seated ? [{ id: "view", label: "View", node: <ViewPanel /> }] : []),
+  ];
 
   return (
     <div className={`duel-preduel pd ${stage === "finished" ? "is-finished" : ""}`}>
@@ -227,13 +229,13 @@ export function PreDuel({ session, you, hasIdentity, decks, deckId, setDeckId, d
       {between && hasIdentity && !seated && !freeSeat && <p className="muted">Both seats are taken — you are spectating.</p>}
 
       {/* ---------- setup panels (after a duel: folded away under the result) ---------- */}
-      {stage === "finished" && variant !== "end" ? (
+      {variant === "end" ? <EndTabsView tabs={endTabs} /> : stage === "finished" ? (
         <details className="pd-more">
           <summary>Side deck, sleeve, rules and view</summary>
           {panels}
         </details>
       ) : panels}
-      {canBot && !seats[1] && seats[0]?.ready && (
+      {variant !== "end" && canBot && !seats[1] && seats[0]?.ready && (
         <div className="duel-bot">
           <b>No opponent yet?</b> <span className="muted">Play against a bot (it plays random legal moves). Its deck:</span>
           <div className="duel-deckrow">
@@ -250,7 +252,7 @@ export function PreDuel({ session, you, hasIdentity, decks, deckId, setDeckId, d
       )}
       {stage === "lobby" && seated && !opp && <p className="muted">Share this page's link with your opponent, or wait for someone to join from the lobby.</p>}
 
-      {seated && stage !== "duel" && (
+      {seated && stage !== "duel" && variant !== "end" && (
         <button className="duel-leave" onClick={() => send({ t: "leave" })}>Leave seat</button>
       )}
     </div>
@@ -264,6 +266,7 @@ function SeatCard({ seat, index, you }: { seat: SeatInfo | null; index: 0 | 1; y
       <div className={`pd-seat-pile ${seat ? "" : "is-empty"}`} aria-hidden="true">
         {seat?.ready ? <><span><SleeveBack sleeve={seat.sleeve} /></span><span><SleeveBack sleeve={seat.sleeve} /></span></> : <span className="pd-seat-ghost">?</span>}
       </div>
+      {seat && <span className="pf-avatar" style={avatarStyle(seat.profile)} aria-hidden="true">{seat.profile?.avatar ? "" : (seat.name[0] ?? "?").toUpperCase()}</span>}
       <div className="pd-seat-text">
         <div className="duel-seat-head">
           <span className={`duel-dot ${seat?.connected ? "is-on" : seat ? "is-off" : ""}`} />
@@ -272,10 +275,12 @@ function SeatCard({ seat, index, you }: { seat: SeatInfo | null; index: 0 | 1; y
           {index === 0 && seat && !seat.bot && <span className="duel-chip" title="The host sets the room's rules">host</span>}
           {seat?.bot && <span className="duel-chip">bot</span>}
         </div>
+        {seat?.profile?.title && <span className="pf-title">{seat.profile.title}</span>}
         <div className={`pd-seat-status ${seat?.ready ? "is-ready" : ""}`}>{status}</div>
         {seat?.deck && <div className="muted pd-seat-deck">Main {seat.deck.main} · Extra {seat.deck.extra} · Side {seat.deck.side}</div>}
         {seat?.ready && <div className="muted pd-seat-deck">Sleeve: {sleeveLabel(seat.sleeve, (id) => catalog.get(id)?.name)}</div>}
       </div>
+      {seat?.profile?.showcase && <span className="pd-showcase" title="Showcase card"><img src={cardImage(seat.profile.showcase, "small")} alt="" /></span>}
     </div>
   );
 }
@@ -401,5 +406,21 @@ function ViewPanel() {
       </div>
       <span className="duel-deckrow"><a className="pd-link" href="/dev/summons" target="_blank" rel="noreferrer">Preview summons →</a><a className="pd-link" href="/dev/fx" target="_blank" rel="noreferrer">Preview resolving effects →</a></span>
     </section>
+  );
+}
+
+interface EndTab { id: string; label: string; node: ReactNode }
+function EndTabsView({ tabs }: { tabs: EndTab[] }) {
+  const [tab, setTab] = useState(tabs[0]?.id ?? "rules");
+  const cur = tabs.find((t) => t.id === tab) ?? tabs[0];
+  return (
+    <div className="pd-endtabs">
+      <div className="pd-endtabs-bar" role="tablist">
+        {tabs.map((t) => (
+          <button key={t.id} type="button" role="tab" aria-selected={t.id === cur?.id} className={t.id === cur?.id ? "is-on" : ""} onClick={() => setTab(t.id)}>{t.label}</button>
+        ))}
+      </div>
+      <div className="pd-endtabs-body" role="tabpanel">{cur?.node}</div>
+    </div>
   );
 }

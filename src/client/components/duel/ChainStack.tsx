@@ -1,6 +1,7 @@
 import type { Seat } from "../../../shared/duelActions.ts";
 import type { EngineEvent } from "../../../shared/enginePrompts.ts";
 import { CardFace } from "./CardView.tsx";
+import { cardImage } from "../../api.ts";
 import { getCard } from "./useDuel.ts";
 import { refUid } from "../engine/boardRefs.ts";
 import type { OpenChainLink } from "../../../shared/chain.ts";
@@ -29,16 +30,17 @@ export function ChainStack({ chain, you, names, onHover, onZoom }: { chain: Chai
   if (!chain.length) return null;
   return (
     <div className="duel-chainstack" aria-live="polite">
-      <span className="duel-chainstack-title">Chain · {chain.length} link{chain.length === 1 ? "" : "s"}</span>
+      <span className="duel-chainstack-title">Chain <b>{chain.length}</b><small>{chain.length === 1 ? "link" : "links"} · newest on top</small></span>
       <ol reversed>
         {[...chain].reverse().map((l) => (
           <li key={l.link} className={`${l.controller === you ? "is-mine" : "is-theirs"} ${l.resolving ? "is-resolving" : ""}`}
+            style={{ ["--art" as string]: l.code > 0 ? `url("${cardImage(l.code, "crop")}")` : undefined, cursor: l.code ? "zoom-in" : undefined }}
             onMouseEnter={() => onHover?.(l.code || null)} onMouseLeave={() => onHover?.(null)} onClick={() => l.code && onZoom?.(l.code)}
-            title="Hover to preview, click to zoom" style={{ cursor: l.code ? "zoom-in" : undefined }}>
+            title="Hover to preview, click to zoom">
             <span className="duel-chainstack-n">{l.link}</span>
             <span className="duel-card duel-chainstack-thumb"><span className="duel-card-inner"><CardFace code={l.code} /></span></span>
             <span className="duel-chainstack-text">
-              <b>{getCard(l.code)?.name ?? "A card"}</b>
+              <b>{getCard(l.code)?.name ?? "A card"}{l.resolving && <em className="duel-chainstack-res">Resolving</em>}</b>
               <small>{l.controller === you ? "You" : names[l.controller]}{l.desc ? ` · ${l.desc}` : ""}{l.from ? ` · from ${getCard(l.from)?.name ?? "another card"}` : ""}</small>
             </span>
           </li>

@@ -78,14 +78,49 @@
 .pd-toggles { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; font-size: 13px; }
 .pd-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; }
 
-/* ---------- end of duel: one screen (result + Rematch + the room setup), and a bar when it's closed ---------- */
-.duel-end:has(.duel-end-setup) { overflow: auto; place-items: start center; padding: calc(4 * var(--vh, 1vh)) 16px; }
-.duel-end-card:has(.duel-end-setup) { width: min(1500px, 100%); }
-.duel-end-setup { margin-top: 18px; text-align: left; }
-.duel-end-setup .duel-preduel { background: none; border: 0; padding: 0; }
+/* ---------- end of duel: one wide screen, no scrolling: the result on the left, the room setup as tabs on the right ---------- */
+.duel-end.has-setup { place-items: center; padding: 3vh 3vw; overflow: hidden; }
+.duel-end.has-setup .duel-end-card {
+  width: min(1320px, 100%); height: min(760px, 100%); padding: 0; text-align: left; overflow: hidden;
+  display: grid; grid-template-columns: minmax(300px, 0.85fr) minmax(0, 1.4fr); }
+.duel-end-hero { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 28px 24px; text-align: center;
+  background: radial-gradient(120% 80% at 50% 25%, color-mix(in srgb, var(--end-tone) 22%, transparent), transparent 70%);
+  border-right: 1px solid color-mix(in srgb, var(--end-tone) 30%, transparent); min-height: 0; }
+.duel-end-hero .duel-end-title { font-size: clamp(40px, 5vw, 72px); text-shadow: 0 0 30px color-mix(in srgb, var(--end-tone) 55%, transparent); }
+.duel-end-hero .duel-end-reason { margin: -6px 0 0; }
+.duel-end-vs { display: flex; align-items: center; justify-content: center; gap: 14px; width: 100%; }
+.duel-end-vs-x { font-family: var(--font-field, inherit); font-weight: 900; color: var(--muted); font-size: 18px; }
+.duel-end-duelist { display: grid; justify-items: center; gap: 4px; min-width: 0; flex: 1; max-width: 170px; }
+.duel-end-duelist b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.duel-end-duelist.is-loser { opacity: .6; }
+.duel-end-pile { position: relative; width: 64px; aspect-ratio: 59 / 86; border-radius: 5px; overflow: hidden; box-shadow: 0 8px 20px rgb(0 0 0 / .45); }
+.duel-end-duelist.is-winner .duel-end-pile { box-shadow: 0 0 0 2px var(--end-tone), 0 0 24px color-mix(in srgb, var(--end-tone) 60%, transparent), 0 8px 20px rgb(0 0 0 / .45); }
+.duel-end-lp { font-family: var(--font-num, inherit); font-weight: 800; font-size: 14px; }
+.duel-end-crown { font-size: 10.5px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--end-tone); }
+.duel-end-stats { width: 100%; }
+.duel-end-hero .duel-end-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: min(340px, 100%); margin-top: 4px; }
+.duel-end-hero .duel-end-rematch { grid-column: 1 / -1; padding: 12px; font-size: 16px; font-weight: 800; }
+.duel-end-hero .duel-end-actions a.button { justify-content: center; }
+.duel-end-note { margin: 0; color: var(--end-tone); font-weight: 700; }
+.duel-end-setup { min-height: 0; display: flex; flex-direction: column; padding: 18px 20px; text-align: left; }
+.duel-end-setup .duel-preduel { background: none; border: 0; padding: 0; height: 100%; min-height: 0; display: flex; flex-direction: column; }
+/* the setup as tabs: one panel at a time, sized to the card (it only scrolls if a window is tiny) */
+.pd-endtabs { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
+.pd-endtabs-bar { display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: color-mix(in srgb, var(--fg) 6%, transparent); align-self: flex-start; }
+.pd-endtabs-bar button { padding: 6px 16px; border: 0; border-radius: 9px; background: none; font-weight: 700; color: var(--muted); }
+.pd-endtabs-bar button.is-on { background: var(--accent); color: var(--accent-fg); }
+.pd-endtabs-body { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.pd-endtabs-body > .pd-panel { background: none; border: 0; padding: 0; }
+.pd-endtabs-body .pd-sleeve-fan { margin: 0 auto; }
 .duel-finished-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center;
   padding: 10px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
 .duel-finished-bar b { font-size: 16px; }
+@media (max-width: 820px) {
+  .duel-end.has-setup .duel-end-card { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); height: 100%; }
+  .duel-end-hero { border-right: 0; border-bottom: 1px solid color-mix(in srgb, var(--end-tone) 30%, transparent); padding: 14px; gap: 8px; }
+  .duel-end-hero .duel-end-title { font-size: 36px; }
+  .duel-end-pile { width: 40px; }
+}
 
 /* ---------- deck builder modal ---------- */
 .duel-deckedit { position: fixed; inset: 0; z-index: 49; background: var(--backdrop); display: grid; place-items: center; padding: calc(2 * var(--vh, 1vh)) calc(2 * var(--vw, 1vw)); }
@@ -102,8 +137,19 @@
 
 /* wide screens: the room uses the width (the page is capped at 1400px elsewhere) */
 @media (min-width: 1500px) {
-  .content:has(> .duel-page:not(.is-live)) { max-width: min(1840px, 100%); }
+  html.duel-room .content { max-width: min(1840px, 100%); }
   .duel-layout.is-preduel { grid-template-columns: minmax(0, 1fr) 360px; }
   .duel-layout.is-preduel .duel-preduel.pd { max-width: none; }
   .pd-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
+
+/* the duel in numbers (end screen) */
+.duel-endstats { width: min(340px, 100%); display: grid; gap: 4px; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--fg) 5%, transparent); }
+.duel-endstats-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: baseline; gap: 10px; }
+.duel-endstats-row b { font-family: var(--font-num, inherit); font-size: 15px; }
+.duel-endstats-row b:first-child { text-align: right; }
+.duel-endstats-row b:last-child { text-align: left; color: var(--muted); }
+.duel-endstats-row span { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.duel-endstats-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 10px; margin-top: 4px; font-size: 12px; color: var(--muted); }
+.duel-endstats-chips b { color: var(--fg); }
+.duel-end-hero .duel-end-replay { grid-column: 1 / -1; justify-content: center; }

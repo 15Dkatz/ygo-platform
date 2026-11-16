@@ -8,7 +8,15 @@
 import { cardImage } from "../../../api.ts";
 import type { Card } from "../../../../shared/types.ts";
 import type { SplashStyle } from "../duelSettings.ts";
-import { play as sfx, type Sfx } from "./sfx.ts";
+import { cancelScheduled, play as playSfx, type PlayOpts, type Sfx } from "./sfx.ts";
+
+/** Animation speed (the duel setting): the animator scales every animation it runs; the timers here
+ *  (sounds in step, the splash queue) follow it too. */
+let speed = 1;
+export function setFxSpeed(s: number) { speed = s > 0 ? s : 1; }
+const sfx = (name: Sfx, o: PlayOpts = {}) => playSfx(name, { ...o, inMs: o.inMs ? o.inMs / speed : 0 });
+/** Skip: drop the queued splashes and the sounds waiting for them. */
+export function resetSplashQueue() { splashFree = 0; cancelScheduled(); }
 import "./summon-fx.css";
 
 type Run = (el: Element, frames: Keyframe[], opts: KeyframeAnimationOptions) => Animation;
@@ -425,15 +433,22 @@ export interface SplashOpts {
   big?: boolean;
   short?: boolean;
   style?: SplashStyle;
+  /** show "Click or press Space to skip" (the duel; not the lab) */
+  skipHint?: boolean;
 }
 /** The card, big, for a moment. Returns when the board is clear again (ms from now): play the summon /
  *  activation on the field from then. */
 export function splash(layer: HTMLElement, run: Run, o: SplashOpts, delay: number): number {
+  // the queue runs in real time (speed-adjusted); `wait` is in animation time, which run() scales back
   const now = performance.now();
-  const start = Math.max(now + delay, splashFree);
-  const wait = start - now;
   const ms = o.short ? 900 : o.big ? 1550 : 1250;
-  splashFree = start + ms * 0.8;
+  const start = Math.max(now + delay / speed, splashFree);
+  const wait = (start - now) * speed;
+  splashFree = start + (ms * 0.8) / speed;
+  if (o.skipHint) {
+    const hint = bit(layer, "sfx-skiphint", {}, ms, wait, "Click or press Space to skip");
+    run(hint, [{ opacity: 0 }, { offset: 0.15, opacity: 1 }, { offset: 0.8, opacity: 1 }, { opacity: 0 }], { duration: ms, delay: wait, fill: "both" });
+  }
   sfx(o.big ? "splash-big" : "splash", { inMs: wait });
   const style = o.style ?? "showcase";
   switch (style) {

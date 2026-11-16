@@ -19,6 +19,7 @@ import type { EngineEvent } from "../../shared/enginePrompts.ts";
 import { stepClock } from "../../shared/clock.ts";
 import { cleanRarities, type RarityMap } from "../../shared/rarity.ts";
 import { DEFAULT_SLEEVE, cleanSleeve } from "../../shared/sleeves.ts";
+import { cleanProfile, type Profile } from "../../shared/profile.ts";
 import type { OpenChainLink } from "../../shared/chain.ts";
 import { publicChain, publicDeciding } from "./engine/publicView.ts";
 
@@ -63,6 +64,7 @@ interface SeatState {
   connected: boolean;
   leftAt: number | null;
   bot?: boolean;
+  profile?: Profile;
 }
 
 interface ChatLine { from: string; text: string; at: number; system?: boolean }
@@ -498,7 +500,7 @@ export class DuelRoom extends DurableObject<Env> {
       if (free < 0) throw new RoomError("Both seats are taken — you can spectate.");
       if (this.hasBot() && room.ownerId && a.id !== room.ownerId) throw new RoomError("This is a private duel against a bot. You can watch it.");
       seat = free as Seat;
-      room.seats[seat] = { id: a.id, name: a.name, deck, connected: true, leftAt: null };
+      room.seats[seat] = { id: a.id, name: a.name, deck, connected: true, leftAt: null, profile: cleanProfile((msg as { profile?: unknown }).profile) };
       a.seat = seat;
       ws.serializeAttachment(a);
       this.systemLine(`${a.name} took a seat.`);
@@ -506,6 +508,7 @@ export class DuelRoom extends DurableObject<Env> {
     } else {
       if (room.stage !== "lobby" && room.stage !== "finished") throw new RoomError("You can only change decks between duels.");
       room.seats[seat]!.deck = deck;
+      room.seats[seat]!.profile = cleanProfile((msg as { profile?: unknown }).profile);
       this.systemLine(`${a.name} ${room.stage === "finished" ? "side-decked / changed deck" : "changed deck"}.`);
     }
     this.advanceLobby();
@@ -969,6 +972,7 @@ export class DuelRoom extends DurableObject<Env> {
       deck: s.deck ? { main: s.deck.main.length, extra: s.deck.extra.length, side: s.deck.side.length } : undefined,
       rarity: s.deck?.rarity && Object.keys(s.deck.rarity).length ? s.deck.rarity : undefined,
       sleeve: s.deck?.sleeve && s.deck.sleeve !== DEFAULT_SLEEVE ? s.deck.sleeve : undefined,
+      profile: s.profile,
     }) as SessionInfo["seats"];
     const showNotice = room.mode === "engine" && !engineAvailable();
     return {

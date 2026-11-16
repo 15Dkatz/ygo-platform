@@ -29,7 +29,32 @@ export const isMuted = () => muted;
 const VOL_KEY = "duel-sfx-volume";
 let volume = (() => { try { const v = Number(localStorage.getItem(VOL_KEY)); return Number.isFinite(v) && localStorage.getItem(VOL_KEY) !== null ? Math.min(1, Math.max(0, v)) : 0.7; } catch { return 0.7; } })();
 let masterGain: GainNode | null = null;
-function master(a: AudioContext): GainNode {
+/** Sounds go through a category bus (card effects / interface / music), each with its own volume, then the master. */
+export type SoundBus = "fx" | "ui" | "music";
+const BUS_KEY = "duel-sfx-bus";
+let busVol: Record<SoundBus, number> = (() => {
+  try { const v = JSON.parse(localStorage.getItem(BUS_KEY) ?? "null"); if (v && typeof v === "object") return { fx: 1, ui: 1, music: 0, ...v }; } catch { /* ignore */ }
+  return { fx: 1, ui: 1, music: 0 };   // music starts off
+})();
+const buses: Partial<Record<SoundBus, GainNode>> = {};
+let currentBus: SoundBus = "fx";
+export const getBusVolume = (b: SoundBus) => busVol[b];
+export function setBusVolume(b: SoundBus, v: number) {
+  busVol = { ...busVol, [b]: Math.min(1, Math.max(0, v)) };
+  try { localStorage.setItem(BUS_KEY, JSON.stringify(busVol)); } catch { /* private mode */ }
+  const g = buses[b]; if (g) g.gain.value = busVol[b];
+  listeners.forEach((l) => l());
+}
+/** The node a sound connects to: its category bus (the one `play` is making a sound for). */
+function master(a: AudioContext): GainNode { return bus(a, currentBus); }
+function bus(a: AudioContext, b: SoundBus): GainNode {
+  const top = masterOut(a);
+  let g = buses[b];
+  if (!g || g.context !== a) { g = a.createGain(); g.connect(top); buses[b] = g; }
+  g.gain.value = busVol[b];
+  return g;
+}
+function masterOut(a: AudioContext): GainNode {
   if (!masterGain || masterGain.context !== a) {
     masterGain = a.createGain();
     // a gentle compressor so stacked sounds (a summon + its splash + a chain note) don't clip
@@ -76,7 +101,7 @@ function reverb(a: AudioContext): GainNode {
   }
   const conv = a.createConvolver(); conv.buffer = ir;
   const input = a.createGain(); input.gain.value = 0.32;
-  input.connect(conv).connect(master(a));
+  input.connect(conv).connect(masterOut(a));   // shared by every category: straight to the master
   verb = { ctx: a, input };
   return input;
 }
@@ -413,9 +438,20 @@ export interface PlayOpts {
   inMs?: number;
 }
 
+/** Sounds scheduled for later (in step with an animation) are dropped when the animation is skipped. */
+let generation = 0;
+export function cancelScheduled() { generation++; }
+
+/** Interface sounds (picks, draws, turn and phase cues); the rest are card effects. */
+const UI_SOUNDS = new Set<string>(["pick", "draw", "shuffle", "turn", "turn-mine", "turn-theirs", "phase-main1", "phase-battle", "phase-main2", "phase-end", "chain", "win", "lose"]);
+
 export function play(name: Sfx, opts: PlayOpts = {}) {
   if (muted) return;
-  if (opts.inMs && opts.inMs > 0) { setTimeout(() => play(name, { ...opts, inMs: 0 }), opts.inMs); return; }
+  if (opts.inMs && opts.inMs > 0) {
+    const gen = generation;
+    setTimeout(() => { if (gen === generation) play(name, { ...opts, inMs: 0 }); }, opts.inMs);
+    return;
+  }
   const key = name === "chain-link" ? `${name}:${opts.link}` : name;
   const now = performance.now();
   if (now - (lastAt.get(key) ?? 0) < 70) return;   // a batch of draws makes one sound per ~70 ms
@@ -423,6 +459,7 @@ export function play(name: Sfx, opts: PlayOpts = {}) {
   const a = audio();
   if (!a || a.state !== "running") return;
   const t = a.currentTime + 0.01;
+  currentBus = UI_SOUNDS.has(name) ? "ui" : "fx";
   // summons, activations, splashes and the chain sound as the chosen theme ("arcane" is the set below)
   if (momentsFor[soundTheme](a, t, name)) return;   // turns, phases, resolving
   const themed = THEMES[soundTheme];
@@ -545,4 +582,41 @@ export function unlockAudioOnGesture() {
   window.addEventListener("pointerdown", go, { once: true });
   window.addEventListener("keydown", go, { once: true });
   return () => { window.removeEventListener("pointerdown", go); window.removeEventListener("keydown", go); };
+}
+
+// ---------------------------------------------------------------------------------------
+// background music: a generated loop in the sound theme's mood (off until its volume is raised)
+
+let musicTimer: ReturnType<typeof setInterval> | null = null;
+let musicStep = 0;
+/** Chords (semitones from C4) per theme, one per bar; null = no music in that theme. */
+const MUSIC: Record<SoundTheme, { chords: number[][]; bar: number; voice: "pad" | "bells" | "chip" | "soft" } | null> = {
+  cinematic: { chords: [[-12, -5, 0, 3], [-16, -9, -4, 0], [-19, -12, -7, -3], [-14, -7, -2, 2]], bar: 4, voice: "pad" },
+  arcane: { chords: [[0, 4, 7, 11], [-3, 0, 4, 9], [-7, -3, 0, 5], [-5, -1, 2, 7]], bar: 3.2, voice: "bells" },
+  retro: { chords: [[0, 4, 7], [-3, 0, 4], [-7, -3, 0], [-5, -1, 2]], bar: 1.6, voice: "chip" },
+  soft: { chords: [[0, 7, 16], [-3, 4, 12], [-7, 5, 9], [-5, 2, 11]], bar: 5, voice: "soft" },
+  classic: null,
+};
+function musicBar(a: AudioContext) {
+  const m = MUSIC[soundTheme];
+  if (!m || busVol.music <= 0 || muted) return;
+  currentBus = "music";
+  const t = a.currentTime + 0.05, chord = m.chords[musicStep % m.chords.length];
+  musicStep++;
+  switch (m.voice) {
+    case "pad": chord.forEach((n, i) => tone(a, t, N(n), m.bar * 1000 + 600, { type: "sawtooth", gain: 0.006, attack: 1.2, wet: 0.8, detune: (i - 1.5) * 6 })); tone(a, t, N(chord[0] - 12), m.bar * 1000, { gain: 0.02, attack: 0.8 }); break;
+    case "bells": chord.forEach((n, i) => bell(a, t + i * (m.bar / chord.length), N(n + 12), 0.012, 1600, 0.7)); tone(a, t, N(chord[0] - 12), m.bar * 1000, { type: "triangle", gain: 0.01, attack: 0.6, wet: 0.5 }); break;
+    case "chip": for (let k = 0; k < 8; k++) chip(a, t + k * (m.bar / 8), N(chord[k % chord.length] + (k >= 4 ? 12 : 0)), 120, "square", 0.008); chip(a, t, N(chord[0] - 12), m.bar * 1000 * 0.9, "triangle", 0.02); break;
+    case "soft": chord.forEach((n) => tone(a, t, N(n), m.bar * 1000 + 800, { gain: 0.006, attack: 1.6, wet: 0.7 })); break;
+  }
+  currentBus = "fx";
+}
+/** Start / stop the music loop (the duel page runs it while a duel is live). */
+export function setMusic(on: boolean) {
+  if (musicTimer) { clearInterval(musicTimer); musicTimer = null; }
+  if (!on) return;
+  const tick = () => { const a = audio(); if (a && a.state === "running") musicBar(a); };
+  const m = MUSIC[soundTheme];
+  tick();
+  musicTimer = setInterval(tick, (m?.bar ?? 4) * 1000);
 }

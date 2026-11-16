@@ -93,6 +93,8 @@ export class BoardAnimator {
     const p = this.pending;
     this.pending = null;
     if (!p || !this.root) return;
+    this.speed = duelSettings().animSpeed || 1;
+    sfxv.setFxSpeed(this.speed);
     this.sounds(p.intents);
     if (reducedMotion()) return;
     const flipped = new Set<string>();
@@ -174,8 +176,32 @@ export class BoardAnimator {
 
   private run(el: Element, frames: Keyframe[], opts: KeyframeAnimationOptions) {
     this.played++;
-    return el.animate(frames, { fill: "backwards", ...opts });
+    // the duel's animation speed: everything plays faster (durations and delays)
+    const k = this.speed;
+    const o = k === 1 ? opts : { ...opts, duration: typeof opts.duration === "number" ? opts.duration / k : opts.duration, delay: (opts.delay ?? 0) / k };
+    return el.animate(frames, { fill: "backwards", ...o });
   }
+  private speed = 1;
+
+  /** Skip what's playing (Space / a click during a splash): every running one-off animation jumps to its
+   *  end, queued splashes and their sounds are dropped. True when there was something to skip. */
+  skip(): boolean {
+    if (!this.root) return false;
+    const anims = this.root.getAnimations({ subtree: true }).filter((a) =>
+      !(a instanceof CSSAnimation) && a.effect && a.effect.getTiming().iterations !== Infinity && a.playState === "running");
+    if (!anims.length) return false;
+    for (const a of anims) { try { a.finish(); } catch { /* an endless one: leave it */ } }
+    sfxv.resetSplashQueue();
+    return true;
+  }
+  /** A splash shows now: the page lets a click / Space skip it. */
+  splashing(): boolean {
+    return !!this.root?.querySelector(".duel-anim-layer > .sfx-show, .duel-anim-layer > .sfx-portal, .duel-anim-layer > .sfx-splash, .duel-anim-layer > .sfx-cutin, .duel-anim-layer > .sfx-holo, .duel-anim-layer > .sfx-comic, .duel-anim-layer > .sfx-spot");
+  }
+  /** Cards that had their splash this duel (notable cards get one the first time; legendary ones always). */
+  private splashed = new Set<number>();
+  /** A new duel in this room (rematch). */
+  resetDuel() { this.splashed.clear(); }
 
   private move(rects: Rects, it: Extract<Intent, { t: "move" }>, delay: number, flipped: Set<string>) {
     const from = this.fromRect(rects, it.from);
@@ -316,7 +342,7 @@ export class BoardAnimator {
     if (data && cardStars(data) === 3) {
       const layer0 = this.layer();
       const sp = layer0 ? this.wantSplash("always") : null;
-      if (layer0 && sp) delay = sfxv.splash(layer0, this.run.bind(this), { code: code!, name: data.name, kicker: this.kicker(data, targetUid ? "Attacks" : "Direct attack"), tone: "#ff6a3c", at: ar, ...this.splashAt(ar, "summon"), short: true }, delay);
+      if (layer0 && sp) delay = sfxv.splash(layer0, this.run.bind(this), { code: code!, name: data.name, kicker: this.kicker(data, targetUid ? "Attacks" : "Direct attack"), tone: "#ff6a3c", at: ar, ...this.splashAt(ar, "summon"), short: true, skipHint: true }, delay);
     }
     const p = center(ar), q = center(tr);
     const dx = (q.x - p.x) * 0.72, dy = (q.y - p.y) * (targetUid ? 0.72 : 0.5);
@@ -454,9 +480,12 @@ export class BoardAnimator {
 
   /** Whether this moment gets the card-art splash. `level`: "always" (legendary cards, bosses, Extra Deck
    *  summons), "notable" (popular cards, staples: not in "short" mode or during a long combo), "none". */
-  private wantSplash(level: "always" | "notable" | "none"): "full" | "short" | null {
+  private wantSplash(level: "always" | "notable" | "none", code = 0): "full" | "short" | null {
     const mode = duelSettings().summonFx;
     if (mode === "off" || level === "none") return null;
+    // a notable card's splash plays the first time it shows up in this duel
+    if (level === "notable" && code && this.splashed.has(code)) return null;
+    if (code) this.splashed.add(code);
     const now = performance.now();
     this.splashes = this.splashes.filter((t) => now - t < SPLASH_WINDOW);
     const busy = this.splashes.length >= SPLASH_BURST;
@@ -493,9 +522,9 @@ export class BoardAnimator {
     // splash for the cards that are a moment: legendary / notable ones, bosses, Extra Deck summons
     const stars = cardStars(data);
     const level = it.code <= 0 || kind === "set" ? "none" : stars === 3 || big || extra ? "always" : stars === 2 ? "notable" : "none";
-    const sp = this.wantSplash(level);
+    const sp = this.wantSplash(level, it.code);
     if (sp && data) {
-      at = sfxv.splash(layer, run, { code: it.code, name: data.name, kicker: this.kicker(data, sfxv.SUMMON_LABEL[kind]), tone: sfxv.toneOf(kind), at: r, ...this.splashAt(r, "summon"), big: big || stars === 3, short: sp === "short" }, at);
+      at = sfxv.splash(layer, run, { code: it.code, name: data.name, kicker: this.kicker(data, sfxv.SUMMON_LABEL[kind]), tone: sfxv.toneOf(kind), at: r, ...this.splashAt(r, "summon"), big: big || stars === 3, short: sp === "short", skipHint: true }, at);
     }
     sfxv.summon(layer, run, r, kind, at, { card, stage: this.root?.querySelector(".duel-board-wrap"), big, markers: data?.linkmarkers });
   }
@@ -513,10 +542,10 @@ export class BoardAnimator {
     let at = delay;
     // only cards that are a moment get the splash (later chain links a shorter one)
     const stars = cardStars(data);
-    const sp = data ? this.wantSplash(stars === 3 ? "always" : stars === 2 ? "notable" : "none") : null;
+    const sp = data ? this.wantSplash(stars === 3 ? "always" : stars === 2 ? "notable" : "none", it.code) : null;
     if (sp && data) {
       const what = it.link > 1 ? `Chain ${it.link} · ${sfxv.ACTIVATE_LABEL[kind]}` : sfxv.ACTIVATE_LABEL[kind];
-      at = sfxv.splash(layer, run, { code: it.code, name: data.name, kicker: this.kicker(data, what), tone, at: r, ...this.splashAt(r, "activate"), big: stars === 3 && it.link === 1, short: sp === "short" || it.link > 1 }, at);
+      at = sfxv.splash(layer, run, { code: it.code, name: data.name, kicker: this.kicker(data, what), tone, at: r, ...this.splashAt(r, "activate"), big: stars === 3 && it.link === 1, short: sp === "short" || it.link > 1, skipHint: true }, at);
     }
     sfxv.activate(layer, run, r, kind, at, { card, tone });
     const prev = it.prev ? this.el(it.prev)?.getBoundingClientRect() ?? null : null;

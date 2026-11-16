@@ -3,6 +3,7 @@
 // a small dialog. The list panel (EnginePromptPanel) stays as the fallback for anything that
 // can't be shown on the board, and behind the bar's "List" button.
 
+import { usePageFlag } from "../duel/pageFlag.ts";
 import { toCss } from "../duel/uiScale.ts";
 import { useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent, type ReactNode } from "react";
 import type { BoardState, CardInstance, Position } from "../../../shared/duel.ts";
@@ -424,6 +425,7 @@ function PromptBar({ prompt: p, picked, counts, places, send, onList, cardName, 
   prompt: BarPrompt; picked: number[]; counts: number[]; places: EnginePlace[];
   send(r: EngineResponseBody): void; onList(): void; cardName(code: number): string | undefined; onHover(code: number | null): void; onMinimize(): void;
 }) {
+  usePageFlag("engine-bar");
   const hint = p.hint ?? title(p);
   let progress: string | null = null;
   const buttons: ReactNode[] = [];

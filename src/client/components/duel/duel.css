@@ -229,18 +229,18 @@ kbd { font: 11px/1 var(--font); border: 1px solid var(--border); border-bottom-w
 
 /* ---------- phones ---------- */
 @media (max-width: 600px) {
-  :where(body:not(:has(.duel-page.is-scaled))) .duel-board-wrap { padding: 4px; }
-  :where(body:not(:has(.duel-page.is-scaled))) .duel-pile-name { display: none; }
-  :where(body:not(:has(.duel-page.is-scaled))) .duel-pile-count { font-size: 10px; line-height: 14px; padding: 0 4px; }
-  :where(body:not(:has(.duel-page.is-scaled))) .duel-zone-label { font-size: 8px; }
-  :where(body:not(:has(.duel-page.is-scaled))) .duel-playerbar { padding: 4px 8px; gap: 6px; }
-  :where(body:not(:has(.duel-page.is-scaled))) .duel-lp { font-size: 16px; padding: 2px 8px; }
-  :where(body:not(:has(.duel-page.is-scaled))) .duel-seats { grid-template-columns: 1fr; }
-  :where(body:not(:has(.duel-page.is-scaled))) .duel-preview img { width: 90px; }
-  :where(body:not(:has(.duel-page.is-scaled))) .duel-menu { left: 0 !important; right: 0; top: auto !important; bottom: 0; max-width: none; width: 100%; border-radius: var(--radius) var(--radius) 0 0; max-height: calc(70 * var(--vh, 1vh)); }
-  :where(body:not(:has(.duel-page.is-scaled))) .duel-menu-item { padding: 11px 12px; }
-  :where(body:not(:has(.duel-page.is-scaled))) .duel-toasts { top: auto; bottom: 72px; right: 8px; left: 8px; align-items: stretch; }
-  :where(body:not(:has(.duel-page.is-scaled))) .duel-viewer-grid { --cw: 60px; grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); }
+  :where(html:not(.duel-scaled)) .duel-board-wrap { padding: 4px; }
+  :where(html:not(.duel-scaled)) .duel-pile-name { display: none; }
+  :where(html:not(.duel-scaled)) .duel-pile-count { font-size: 10px; line-height: 14px; padding: 0 4px; }
+  :where(html:not(.duel-scaled)) .duel-zone-label { font-size: 8px; }
+  :where(html:not(.duel-scaled)) .duel-playerbar { padding: 4px 8px; gap: 6px; }
+  :where(html:not(.duel-scaled)) .duel-lp { font-size: 16px; padding: 2px 8px; }
+  :where(html:not(.duel-scaled)) .duel-seats { grid-template-columns: 1fr; }
+  :where(html:not(.duel-scaled)) .duel-preview img { width: 90px; }
+  :where(html:not(.duel-scaled)) .duel-menu { left: 0 !important; right: 0; top: auto !important; bottom: 0; max-width: none; width: 100%; border-radius: var(--radius) var(--radius) 0 0; max-height: calc(70 * var(--vh, 1vh)); }
+  :where(html:not(.duel-scaled)) .duel-menu-item { padding: 11px 12px; }
+  :where(html:not(.duel-scaled)) .duel-toasts { top: auto; bottom: 72px; right: 8px; left: 8px; align-items: stretch; }
+  :where(html:not(.duel-scaled)) .duel-viewer-grid { --cw: 60px; grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); }
 }
 
 .duel-bot { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; padding: 10px 12px; border: 1px dashed var(--border); border-radius: var(--radius); }
@@ -350,12 +350,12 @@ kbd { font: 11px/1 var(--font); border: 1px solid var(--border); border-bottom-w
 }
 
 @media (max-width: 600px) {
-  :where(body:not(:has(.duel-page.is-scaled))) .duel-engine-bar { bottom: 8px; left: 8px; right: 8px; transform: none; max-width: none; border-radius: var(--radius); padding: 8px; gap: 6px; }
-  :where(body:not(:has(.duel-page.is-scaled))) .duel-engine-bar-hint { flex-basis: 100%; text-align: center; }
-  :where(body:not(:has(.duel-page.is-scaled))) .duel-engine-dialog { left: 0; right: 0; top: auto; bottom: 0; transform: none; width: 100%; max-height: calc(75 * var(--vh, 1vh)); border-radius: var(--radius) var(--radius) 0 0; }
-  :where(body:not(:has(.duel-page.is-scaled))) .duel-engine-pos { left: 8px !important; right: 8px; top: auto !important; bottom: 8px; transform: none !important; }
-  :where(body:not(:has(.duel-page.is-scaled))) .duel-engine-pos-row { justify-content: center; }
-  :where(body:not(:has(.duel-page.is-scaled))) .duel-engine-pos-row > button { min-width: 0; flex: 1; }
+  :where(html:not(.duel-scaled)) .duel-engine-bar { bottom: 8px; left: 8px; right: 8px; transform: none; max-width: none; border-radius: var(--radius); padding: 8px; gap: 6px; }
+  :where(html:not(.duel-scaled)) .duel-engine-bar-hint { flex-basis: 100%; text-align: center; }
+  :where(html:not(.duel-scaled)) .duel-engine-dialog { left: 0; right: 0; top: auto; bottom: 0; transform: none; width: 100%; max-height: calc(75 * var(--vh, 1vh)); border-radius: var(--radius) var(--radius) 0 0; }
+  :where(html:not(.duel-scaled)) .duel-engine-pos { left: 8px !important; right: 8px; top: auto !important; bottom: 8px; transform: none !important; }
+  :where(html:not(.duel-scaled)) .duel-engine-pos-row { justify-content: center; }
+  :where(html:not(.duel-scaled)) .duel-engine-pos-row > button { min-width: 0; flex: 1; }
 }
 
 /* ======================================================================================
@@ -475,10 +475,10 @@ kbd { font: 11px/1 var(--font); border: 1px solid var(--border); border-bottom-w
   .duel-hand-fan .duel-card { transition: none; }
 }
 @media (max-width: 600px) {
-  :where(body:not(:has(.duel-page.is-scaled))) .duel-avatar { width: 28px; height: 28px; font-size: 13px; }
-  :where(body:not(:has(.duel-page.is-scaled))) .duel-lp { font-size: 19px; min-width: 92px; padding: 2px 8px; }
-  :where(body:not(:has(.duel-page.is-scaled))) .duel-turnbanner b { font-size: 24px; }
-  :where(body:not(:has(.duel-page.is-scaled))) .duel-end-title { font-size: 34px; }
-  :where(body:not(:has(.duel-page.is-scaled))) .duel-hand-fan .duel-card { rotate: calc(var(--i, 0) * 2deg); }
-  :where(body:not(:has(.duel-page.is-scaled))) .duel-preview img { width: 110px; }
+  :where(html:not(.duel-scaled)) .duel-avatar { width: 28px; height: 28px; font-size: 13px; }
+  :where(html:not(.duel-scaled)) .duel-lp { font-size: 19px; min-width: 92px; padding: 2px 8px; }
+  :where(html:not(.duel-scaled)) .duel-turnbanner b { font-size: 24px; }
+  :where(html:not(.duel-scaled)) .duel-end-title { font-size: 34px; }
+  :where(html:not(.duel-scaled)) .duel-hand-fan .duel-card { rotate: calc(var(--i, 0) * 2deg); }
+  :where(html:not(.duel-scaled)) .duel-preview img { width: 110px; }
 }

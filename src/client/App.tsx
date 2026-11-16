@@ -4,6 +4,7 @@ import { lazy, Suspense } from "react";
 const FoilLab = lazy(() => import("./pages/FoilLab.tsx"));
 const FxLab = lazy(() => import("./pages/FxLab.tsx"));
 const SummonLab = lazy(() => import("./pages/SummonLab.tsx"));
+const ReplayPage = lazy(() => import("./pages/ReplayPage.tsx"));
 import { SkinPicker } from "./components/SkinPicker.tsx";
 import { HomePage } from "./pages/HomePage.tsx";
 import { usePageTitle } from "./usePageTitle.ts";
@@ -27,6 +28,10 @@ function titleFor(path: string): string | null {
   if (path.startsWith("/login")) return "Sign in";
   if (path.startsWith("/lobby")) return "Duel lobby";
   if (path.startsWith("/duel/")) return "Duel";
+  if (path.startsWith("/replay/")) return "Replay";
+  if (path.startsWith("/dev/summons")) return "Summon lab";
+  if (path.startsWith("/dev/fx")) return "Effects lab";
+  if (path.startsWith("/dev/foils")) return "Foil lab";
   return "Not found";
 }
 
@@ -65,6 +70,7 @@ export function App() {
           <Route path="/duel/:roomId" element={<DuelPage />} />
           <Route path="/dev/foils" element={<Suspense fallback={null}><FoilLab /></Suspense>} />
           <Route path="/dev/fx" element={<Suspense fallback={null}><FxLab /></Suspense>} />
+          <Route path="/replay/:id" element={<Suspense fallback={null}><ReplayPage /></Suspense>} />
           <Route path="/dev/summons" element={<Suspense fallback={null}><SummonLab /></Suspense>} />
           <Route path="*" element={<NotFound />} />
         </Routes>

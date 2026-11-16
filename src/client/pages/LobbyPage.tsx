@@ -1,4 +1,8 @@
 // PHASE 3 owns this page (room list, create room with Manual / Rules-enforced toggle).
+import { ProfileEditor } from "../components/duel/ProfileEditor.tsx";
+import { avatarStyle, useProfile } from "../components/duel/profileStore.ts";
+import "../components/library/deck-tools.css";
+import { listReplays, type ReplayMeta } from "../components/duel/replay.ts";
 import { STARTER_DECKS, demoDeck, isStarterDeck } from "../../shared/starterDecks.ts";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -31,16 +35,34 @@ interface MatchRow {
 /** Your recent finished duels (account or guest). */
 function RecentDuels({ deckName, refreshKey }: { deckName(id: string | null): string; refreshKey: unknown }) {
   const [rows, setRows] = useState<MatchRow[] | null>(null);
+  const [replays, setReplays] = useState<ReplayMeta[]>([]);
   useEffect(() => {
     let alive = true;
     api<{ matches: MatchRow[] }>("/api/matches").then((r) => { if (alive) setRows(r.matches); }).catch(() => { if (alive) setRows([]); });
+    void listReplays().then((r) => { if (alive) setReplays(r); });
     return () => { alive = false; };
   }, [refreshKey]);
+  const navigate = useNavigate();
+  const [inviteMsg, setInviteMsg] = useState<string | null>(null);
+  /** A private room for a rematch with someone: the link is copied for you to send them. */
+  const challenge = async (m: MatchRow) => {
+    try {
+      const r = await api<{ roomId: string }>("/api/rooms", { method: "POST", json: { mode: m.mode === "manual" ? "manual" : "engine", name: `Rematch vs ${m.opponent ?? "?"}`, settings: { ...DEFAULT_SETTINGS, visibility: "unlisted" } } });
+      const url = `${location.origin}/duel/${r.roomId}`;
+      await navigator.clipboard.writeText(url).catch(() => undefined);
+      setInviteMsg(`Invite link copied: send it to ${m.opponent ?? "your opponent"}.`);
+      navigate(`/duel/${r.roomId}?join=1`);
+    } catch (x) { setInviteMsg(`Couldn't create the room: ${(x as Error).message}`); }
+  };
+  // the replay saved in this browser for a duel (same opponent, saved within a few minutes of its end)
+  const replayFor = (m: MatchRow) => replays.find((r) => Math.abs(Date.parse(r.savedAt) - Date.parse(m.endedAt)) < 5 * 60_000
+    && (m.opponentBot ? r.names.includes("Bot") : !m.opponent || r.names.includes(m.opponent)));
   if (!rows || !rows.length) return null;
   const wins = rows.filter((r) => r.result === "win").length, losses = rows.filter((r) => r.result === "loss").length;
   return (
     <div className="lobby-card lobby-history">
       <h2>Recent duels <span className="muted lobby-record">{wins}W · {losses}L{rows.length - wins - losses ? ` · ${rows.length - wins - losses}D` : ""} (last {rows.length})</span></h2>
+      {inviteMsg && <p className="muted" role="status">{inviteMsg}</p>}
       <ul className="lobby-history-list">
         {rows.map((m) => (
           <li key={m.id}>
@@ -50,6 +72,8 @@ function RecentDuels({ deckName, refreshKey }: { deckName(id: string | null): st
               <span className="muted"> · {deckName(m.deckId)} · {m.mode === "engine" ? "Rules" : "Manual"}{m.turns ? ` · ${m.turns} turns` : ""}</span>
               {m.reason && <small className="muted lobby-history-reason">{m.reason}</small>}
             </span>
+            {!m.opponentBot && m.opponent && <button className="lobby-replay" onClick={() => void challenge(m)} title="A private room with an invite link to send them">Challenge</button>}
+            {replayFor(m) && <Link className="lobby-replay" to={`/replay/${replayFor(m)!.id}`} title="Watch the replay (saved in this browser)">▶ Replay</Link>}
             <span className="muted lobby-history-when" title={new Date(m.endedAt).toLocaleString()}>{ago(m.endedAt)}</span>
           </li>
         ))}
@@ -60,6 +84,8 @@ function RecentDuels({ deckName, refreshKey }: { deckName(id: string | null): st
 
 export function LobbyPage() {
   const navigate = useNavigate();
+  const profile = useProfile();
+  const [editingProfile, setEditingProfile] = useState(false);
   const { identity, requireAccount, loading, setName } = useDuelIdentity();
   const { decks, deck, deckId, setDeckId } = useDecks();
   const [rooms, setRooms] = useState<RoomInfo[] | null>(null);
@@ -165,16 +191,24 @@ export function LobbyPage() {
 
   return (
     <section className="lobby">
+      {editingProfile && identity && <ProfileEditor name={identity.name} decks={decks} onClose={() => setEditingProfile(false)} />}
       <h1>Duel lobby</h1>
 
       <div className="lobby-grid">
         <div className="lobby-card">
           <h2>You</h2>
           {loading ? <p className="muted">Loading…</p> : identity && !renaming ? (
-            <p>
-              Dueling as <b>{identity.name}</b>{identity.guest ? <span className="muted"> (guest)</span> : null}
-              {identity.guest && <button className="lobby-link" onClick={() => setRenaming(true)}>change name</button>}
-            </p>
+            <div className="pf-me">
+              <span className="pf-avatar" style={avatarStyle(profile)}>{profile.avatar ? "" : (identity.name[0] ?? "?").toUpperCase()}</span>
+              <span>
+                <span>Dueling as <b>{identity.name}</b>{identity.guest ? <span className="muted"> (guest)</span> : null}</span>
+                {profile.title && <span className="pf-title">{profile.title}</span>}
+                <span>
+                  {identity.guest && <button className="lobby-link" onClick={() => setRenaming(true)}>change name</button>}
+                  <button className="lobby-link" onClick={() => setEditingProfile(true)}>edit profile</button>
+                </span>
+              </span>
+            </div>
           ) : requireAccount ? (
             <p><Link to="/login">Sign in</Link> to duel.</p>
           ) : (

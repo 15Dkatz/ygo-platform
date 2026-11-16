@@ -99,20 +99,23 @@
   .duel-page.is-live .duel-rail .duel-chatbox .duel-loglist { flex: 1; min-height: 0; overflow-y: auto; }
 }
 /* scaled-copy:start */
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-board-wrap > .duel-rail { width: var(--rail-w, min(var(--side), 220px)); display: flex; flex-direction: column; align-items: stretch; overflow: visible; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-rail .dl { max-height: 100%; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-rail .duel-chatbox { margin-top: 8px; height: min(calc(34 * var(--vh, 1vh)), 360px); display: flex; flex-direction: column; border-radius: 12px; overflow: hidden;
+:where(html.duel-scaled) .duel-page.is-live .duel-board-wrap > .duel-rail { width: var(--rail-w, min(var(--side), 220px)); display: flex; flex-direction: column; align-items: stretch; overflow: visible; }
+:where(html.duel-scaled) .duel-page.is-live .duel-rail .dl { max-height: 100%; }
+:where(html.duel-scaled) .duel-page.is-live .duel-rail .duel-chatbox { margin-top: 8px; height: min(calc(34 * var(--vh, 1vh)), 360px); display: flex; flex-direction: column; border-radius: 12px; overflow: hidden;
     background: color-mix(in srgb, var(--surface) 62%, transparent); backdrop-filter: blur(10px); border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border)); padding: 6px; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-rail .duel-chatbox .duel-logchat { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-:where(body:has(.duel-page.is-scaled)) .duel-page.is-live .duel-rail .duel-chatbox .duel-loglist { flex: 1; min-height: 0; overflow-y: auto; }
+:where(html.duel-scaled) .duel-page.is-live .duel-rail .duel-chatbox .duel-logchat { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+:where(html.duel-scaled) .duel-page.is-live .duel-rail .duel-chatbox .duel-loglist { flex: 1; min-height: 0; overflow-y: auto; }
 /* scaled-copy:end */
 
 
 
 
 
+
+
+
 @media (max-width: 1000px) {
-  :where(body:not(:has(.duel-page.is-scaled))) .duel-rail .dl { display: none; }
+  :where(html:not(.duel-scaled)) .duel-rail .dl { display: none; }
 }
 /* "calm panels" fades the rail back; the log stays readable */
 @media (min-width: 1001px) {
@@ -120,9 +123,12 @@
   html .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail:hover { opacity: 1; }
 }
 /* scaled-copy:start */
-html:where(:has(.duel-page.is-scaled)) .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail { opacity: .88; }
-html:where(:has(.duel-page.is-scaled)) .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail:hover { opacity: 1; }
+html:where(.duel-scaled) .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail { opacity: .88; }
+html:where(.duel-scaled) .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail:hover { opacity: 1; }
 /* scaled-copy:end */
+
+
+
 
 
 
@@ -145,10 +151,13 @@ html:where(:has(.duel-page.is-scaled)) .duel-page.is-live.is-calm .duel-board-wr
   }
 }
 /* scaled-copy:start */
-html:where(:has(.duel-page.is-scaled)) .duel-page.is-live .duel-board-wrap > .duel-rail, html:where(:has(.duel-page.is-scaled)) .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail:hover {
+html:where(.duel-scaled) .duel-page.is-live .duel-board-wrap > .duel-rail, html:where(.duel-scaled) .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail:hover {
     background: none; border-color: transparent; box-shadow: none; backdrop-filter: none; padding: 0 4px;
   }
 /* scaled-copy:end */
+
+
+
 
 
 

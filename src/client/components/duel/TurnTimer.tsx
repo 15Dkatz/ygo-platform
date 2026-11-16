@@ -3,6 +3,7 @@
 //  - SecondBar: the bar under a player's LP, draining from full to empty every second while their clock runs
 //  - ClockFace: the big clock beside the turn sign: whoever is deciding, a ring sweeping each second,
 //    an arc for the time left, a flip when the clock passes to the other player, "+3s" on an increment
+import { usePageFlag } from "./pageFlag.ts";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { TurnClock } from "../../../shared/duel.ts";
 import { play as sfx } from "./anim/sfx.ts";
@@ -85,6 +86,7 @@ export function SecondBar({ timer, seat }: { timer: TurnClock; seat: 0 | 1 }) {
 
 /** The big clock beside the turn sign: the time of whoever the duel is waiting on. */
 export function ClockFace({ timer, seat, label, mine }: { timer: TurnClock; seat: 0 | 1; label: string; mine: boolean }) {
+  usePageFlag("clock");
   const { left, running, secDelay } = useClockLeft(timer, seat, true);
   const bonus = useIncrementPop(timer, seat);
   // a soft tick each second in your last ten

@@ -77,7 +77,7 @@ export interface TurnClock {
 
 /** Every websocket message is one JSON envelope. Phases may add new `t` values. */
 export type ClientMsg =
-  | { t: "join"; deckId: string; main: number[]; extra: number[]; side: number[]; rarity?: Record<string, import("./rarity.ts").Rarity>; sleeve?: string }
+  | { t: "join"; deckId: string; main: number[]; extra: number[]; side: number[]; rarity?: Record<string, import("./rarity.ts").Rarity>; sleeve?: string; profile?: import("./profile.ts").Profile }
   | { t: "chat"; text: string }
   | { t: "action"; action: unknown }          // manual-mode board action (phase 3 defines)
   | { t: "respond"; response: unknown }       // answer to an engine prompt (phase 4 defines)
@@ -150,6 +150,8 @@ export interface SeatInfo {
   rarity?: Record<string, import("./rarity.ts").Rarity>;
   /** Card sleeve of this player's deck (everyone sees it). */
   sleeve?: string;
+  /** Their profile: avatar, title, showcase card. */
+  profile?: import("./profile.ts").Profile;
 }
 
 export interface SessionInfo {

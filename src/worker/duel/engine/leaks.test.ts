@@ -15,6 +15,7 @@ import { maskBoard } from "../manual/mask.ts";
 import { botResponse, seededRng } from "./bot.ts";
 import { clearEngineCaches } from "./data.ts";
 import { publicChain, publicDeciding } from "./publicView.ts";
+import { eventsFor } from "./EngineDuel.ts";
 import { startRoomSession, type RoomEngineUpdate } from "./roomSession.ts";
 import { engineDataAvailable, nodeCore, nodeData } from "./testHarness.ts";
 
@@ -43,9 +44,9 @@ function codesIn(v: unknown, out: number[] = []): number[] {
   return out;
 }
 
-interface Leak { duel: number; step: number; viewer: Seat; where: string; detail: string }
+interface Leak { duel: number; step: number; viewer: Seat | "spectator"; where: string; detail: string }
 
-describe.skipIf(!engineDataAvailable)("no hidden information reaches the other player", () => {
+describe.skipIf(!engineDataAvailable)("no hidden information reaches the other player or a spectator", () => {
   it(`checks everything sent to each player (${MATCHES.length} duels)`, async () => {
     clearEngineCaches();
     const { data } = nodeData();
@@ -62,6 +63,7 @@ describe.skipIf(!engineDataAvailable)("no hidden information reaches the other p
       let u: RoomEngineUpdate = await s.start();
       const rng = seededRng(900 + m);
       const known: [Set<number>, Set<number>] = [new Set(), new Set()];
+      const specKnown = new Set<number>();   // a spectator: only what has been public
       let chain: OpenChainLink[] = [];
       // own deck lists are known from the start
       for (const v of [0, 1] as Seat[]) for (const c of [...(v === 0 ? A : B).main, ...(v === 0 ? A : B).extra]) known[v].add(c);
@@ -97,6 +99,23 @@ describe.skipIf(!engineDataAvailable)("no hidden information reaches the other p
             if (raw?.includes(n)) rawHintLeaks++;
           }
           // 4. the public chain
+          for (const c of codesIn(chain)) if (secret.has(c)) say("chain", `${name(c)} (${c})`);
+        }
+        // a spectator: the board with both hands hidden, and the public events (what the room sends them)
+        {
+          for (const c of allCodes(maskBoard(full, null))) specKnown.add(c);
+          const pub = u.events ? eventsFor(u.events[0], 1) : [];
+          for (const e of pub) if (e.e === "confirm" && e.public) e.cards.forEach((c) => c.code > 0 && specKnown.add(c.code));
+          const secret = new Set([...allCodes(full)].filter((c) => !specKnown.has(c)));
+          const secretNames = [...secret].map((c) => [c, name(c)] as const).filter(([, n]) => n && ![...specKnown].some((k) => name(k) === n));
+          const say = (where: string, detail: string) => leaks.push({ duel: m, step, viewer: "spectator", where, detail });
+          for (const e of pub) for (const c of codesIn(e)) if (secret.has(c)) say("events", `${e.e}: ${name(c)} (${c}) ${JSON.stringify(e).slice(0, 300)}`);
+          for (const line of u.log ?? []) {
+            for (const [, code] of line.matchAll(/\[\[(\d+)\]\]/g)) if (secret.has(+code)) say("log", line);
+            for (const [, n] of secretNames) if (line.includes(n)) say("log", line);
+          }
+          const deciding = publicDeciding(u.prompts ?? []);
+          for (const [, n] of secretNames) if (deciding?.hint?.includes(n)) say("deciding", deciding.hint);
           for (const c of codesIn(chain)) if (secret.has(c)) say("chain", `${name(c)} (${c})`);
         }
         const p = u.prompts![0];

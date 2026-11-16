@@ -9,19 +9,20 @@ Idempotent: copies are marked and regenerated."""
 import re, os
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "client", "components", "duel"))
 
-ON = ":has(.duel-page.is-scaled)"
+ON = ".duel-scaled"          # <html> class while the duel is scaled (DuelPage); no :has(), which is slow
+OFF = ":not(.duel-scaled)"
 MARK_A = "/* scaled-copy:start */"
 MARK_B = "/* scaled-copy:end */"
 
 
 def scope(sel: str, cond: str) -> str:
     sel = sel.strip()
-    if sel.startswith(":where(body") or ":where(:has(.duel-page.is-scaled" in sel or ":where(:not(:has(.duel-page.is-scaled" in sel:
+    if ":where(html" in sel or "html:where(" in sel or ":root:where(" in sel:
         return sel   # already scoped (the script is re-run)
-    for root in ("html", "body", ":root"):
+    for root in ("html", ":root"):
         if sel == root or sel.startswith(root + " ") or sel.startswith(root + ":") or sel.startswith(root + "."):
             return root + f":where({cond})" + sel[len(root):]
-    return f":where(body{cond}) {sel}"
+    return f":where(html{cond}) {sel}"
 
 
 def rules(body: str):
@@ -67,7 +68,7 @@ def process(path: str):
             continue
         new = []
         for sel, decl in rules(body):
-            new.append(", ".join(scope(x, ":not(:has(.duel-page.is-scaled))") for x in sel.split(",")) + " {" + decl + "}")
+            new.append(", ".join(scope(x, OFF) for x in sel.split(",")) + " {" + decl + "}")
         head = s[start:s.index("{", start) + 1]
         s = s[:start] + head + "\n  " + "\n  ".join(new) + "\n}" + s[end:]
     open(path, "w", encoding="utf-8", newline="").write(s)

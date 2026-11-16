@@ -6,3 +6,5 @@ data/
 *.log
 worker-configuration.d.ts
 .claude/worktrees/
+test-results/
+playwright-report/

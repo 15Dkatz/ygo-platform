@@ -77,3 +77,28 @@ html .duel-end-setup .pd-panel, html .duel-end-setup .pd-seat { background: colo
 @media (prefers-reduced-motion: reduce) {
   html .duel-modal, html .th-dialog, html .sl-picker, html .duel-engine-dialog .engine-prompt, html .duel-deckedit-box, html .duel-settings-panel, html .duel-menu { animation: none; }
 }
+
+/* ---------- every modal fits the window; if its content is taller, it scrolls inside (never cut off) ---------- */
+html .th-dialog { max-height: calc(100dvh - 32px); overflow: auto; overscroll-behavior: contain; }
+html .card-dialog { overflow: auto; overscroll-behavior: contain; }
+html .duel-modal { max-height: calc(100dvh - 32px); }
+html .duel-modal-body { min-height: 0; overscroll-behavior: contain; }
+html .duel-settings-panel { overscroll-behavior: contain; }
+html .duel-menu { overscroll-behavior: contain; }
+html .duel-deckedit-box { overscroll-behavior: contain; }
+html .duel-engine-dialog { overscroll-behavior: contain; }
+
+/* ---------- accessibility ---------- */
+/* colour-blind friendly: blue (you, good) and orange (opponent, bad) instead of green / red */
+.duel-page.cb-safe { --ok: #4aa3ff; --danger: #ff9f1c; --ph-battle: #ff9f1c; --ph-turn-theirs: #ff9f1c; }
+.duel-page.cb-safe .dl, .duel-page.cb-safe ~ * .dl { --dl-you: #4aa3ff; --dl-opp: #ff9f1c; }
+.duel-page.cb-safe .duel-chainstack li.is-mine { box-shadow: inset 3px 0 0 #4aa3ff, inset 0 0 0 1px color-mix(in srgb, var(--fg) 8%, transparent); }
+.duel-page.cb-safe .duel-chainstack li.is-theirs { box-shadow: inset 3px 0 0 #ff9f1c, inset 0 0 0 1px color-mix(in srgb, var(--fg) 8%, transparent); }
+.duel-page.cb-safe .duel-end.is-win { --end-tone: #4aa3ff; }
+.duel-page.cb-safe .duel-end.is-lose { --end-tone: #ff9f1c; }
+.duel-page.cb-safe .dl-line.k-lp-loss .dl-verb { color: #ff9f1c; }
+.duel-page.cb-safe .dl-line.k-lp-gain .dl-verb { color: #4aa3ff; }
+/* keyboard: a clear focus ring on the room, end screen, sleeve and profile controls */
+html :is(.pd-panel, .pd-endtabs, .duel-end-hero, .sl-picker, .pf-dialog, .rr) :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+/* reduced motion: the clock's second sweep and the turn sign's drain stand still */
+@media (prefers-reduced-motion: reduce) { .duel-clock-sweep, .duel-sectext::after { animation: none !important; } }

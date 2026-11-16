@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { AUTO_PASS_LABEL, type AutoPassMode } from "../../../shared/autoPass.ts";
-import { getVolume, isMuted, onMuteChange, play, setMuted, setVolume } from "./anim/sfx.ts";
+import { getBusVolume, getVolume, isMuted, onMuteChange, play, setBusVolume, setMuted, setVolume, type SoundBus } from "./anim/sfx.ts";
 import { SoundThemePicker } from "./SoundThemePicker.tsx";
-import { RESOLVE_COLORS, RESOLVE_COLOR_LABEL, RESOLVE_FX, RESOLVE_FX_LABEL, type ResolveColor, type ResolveFx, SUMMON_FX, SUMMON_FX_LABEL, SPLASH_STYLES, SPLASH_STYLE_LABEL, type SplashStyle, type SummonFxMode } from "./duelSettings.ts";
+import { RESOLVE_COLORS, RESOLVE_COLOR_LABEL, RESOLVE_FX, RESOLVE_FX_LABEL, type ResolveColor, type ResolveFx, ANIM_SPEEDS, UI_SIZES, UI_SIZE_LABEL, type UiSize, SUMMON_FX, SUMMON_FX_LABEL, SPLASH_STYLES, SPLASH_STYLE_LABEL, type SplashStyle, type SummonFxMode } from "./duelSettings.ts";
 import { DEFAULT_SCALE, DEFAULT_TILT, LAYOUT, SCALE_RANGE, TILT_MAX, setDuelSetting, useDuelSettings, type DuelSettings, type LayoutKey } from "./duelSettings.ts";
 
 const pct = (v: number) => `${Math.round(v * 100)}%`;
@@ -78,6 +78,19 @@ export function DuelSettingsButton({ autoPass, setAutoPass, engine }: { autoPass
 
           <Section title="Animations" id="anim">
             <label className="duel-setting">
+              <span>Interface size</span>
+              <select value={s.uiSize} onChange={(e) => setDuelSetting("uiSize", e.target.value as UiSize)} aria-label="Interface size">
+                {UI_SIZES.map((v) => <option key={v} value={v}>{UI_SIZE_LABEL[v]}</option>)}
+              </select>
+            </label>
+            <label className="duel-setting">
+              <span>Animation speed</span>
+              <select value={s.animSpeed} onChange={(e) => setDuelSetting("animSpeed", Number(e.target.value))} aria-label="Animation speed">
+                {ANIM_SPEEDS.map((v) => <option key={v} value={v}>{v === 1 ? "Normal" : `${v}x faster`}</option>)}
+              </select>
+              <small className="muted">Click or press Space during a card splash to skip it.</small>
+            </label>
+            <label className="duel-setting">
               <span>Summons and activations</span>
               <select value={s.summonFx} onChange={(e) => setDuelSetting("summonFx", e.target.value as SummonFxMode)} aria-label="Summon and activation animations">
                 {SUMMON_FX.map((f) => <option key={f} value={f}>{SUMMON_FX_LABEL[f]}</option>)}
@@ -113,6 +126,7 @@ export function DuelSettingsButton({ autoPass, setAutoPass, engine }: { autoPass
             <Toggle label={'"Chain?" / "Your move" callouts'} on={s.callouts} set={(v) => setDuelSetting("callouts", v)} />
             <Toggle label="Screen-edge flashes (damage, heals, callouts)" on={s.edgeFlash} set={(v) => setDuelSetting("edgeFlash", v)} />
             <Toggle label="Turn sign glow" on={s.heartbeat} set={(v) => setDuelSetting("heartbeat", v)} />
+            <Toggle label="Colour-blind friendly colours (blue / orange)" on={s.colorblind} set={(v) => setDuelSetting("colorblind", v)} />
             <Toggle label="Shimmer on the zone labels" on={s.labelShimmer} set={(v) => setDuelSetting("labelShimmer", v)} />
           </Section>
 
@@ -125,6 +139,9 @@ export function DuelSettingsButton({ autoPass, setAutoPass, engine }: { autoPass
                   onChange={(e) => setVolume(Number(e.target.value) / 100)} onPointerUp={() => play("pick")} aria-label="Volume" />
               </span>
             </label>
+            <BusSlider bus="fx" label="Card effects" />
+            <BusSlider bus="ui" label="Interface" />
+            <BusSlider bus="music" label="Music" hint="Generated in the sound theme's mood (none for Classic)." />
             <SoundThemePicker />
           </Section>
 
@@ -188,4 +205,16 @@ function CopySettings() {
     setTimeout(() => setDone(false), 1500);
   };
   return <button className="duel-setting-reset" onClick={copy} title="Copy all view settings as text">{done ? "Copied ✓" : "Copy settings"}</button>;
+}
+
+function BusSlider({ bus, label, hint }: { bus: SoundBus; label: string; hint?: string }) {
+  const v = useSyncExternalStore(onMuteChange, () => getBusVolume(bus), () => getBusVolume(bus));
+  return (
+    <label className="duel-setting">
+      <span>{label} <b>{v === 0 ? "Off" : `${Math.round(v * 100)}%`}</b></span>
+      <input type="range" min={0} max={100} step={5} value={Math.round(v * 100)} onChange={(e) => setBusVolume(bus, Number(e.target.value) / 100)}
+        onPointerUp={() => { if (bus === "ui") play("pick"); else if (bus === "fx") play("act-spell"); }} aria-label={`${label} volume`} />
+      {hint && <small className="muted">{hint}</small>}
+    </label>
+  );
 }

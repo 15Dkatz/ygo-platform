@@ -1,0 +1,32 @@
+/* Duelist profile: avatars (a card's art in a ring), the editor */
+.pf-avatar { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; flex: none; font-weight: 900; color: var(--accent-fg);
+  background: var(--accent) center 30% / cover no-repeat; box-shadow: 0 0 0 2px color-mix(in srgb, var(--fg) 25%, transparent), 0 4px 10px rgb(0 0 0 / .35); }
+.pf-avatar.is-big { width: 96px; height: 96px; font-size: 36px; box-shadow: 0 0 0 3px var(--accent), 0 0 24px color-mix(in srgb, var(--accent) 40%, transparent); }
+.pf-title { display: block; font-size: 11.5px; font-style: italic; color: color-mix(in srgb, var(--accent) 70%, var(--fg)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pf-dialog { width: min(980px, 100%); height: min(640px, calc(100dvh - 32px)); display: flex; flex-direction: column; }
+.pf-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 240px 1fr; gap: 16px; }
+.pf-preview { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.pf-preview input { width: 100%; }
+.pf-show { width: 96px; aspect-ratio: 59 / 86; display: grid; place-items: center; border-radius: 6px; border: 1px dashed var(--border); overflow: hidden; font-size: 11px; color: var(--muted); }
+.pf-show img { width: 100%; height: 100%; object-fit: cover; }
+.pf-actions { display: flex; gap: 8px; margin-top: auto; }
+.pf-pick { min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.pf-tabs { display: flex; gap: 6px; align-items: center; }
+.pf-tabs button.is-on { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+.pf-tabs input { margin-left: auto; width: 200px; }
+.pf-grid { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 8px; align-content: start; padding: 2px; }
+.pf-choice { padding: 3px; border-radius: 10px; border: 2px solid transparent; background: none; display: grid; place-items: center; cursor: pointer; }
+.pf-choice.avatar .pf-avatar { width: 54px; height: 54px; }
+.pf-choice.showcase img { width: 100%; aspect-ratio: 59 / 86; object-fit: cover; border-radius: 4px; }
+.pf-choice:hover { border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+.pf-choice.is-on { border-color: var(--accent); background: var(--accent-soft, transparent); }
+/* the lobby's "You" card */
+.pf-me { display: flex; align-items: center; gap: 10px; }
+.pf-me > span:last-child { min-width: 0; display: grid; }
+.pf-me b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the duel's LP plates: the avatar letter circle with the art */
+.duel-avatar.has-art { background-size: cover; background-position: center 30%; color: transparent; }
+/* a seat's showcase card in the room */
+.pd-showcase { width: 34px; aspect-ratio: 59 / 86; border-radius: 3px; overflow: hidden; flex: none; box-shadow: 0 2px 6px rgb(0 0 0 / .4); }
+.pd-showcase img { width: 100%; height: 100%; object-fit: cover; display: block; }
+@media (max-width: 720px) { .pf-body { grid-template-columns: 1fr; } .pf-preview { flex-direction: row; flex-wrap: wrap; justify-content: center; } }

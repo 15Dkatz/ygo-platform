@@ -1,5 +1,5 @@
 // PHASE 3 owns this page (duel board). PHASE 4 adds engine-mode prompts.
-import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { Suspense, lazy, useSyncExternalStore, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { newDeck, useDeckStore } from "../store/deckStore.ts";
 import { isStarterDeck } from "../../shared/starterDecks.ts";
 import type { Deck } from "../../shared/types.ts";
@@ -20,7 +20,7 @@ import { CardPreview, LogChat, LogText } from "../components/duel/SidePanel.tsx"
 import { boardCodes, getCard, useCardData, useDuelIdentity, useDuelSocket } from "../components/duel/useDuel.ts";
 import { AnimatedLp } from "../components/duel/anim/AnimatedLp.tsx";
 import { useBoardAnimations } from "../components/duel/anim/useBoardAnimations.ts";
-import { play as sfx } from "../components/duel/anim/sfx.ts";
+import { getBusVolume, getSoundTheme, isMuted, onMuteChange, play as sfx, setMusic } from "../components/duel/anim/sfx.ts";
 import { EndOverlay, MuteToggle, ReconnectOverlay, TurnBanner } from "../components/duel/DuelFx.tsx";
 import { useEngineBoard, type Decision } from "../components/engine/EngineBoard.tsx";
 import { ClockFace, SecondsText, TurnTimer } from "../components/duel/TurnTimer.tsx";
@@ -41,6 +41,13 @@ import { RarityContext, rarityLookup, useFoilPointer } from "../components/cards
 import { SleeveContext } from "../components/duel/Sleeve.tsx";
 import { DuelLog, useRailFit } from "../components/duel/DuelLog.tsx";
 import { useUiScale } from "../components/duel/uiScale.ts";
+import { useHtmlClasses, usePageFlag } from "../components/duel/pageFlag.ts";
+import { PHASE_SHORT, LpDialog, MorePopover, MoveStatus, NowPanel, PHASE_SHORT_LABEL, PhaseCell, PlayerBar, TurnSign, decidingText, scrollableAncestor } from "../components/duel/DuelParts.tsx";
+import { ReplayRecorder, saveReplay } from "../components/duel/replay.ts";
+import { DuelStats } from "../components/duel/DuelStats.tsx";
+import { avatarStyle, getProfile } from "../components/duel/profileStore.ts";
+import type { Profile } from "../../shared/profile.ts";
+import "../components/duel/profile.css";
 const DeckBuilder = lazy(() => import("./DeckBuilderPage.tsx").then((m) => ({ default: m.DeckBuilder })));
 import { RevealStrip, useReveals } from "../components/duel/RevealStrip.tsx";
 
@@ -49,7 +56,6 @@ type Viewer =
   | { kind: "peek" }
   | { kind: "materials"; uid: string };
 
-const PHASE_SHORT: Record<Phase, string> = { draw: "DP", standby: "SP", main1: "M1", battle: "BP", main2: "M2", end: "EP" };
 const other = (p: Seat): Seat => (p === 0 ? 1 : 0);
 const NO_PLAYER = { name: "", lp: 0, deck: [], hand: [], extra: [], gy: [], banished: [], monster: [], spelltrap: [], field: null, pendulum: [] };
 const NO_BOARD: BoardState = { players: [NO_PLAYER, NO_PLAYER], extraMonster: [], turn: 1, turnPlayer: 0, phase: "draw", log: [] };
@@ -59,8 +65,10 @@ export function DuelPage() {
   const [params] = useSearchParams();
   const anim = useBoardAnimations();
   const revealFeed = useRef<((events: EngineEvent[] | null) => void) | null>(null);
+  // this duel's replay: every board update as it arrives (saved in this browser when the duel ends)
+  const recorder = useRef<ReplayRecorder | null>(null);
   const { conn, send, toast, clearPeek, promptEvents, chain } = useDuelSocket(roomId, {
-    beforeState: (prev, next, events) => { anim.beforeState(prev, next, events); revealFeed.current?.(events); },
+    beforeState: (prev, next, events) => { anim.beforeState(prev, next, events); revealFeed.current?.(events); recorder.current?.add(next, events); },
   });
   const { identity } = useDuelIdentity();
   const { decks, deck, deckId, setDeckId, setSleeve, upsertDeck } = useDecks();
@@ -129,6 +137,8 @@ export function DuelPage() {
   const live = !!board && (session?.stage === "duel" || session?.stage === "finished");
   // the live duel keeps its full-size layout, scaled to the window as one piece (phones keep their own layout)
   const uiZoomNow = useUiScale(live);
+  // page-wide state for CSS as classes on <html> (no body:has(), which makes every update re-check styles)
+  useHtmlClasses({ "duel-live": live, "duel-scaled": !!uiZoomNow, "duel-room": !live });
   // the log in the rail reaches almost to the field
   useRailFit([live, ds.tilt, ds.fieldScale, ds.fieldY, ds.camera, ds.cameraY, drawer, uiZoomNow]);
   const playing = live && session?.stage === "duel" && you !== null;
@@ -168,7 +178,7 @@ export function DuelPage() {
     if (you === null && session.stage === "lobby" && session.seats.some((s) => s === null)) {
       autoJoined.current = true;
       const d = params.get("demo") === "1" ? demoDeck("kewl") : deck;   // demo rooms: Kewl Tune (vs the bot's Branded Despia)
-      send({ t: "join", deckId: d.id, main: d.main, extra: d.extra, side: d.side, rarity: d.rarity, sleeve: d.sleeve });
+      send({ t: "join", deckId: d.id, main: d.main, extra: d.extra, side: d.side, rarity: d.rarity, sleeve: d.sleeve, profile: getProfile() });
     } else if (you !== null) autoJoined.current = true;
   }, [params, session, identity, deck, you, conn.status, send]);
 
@@ -256,10 +266,23 @@ export function DuelPage() {
   useEffect(() => {
     const was = lastStage.current;
     lastStage.current = session?.stage;
-    if (session?.stage === "duel" && was !== "duel") setDuelNo((n) => n + 1);
-    if (session?.stage === "finished" && was === "duel") setEndShown(true);
+    if (session?.stage === "duel" && was !== "duel") { setDuelNo((n) => n + 1); recorder.current = new ReplayRecorder(); setReplayId(null); }
+    if (session?.stage === "finished" && was === "duel") {
+      setEndShown(true);
+      // keep the replay (this browser)
+      const rec = recorder.current, b = board;
+      recorder.current = null;
+      if (rec && b && session) {
+        void saveReplay(rec, {
+          names: [b.players[0].name, b.players[1].name], you, winner: session.winner ?? null, reason: session.endReason,
+          sleeves: [session.seats[0]?.sleeve, session.seats[1]?.sleeve], rarity: [session.seats[0]?.rarity, session.seats[1]?.rarity],
+        }, b).then(setReplayId);
+      }
+    }
     if (session?.stage !== "finished") setEndShown(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.stage]);
+  const [replayId, setReplayId] = useState<string | null>(null);
 
   // unread chat messages while the chat is closed (system lines don't count)
   const lineCount = conn.chat.filter((c) => !c.system).length;
@@ -474,6 +497,24 @@ export function DuelPage() {
   // keyboard-only play: a cursor over the highlighted cards / zones (arrows, Enter, 1-9)
   useKeyboardCursor(!!live && engineMode && !auto.on);
 
+  // skip a splash: Space or a click while one is on screen (that press does nothing else)
+  useEffect(() => {
+    const a = anim.animator;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== " " || (e.target as HTMLElement).closest?.("input, textarea, select")) return;
+      if (a.splashing() && a.skip()) { e.preventDefault(); e.stopImmediatePropagation(); }
+    };
+    const onDown = (e: PointerEvent) => { if (a.splashing() && a.skip()) { e.preventDefault(); e.stopPropagation(); } };
+    addEventListener("keydown", onKey, { capture: true });
+    addEventListener("pointerdown", onDown, { capture: true });
+    return () => { removeEventListener("keydown", onKey, { capture: true }); removeEventListener("pointerdown", onDown, { capture: true }); };
+  }, [anim.animator]);
+  useEffect(() => { anim.animator.resetDuel(); }, [duelNo, anim.animator]);
+  // background music while the duel is live (off unless its volume is up; follows the sound theme)
+  const musicOn = useSyncExternalStore(onMuteChange, () => getBusVolume("music") > 0 && !isMuted(), () => false);
+  const soundTheme = useSyncExternalStore(onMuteChange, getSoundTheme, getSoundTheme);
+  useEffect(() => { setMusic(!!live && musicOn); return () => setMusic(false); }, [live, musicOn, soundTheme]);
+
   // keyboard shortcuts
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -575,7 +616,7 @@ export function DuelPage() {
   return (
     <RarityContext.Provider value={rarityFn}>
     <SleeveContext.Provider value={sleeveFn}>
-    <section className={`duel-page ${live ? "is-live" : ""} ${uiZoomNow ? "is-scaled" : ""} ${drawer ? "is-drawer-open" : ""} ${tilt ? "is-tilt" : ""} ${nothingToDo ? "is-nothing-to-do" : ""} ${ds.calmPanels ? "is-calm" : ""} ${ds.edgeFlash ? "" : "no-edge"} ${ds.labelShimmer ? "" : "no-shimmer"} ${ds.heartbeat ? "" : "no-heartbeat"}`}
+    <section className={`duel-page ${live ? "is-live" : ""} ${uiZoomNow ? "is-scaled" : ""} ${drawer ? "is-drawer-open" : ""} ${tilt ? "is-tilt" : ""} ${nothingToDo ? "is-nothing-to-do" : ""} ${ds.calmPanels ? "is-calm" : ""} ${ds.edgeFlash ? "" : "no-edge"} ${ds.labelShimmer ? "" : "no-shimmer"} ${ds.heartbeat ? "" : "no-heartbeat"} ${ds.colorblind ? "cb-safe" : ""}`}
       data-resolve={ds.resolveFx} data-resolve-color={ds.resolveColor} ref={anim.rootRef}
       style={{
         ["--tilt" as string]: `${ds.tilt}deg`, ["--field-scale" as string]: ds.fieldScale, ["--hand-scale" as string]: ds.handScale,
@@ -635,8 +676,8 @@ export function DuelPage() {
           <div className="duel-main">
             <PendulumStrip board={board!} player={other(me)} ui={ui} />
             <Board board={board!} ui={ui}
-              top={<PlayerBar board={board!} player={other(me)} you={you} onLp={engineMode ? undefined : setLpFor} connected={session.seats[other(me)]?.connected} timer={session.timer} startLp={session.settings?.startingLP} duelNo={duelNo} onLpChange={(d) => onLpChange(d, "top")} />}
-              bottom={<PlayerBar board={board!} player={me} you={you} onLp={engineMode ? undefined : setLpFor} onLpChange={onLpChange} connected={session.seats[me]?.connected} timer={session.timer} startLp={session.settings?.startingLP} duelNo={duelNo} />}
+              top={<PlayerBar board={board!} player={other(me)} you={you} onLp={engineMode ? undefined : setLpFor} connected={session.seats[other(me)]?.connected} profile={session.seats[other(me)]?.profile} timer={session.timer} startLp={session.settings?.startingLP} duelNo={duelNo} onLpChange={(d) => onLpChange(d, "top")} />}
+              bottom={<PlayerBar board={board!} player={me} you={you} onLp={engineMode ? undefined : setLpFor} onLpChange={onLpChange} connected={session.seats[me]?.connected} profile={session.seats[me]?.profile} timer={session.timer} startLp={session.settings?.startingLP} duelNo={duelNo} />}
               gaps={phaseCtl ? [
                 <PhaseCell key="a" controls={phaseCtl} go={goPhase} phases={["draw", "standby"]} />,
                 <PhaseCell key="b" controls={phaseCtl} go={goPhase} phases={["main1", "battle", "main2"]} />,
@@ -800,7 +841,10 @@ export function DuelPage() {
       {engineUi && engineBoard.overlay}
       {live && board && <TurnBanner board={board} you={you} />}
       {endShown && session?.stage === "finished" && (
-        <EndOverlay session={session} you={you} onRematch={() => send({ t: "rematch" })} onClose={() => setEndShown(false)}>
+        <EndOverlay session={session} you={you} onRematch={() => send({ t: "rematch" })} onClose={() => setEndShown(false)}
+          lp={board ? [board.players[0].lp, board.players[1].lp] : undefined}
+          stats={board ? <DuelStats log={board.log} names={[board.players[0].name, board.players[1].name]} you={you} turns={board.turn} /> : undefined}
+          replayId={replayId}>
           <PreDuel variant="end" session={session} you={you} hasIdentity={!!identity} decks={decks} deckId={deckId} setDeckId={setDeckId} deck={deck} setSleeve={setSleeve} onEditDeck={(id) => void editDeck(id)} send={send} />
         </EndOverlay>
       )}
@@ -812,7 +856,7 @@ export function DuelPage() {
                 upsertDeck(saved);
                 // seated with this deck between duels: the room gets the new list right away
                 if (you !== null && saved.id === deckId && session?.seats[you]?.ready && (session.stage === "lobby" || session.stage === "finished")) {
-                  send({ t: "join", deckId: saved.id, main: saved.main, extra: saved.extra, side: saved.side, rarity: saved.rarity, sleeve: saved.sleeve });
+                  send({ t: "join", deckId: saved.id, main: saved.main, extra: saved.extra, side: saved.side, rarity: saved.rarity, sleeve: saved.sleeve, profile: getProfile() });
                 }
               }} />
             </Suspense>
@@ -824,194 +868,5 @@ export function DuelPage() {
     </section>
     </SleeveContext.Provider>
     </RarityContext.Provider>
-  );
-}
-
-function PlayerBar({ board, player, you, onLp, onLpChange, connected, timer, startLp = 8000, duelNo = 0 }: {
-  board: NonNullable<ReturnType<typeof useDuelSocket>["conn"]["board"]>; player: Seat; you: Seat | null;
-  timer?: TurnClock; startLp?: number; duelNo?: number;
-  /** Manual mode: click the LP to change it (rules-enforced LP only change through the rules). */
-  onLp?: (p: Seat) => void; onLpChange?: (delta: number) => void; connected?: boolean;
-}) {
-  const pb = board.players[player];
-  const turn = board.turnPlayer === player;
-  const [hit, setHit] = useState<"" | "is-hit" | "is-heal">("");
-  const lpChanged = (d: number) => {
-    onLpChange?.(d);
-    setHit(d < 0 ? "is-hit" : "is-heal");
-    setTimeout(() => setHit(""), 650);
-  };
-  return (
-    <div className={`duel-playerbar ${turn ? "is-turn" : ""} ${player === you ? "is-you" : ""} ${hit}`} data-seat={player}>
-      <span className="duel-avatar" aria-hidden="true">
-        {(pb.name.trim()[0] ?? "?").toUpperCase()}
-        <span className={`duel-dot ${connected === false ? "is-off" : "is-on"}`} title={connected === false ? "Disconnected" : "Connected"} />
-      </span>
-      <span className="duel-pinfo">
-        <b className="duel-pname">{pb.name}{player === you ? " (you)" : ""}</b>
-        <span className="muted duel-pcounts">
-          <span title="Cards in hand">✋ {pb.hand.length}</span>
-          <span title="Cards in Deck">🂠 {pb.deck.length}</span>
-          {turn && <span className="duel-chip is-turn">Turn {board.turn}</span>}
-          <span className="duel-timer-slot">{timer && <TurnTimer timer={timer} seat={player} label={player === you ? "Your time" : `${pb.name}'s time`} />}</span>
-        </span>
-      </span>
-      <button className={`duel-lp ${pb.lp <= 2000 ? "is-low" : ""}`} onClick={onLp ? () => onLp(player) : undefined} disabled={you === null || !onLp} title={onLp ? "Change LP" : "Life Points"}>
-        <span>LP</span> <AnimatedLp key={duelNo} value={pb.lp} onChange={lpChanged} />
-      </button>
-    </div>
-  );
-}
-
-const PHASE_SHORT_LABEL = PHASE_SHORT;
-
-/** Some of the phases, as big buttons in an empty cell of the middle row (DP SP | M1 BP M2 | EP + End turn). */
-function PhaseCell({ controls, go, phases, endTurn }: { controls: PhaseControls; go(target: Phase | "endTurn"): void; phases: Phase[]; endTurn?: boolean }) {
-  return (
-    <div className="duel-phasecell" role="group">
-      {controls.phases.filter((p) => phases.includes(p.phase)).map((p) => (
-        <button key={p.phase} className={`duel-phasebtn ${p.current ? "is-active" : ""} ${p.past ? "is-past" : ""} ${p.enabled ? "is-next" : ""} ${controls.next === p.phase ? "duel-next-phase" : ""}`}
-          disabled={!p.enabled} title={`${PHASE_LABEL[p.phase]}: ${p.hint}${controls.next === p.phase ? " (N)" : ""}`} onClick={() => go(p.phase)}>
-          {PHASE_SHORT_LABEL[p.phase]}
-        </button>
-      ))}
-      {endTurn && (
-        <button className="primary duel-end-turn duel-phasecell-end" disabled={!controls.endTurn.enabled} onClick={() => go("endTurn")} title={`${controls.endTurn.hint} (E)`}>End turn</button>
-      )}
-    </div>
-  );
-}
-
-/** The nearest element between `el` and the board that scrolls on its own (has overflow to scroll). */
-function scrollableAncestor(el: HTMLElement | null): HTMLElement | null {
-  for (let n = el; n && !n.classList.contains("duel-board-wrap") && n !== document.body; n = n.parentElement) {
-    const o = getComputedStyle(n).overflowY;
-    if ((o === "auto" || o === "scroll") && n.scrollHeight > n.clientHeight + 2) return n;
-  }
-  return null;
-}
-
-/** "Bot is choosing: Select the card(s) to add to your hand" (or deciding whether to chain). */
-function decidingText(d: { seat: 0 | 1; kind: string; hint?: string } | undefined, names: [string, string], fallback: string): string {
-  if (!d) return `Waiting for ${fallback}…`;
-  const who = names[d.seat];
-  if (d.kind === "selectChain") return `${who} may respond (chain)…`;
-  if (d.kind === "idle") return `${who} is in their Main Phase…`;
-  if (d.kind === "battle") return `${who} is in their Battle Phase…`;
-  if (d.hint) return `${who} is choosing: ${d.hint}`;
-  // no public hint (it would name a hidden card): say what kind of choice it is
-  const what: Record<string, string> = {
-    selectPlace: "a zone", selectPosition: "a battle position", selectCard: "cards", selectTribute: "Tributes", selectSum: "materials",
-    selectUnselect: "cards", selectCounter: "counters", effectYesNo: "whether to use an effect", yesNo: "yes or no", option: "an option",
-    sort: "an order", announceNumber: "a number", announceRace: "a Type", announceAttribute: "an Attribute", announceCard: "a card name", rps: "rock, paper or scissors",
-  };
-  return what[d.kind] ? `${who} is choosing ${what[d.kind]}…` : `${who} is deciding…`;
-}
-
-/** Bottom right: whose turn it is, beating like a heart when it's yours (or when it's your move on their turn). */
-function TurnSign({ board, you, names, acting, waiting, timer }: { board: BoardState; you: Seat | null; names: [string, string]; acting: boolean; waiting: string | null; timer?: TurnClock }) {
-  const mine = board.turnPlayer === you;
-  const theirMove = acting && !mine;
-  const cls = theirMove ? "is-acting" : mine ? (acting ? "is-mine" : "is-mine is-waiting") : "is-theirs";
-  return (
-    <div className="duel-turnrow">
-      {/* the clock of whoever the duel waits on: it passes back and forth with the decisions */}
-      {timer && (() => {
-        const seat = (timer.running ?? board.turnPlayer) as 0 | 1;
-        return <ClockFace timer={timer} seat={seat} mine={seat === you} label={seat === you ? "your time" : `${names[seat]}'s time`} />;
-      })()}
-      <div className={`duel-turnsign ${cls}`} role="status" aria-live="polite">
-        {/* timed duels: the letters are the seconds bar of whoever is deciding */}
-        {timer
-          ? <SecondsText timer={timer} seat={(timer.running ?? board.turnPlayer) as 0 | 1}>{theirMove ? "Your move" : mine ? "Your turn" : `${names[board.turnPlayer]}'s turn`}</SecondsText>
-          : <b>{theirMove ? "Your move" : mine ? "Your turn" : `${names[board.turnPlayer]}'s turn`}</b>}
-        {waiting && mine && <small>waiting for {waiting}</small>}
-      </div>
-    </div>
-  );
-}
-
-/** What you're deciding right now, and for which card: step back to look at the board, then return. */
-function NowPanel({ decision, prompt, source, onHover }: { decision: Decision; prompt: EnginePrompt | null; source: { code: number; desc: string } | null; onHover(code: number | null): void }) {
-  if (!prompt) return null;
-  const name = source?.code ? getCard(source.code)?.name : null;
-  return (
-    <div className={`duel-now ${decision.peeking ? "is-peeking" : ""}`} onMouseEnter={() => source?.code && onHover(source.code)} onMouseLeave={() => onHover(null)}>
-      {source?.code ? <span className="duel-card duel-now-thumb"><span className="duel-card-inner"><CardFace code={source.code} /></span></span> : null}
-      <span className="duel-now-text">
-        <small>{prompt.kind === "selectChain" ? "Your chance to respond" : name ? "Resolving" : "Your decision"}</small>
-        {name && <b>{name}</b>}
-        <span>{prompt.hint ?? (prompt.kind === "selectChain" ? "Chain a card or effect?" : "Choose on the board")}</span>
-      </span>
-      {decision.peeking
-        ? <button className="primary duel-now-btn" onClick={decision.restore} title="Back to the decision (M)">Back to it <kbd>M</kbd></button>
-        : <button className="duel-now-btn" onClick={decision.peek} title="Hide the decision to look at the board (M)">👁 View board</button>}
-    </div>
-  );
-}
-
-/** The less common tools (Shuffle hand, manual-mode Draw / Coin / ..., Concede on phones), in a pop-up. */
-function MorePopover({ children }: { children: ReactNode }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const close = (e: MouseEvent | KeyboardEvent) => {
-      if (e instanceof KeyboardEvent ? e.key === "Escape" : !ref.current?.contains(e.target as Node)) setOpen(false);
-    };
-    window.addEventListener("mousedown", close as EventListener);
-    window.addEventListener("keydown", close as EventListener);
-    return () => { window.removeEventListener("mousedown", close as EventListener); window.removeEventListener("keydown", close as EventListener); };
-  }, [open]);
-  return (
-    <div className="duel-more" ref={ref}>
-      <button className="duel-more-btn" onClick={() => setOpen((o) => !o)} aria-expanded={open}>⋯ More</button>
-      {open && <div className="duel-tools duel-more-panel" onClick={(e) => { if ((e.target as HTMLElement).closest("button")) setOpen(false); }}>{children}</div>}
-    </div>
-  );
-}
-
-/** Whose decision it is (left of the phase track). */
-function MoveStatus({ board, you, move }: { board: BoardState; you: Seat | null; move?: { mine: boolean; text: string } | null }) {
-  const mine = board.turnPlayer === you;
-  return move ? <span className={`duel-move ${move.mine ? "is-mine" : "is-wait"}`} role="status">{move.text}</span>
-    : <span className="duel-move is-wait">{mine ? "Your turn" : `${board.players[board.turnPlayer].name}'s turn`}</span>;
-}
-
-function LpDialog({ board, initial, you, onClose, act }: { board: NonNullable<ReturnType<typeof useDuelSocket>["conn"]["board"]>; initial: Seat; you: Seat | null; onClose(): void; act(a: DuelAction): void }) {
-  const [player, setPlayer] = useState<Seat>(initial);
-  const [amount, setAmount] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-  useEffect(() => { inputRef.current?.focus(); }, []);
-  const n = Math.trunc(Number(amount));
-  const ok = Number.isFinite(n) && n > 0;
-  const go = (a: DuelAction) => { act(a); onClose(); };
-  const lp = board.players[player].lp;
-  const quick = useMemo(() => [500, 1000, 2000], []);
-  if (you === null) return null;
-  return (
-    <Modal title="Change LP" onClose={onClose}>
-      <div className="duel-lpdialog">
-        <div className="duel-seg" role="radiogroup">
-          {([0, 1] as Seat[]).map((p) => (
-            <button key={p} role="radio" aria-checked={player === p} className={player === p ? "is-active" : ""} onClick={() => setPlayer(p)}>
-              {board.players[p].name}{p === you ? " (you)" : ""}: {board.players[p].lp}
-            </button>
-          ))}
-        </div>
-        <form onSubmit={(e) => { e.preventDefault(); if (ok) go({ type: "lp", player, delta: -n }); }}>
-          <input ref={inputRef} inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d]/g, ""))} placeholder="Amount" aria-label="LP amount" />
-          <div className="duel-lp-actions">
-            <button type="submit" className="is-danger" disabled={!ok}>− Damage / pay</button>
-            <button type="button" disabled={!ok} onClick={() => go({ type: "lp", player, delta: n })}>+ Gain</button>
-            <button type="button" disabled={!ok} onClick={() => go({ type: "lp", player, set: n })}>Set to</button>
-          </div>
-        </form>
-        <div className="duel-lp-actions">
-          {quick.map((q) => <button key={q} onClick={() => go({ type: "lp", player, delta: -q })}>−{q}</button>)}
-          <button onClick={() => go({ type: "lp", player, set: Math.ceil(lp / 2) })} disabled={lp <= 1}>Halve</button>
-        </div>
-      </div>
-    </Modal>
   );
 }
