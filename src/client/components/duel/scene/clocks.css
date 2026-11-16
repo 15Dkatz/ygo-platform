@@ -1,0 +1,214 @@
+/* duel scene: Clocks, turn sign, more resolving-card styles, canvas resolve layers, hand fit.
+   Part of duel-scene.css (imported in order: later parts override earlier ones). */
+/* ================= clocks ================= */
+/* the seconds bar under a player's LP: drains every second while their clock runs */
+.duel-secbar { display: block; position: relative; height: 6px; width: 100%; margin: 3px 0 2px; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--fg) 12%, transparent); }
+.duel-secbar i { position: absolute; inset: 0; transform-origin: left center; border-radius: inherit;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 70%, #fff), var(--accent)); box-shadow: 0 0 8px var(--accent); opacity: .35; }
+.duel-secbar.is-running i { opacity: 1; }
+.duel-secbar.is-low i { background: linear-gradient(90deg, #ffe08a, #ffb347); box-shadow: 0 0 8px #ffb347; }
+.duel-secbar.is-critical i { background: linear-gradient(90deg, #ff9a9a, #ff3b5c); box-shadow: 0 0 10px #ff3b5c; }
+.duel-secbar.is-critical.is-running { animation: clock-pulse .5s ease-in-out infinite alternate; }
+
+/* the big clock beside the turn sign */
+.duel-turnrow { display: flex; align-items: center; justify-content: flex-end; gap: 14px; }
+.duel-clockface { --c: var(--accent); position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; pointer-events: none;
+  animation: clock-flip .45s cubic-bezier(.3, 1.3, .5, 1) both; }
+.duel-clockface.is-theirs { --c: #9aa4b1; }
+.duel-clockface.is-low { --c: #ffb347; }
+.duel-clockface.is-critical { --c: #ff3b5c; }
+.duel-clock-dial { position: relative; width: clamp(64px, calc(9 * var(--vh, 1vh)), 92px); aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center;
+  background: radial-gradient(circle, color-mix(in srgb, var(--surface) 85%, transparent) 58%, transparent 59%); filter: drop-shadow(0 0 10px color-mix(in srgb, var(--c) 45%, transparent)); }
+/* outer arc: how much of the bank / turn time is left */
+.duel-clock-bank { position: absolute; inset: 0; border-radius: 50%;
+  background: conic-gradient(var(--c) calc(var(--bank) * 360deg), color-mix(in srgb, var(--fg) 12%, transparent) 0);
+  -webkit-mask: radial-gradient(circle, transparent 66%, #000 67%); mask: radial-gradient(circle, transparent 66%, #000 67%); }
+/* inner ring: a bright arc goes round once a second (a rotation: drawn once, turned on the GPU) */
+.duel-clock-sweep { position: absolute; inset: 12%; border-radius: 50%;
+  background: conic-gradient(transparent 0 55%, color-mix(in srgb, var(--c) 45%, transparent) 80%, color-mix(in srgb, var(--c) 85%, #fff) 99%, transparent 100%);
+  -webkit-mask: radial-gradient(circle, transparent 74%, #000 76%); mask: radial-gradient(circle, transparent 74%, #000 76%); opacity: .9; will-change: transform; }
+.duel-clockface.is-running .duel-clock-sweep { animation: clock-sweep 1s linear infinite; animation-delay: var(--sec-delay, 0s); }
+@keyframes clock-sweep { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.duel-clockface.is-paused .duel-clock-sweep { opacity: .25; }
+.duel-clock-digits { position: relative; font-family: var(--font-num, inherit); font-size: clamp(15px, calc(2.3 * var(--vh, 1vh)), 22px); font-weight: 900; font-variant-numeric: tabular-nums;
+  color: var(--fg); text-shadow: 0 0 10px color-mix(in srgb, var(--c) 60%, transparent); }
+.duel-clockface.is-critical.is-running .duel-clock-digits { color: #ff6b81; animation: clock-pulse .5s ease-in-out infinite alternate; }
+.duel-clock-label { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.duel-clockface.is-mine .duel-clock-label { color: var(--c); }
+.duel-clockface.is-theirs { opacity: .75; }
+.duel-clock-bonus { position: absolute; top: -6px; right: -14px; font-weight: 900; font-size: 15px; color: #7dffa0; text-shadow: 0 0 8px #2fe08a; animation: clock-bonus 1.4s ease-out both; }
+@keyframes clock-flip { from { transform: rotateY(90deg) scale(.8); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes clock-pulse { from { transform: scale(1); } to { transform: scale(1.08); } }
+@keyframes clock-bonus { 0% { opacity: 0; transform: translateY(6px) scale(.6); } 20% { opacity: 1; transform: translateY(0) scale(1.2); } 100% { opacity: 0; transform: translateY(-22px) scale(1); } }
+@media (prefers-reduced-motion: reduce) { .duel-clockface, .duel-clock-bonus, .duel-secbar, .duel-clock-digits { animation: none !important; } }
+/* the small name-side timer: bigger and clearer than before */
+.turn-timer { font-weight: 800; font-variant-numeric: tabular-nums; }
+.turn-timer.is-running { color: var(--accent); }
+.turn-timer.is-low { color: #ffb347; } .turn-timer.is-critical { color: #ff3b5c; }
+/* clock stacked above the turn sign (side by side it ran into the hand); the dock and pill move up to make room */
+.duel-turnrow { flex-direction: column; align-items: flex-end; gap: 6px; }
+.duel-clockface { flex-direction: row; gap: 8px; align-items: center; }
+.duel-clock-dial { width: clamp(58px, calc(8 * var(--vh, 1vh)), 78px); }
+.duel-clock-label { order: -1; }
+@media (min-width: 1001px) {
+  .duel-page.is-live[data-clock] .duel-engine-bar, .duel-page.is-live[data-clock] .duel-decision-pill { bottom: 250px; max-height: calc(calc(100 * var(--vh, 1vh)) - 330px); }
+}
+/* scaled-copy:start */
+:where(html.duel-scaled) .duel-page.is-live[data-clock] .duel-engine-bar, :where(html.duel-scaled) .duel-page.is-live[data-clock] .duel-decision-pill { bottom: 250px; max-height: calc(calc(100 * var(--vh, 1vh)) - 330px); }
+/* scaled-copy:end */
+
+
+
+
+
+
+
+
+
+
+
+/* your hand ends before the bottom-right corner (turn buttons, clock, turn sign); the cards fan tighter instead */
+@media (min-width: 1001px) {
+  .duel-page.is-live .duel-hand.is-own { width: min(76%, calc(var(--hw) * 7.6), calc(100% - 2 * clamp(250px, 19%, 300px))); }
+}
+/* scaled-copy:start */
+:where(html.duel-scaled) .duel-page.is-live .duel-hand.is-own { width: min(76%, calc(var(--hw) * 7.6), calc(100% - 2 * clamp(250px, 19%, 300px))); }
+/* scaled-copy:end */
+
+
+
+
+
+
+
+
+
+
+
+/* the turn sign a touch smaller (it shares the corner with the clock); the seconds bar easier to see */
+.duel-turnsign b { font-size: clamp(18px, calc(2.7 * var(--vh, 1vh)), 30px); }
+.duel-secbar { height: 8px; border-radius: 4px; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 10%, transparent); }
+.duel-secbar.is-running { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent), 0 0 10px color-mix(in srgb, var(--accent) 35%, transparent); }
+
+/* ---------- turn sign: a calm, slow glow (no more heartbeat) ---------- */
+/* opacity only (a filter animation repainted the big text every frame); the glow is a still drop-shadow */
+@keyframes turn-calm { 0%, 100% { opacity: .78; } 50% { opacity: 1; } }
+.duel-page .duel-turnsign.is-mine b, .duel-page .duel-turnsign.is-acting b { filter: drop-shadow(0 0 9px color-mix(in srgb, var(--accent) 55%, transparent)); }
+.duel-page .duel-turnsign.is-mine b, .duel-page .duel-turnsign.is-acting b { animation: turn-calm 3.2s ease-in-out infinite !important; transform: none; }
+.duel-page .duel-turnsign.is-acting b { animation-duration: 2.2s !important; }
+.duel-page .duel-turnsign.is-mine.is-waiting b { animation: none !important; }
+.duel-page.no-heartbeat .duel-turnsign b { animation: none !important; }
+
+/* the letters as the seconds bar: dim letters, and a bright copy over them clipped shorter through each
+   second (a clip animation, synced to the clock by --sec-delay; no repaint of the letters per frame) */
+.duel-sectext {
+  --fill: var(--accent); --dim: color-mix(in srgb, var(--fg) 22%, transparent);
+  position: relative; color: var(--dim); -webkit-text-fill-color: var(--dim); text-shadow: none !important;
+}
+.duel-sectext::after {
+  content: attr(data-text); position: absolute; inset: 0; white-space: nowrap; pointer-events: none;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--fill) 75%, #fff), var(--fill));
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;
+}
+.duel-sectext.is-running::after { animation: sec-drain 1s linear infinite; animation-delay: var(--sec-delay, 0s); will-change: clip-path; }
+@keyframes sec-drain { from { clip-path: inset(0 0 0 0); } to { clip-path: inset(0 100% 0 0); } }
+.duel-turnsign.is-acting .duel-sectext { --fill: var(--warn, #ffb347); }
+.duel-turnsign.is-theirs .duel-sectext { --fill: #9aa4b1; }
+.duel-sectext.is-low { --fill: #ffb347; }
+.duel-sectext.is-critical { --fill: #ff3b5c; }
+
+/* ---- Power-up aura, card-shaped and behind the card (replaces the spiky flames) ---- */
+/* 1: a glow hugging the card's outline, surging */
+
+/* 2: a card-shaped ring of energy streaming upward (thicker above the card) */
+
+/* 3-4: lightning crackling beside the card, never over it */
+
+/* sparks rise behind the card */
+
+/* ================= more resolving-card styles: all around / behind the card, never over its face ================= */
+/* natural colours when "Theme colour" is picked */
+.duel-page[data-resolve="holy"][data-resolve-color="theme"] .duel-card.is-source { --src-c: #ffe9a3; }
+.duel-page[data-resolve="void"][data-resolve-color="theme"] .duel-card.is-source { --src-c: #a35cff; }
+.duel-page[data-resolve="electric"][data-resolve-color="theme"] .duel-card.is-source { --src-c: #5fe3ff; }
+.duel-page[data-resolve="frost"][data-resolve-color="theme"] .duel-card.is-source { --src-c: #9fe6ff; }
+
+/* ---- Holy light: a pillar pouring down behind the card, a halo turning above it, motes drifting up ---- */
+.duel-page[data-resolve="holy"] .duel-card.is-source { animation: src-lift 2.4s ease-in-out infinite; }
+
+.duel-page[data-resolve="holy"] .duel-card.is-source > .duel-card-inner { box-shadow: 0 0 0 2px #fff, 0 0 26px 8px var(--src-c); }
+
+/* ---- Dark vortex: a spiral swirling behind the card, shadow smoke at its edges ---- */
+
+.duel-page[data-resolve="void"] .duel-card.is-source > .duel-card-inner { box-shadow: 0 0 0 2px color-mix(in srgb, var(--src-c) 80%, #fff), 0 0 30px 10px var(--src-c), 0 0 60px 20px rgb(10 0 30 / .8); }
+
+/* ---- Electric current: light racing around the card's outline, arcs jumping off it ---- */
+
+.duel-page[data-resolve="electric"] .duel-card.is-source { animation: pu-tremble .12s steps(2) infinite; }
+.duel-page[data-resolve="electric"] .duel-card.is-source > .duel-card-inner { box-shadow: 0 0 0 2px var(--src-c), 0 0 16px 4px var(--src-c); }
+
+/* ---- Summoning circle: a turning ring of runes and a star beneath the card ---- */
+
+.duel-page[data-resolve="circle"] .duel-card.is-source { animation: src-lift 2s ease-in-out infinite; }
+
+/* ---- Frost crystals: shards growing out from the card's edges in a cold glow ---- */
+
+.duel-page[data-resolve="frost"] .duel-card.is-source > .duel-card-inner { box-shadow: 0 0 0 2px #e8fbff, 0 0 18px 5px var(--src-c); }
+
+@media (prefers-reduced-motion: reduce) { .duel-page .duel-srcfx > i { animation: none !important; } }
+
+/* ---- resolving layers "behind the card": negative z-index vanishes inside the tilted (3D) table, so the
+   card's face is lifted above them instead; front accents (bolts, stars, fireworks) sit higher still ---- */
+.duel-page .duel-card.is-source > .duel-card-inner { z-index: 2; }
+.duel-page .duel-card.is-source .duel-source-tag { z-index: 8; }
+
+/* summoning circle: rune ticks only in the ring, the star inside it */
+
+/* electric: a thicker, brighter current */
+
+/* ================= canvas resolving effects (ResolveFx.tsx): a back layer under the face, a front one over it ================= */
+.duel-rfx { position: absolute; inset: -80%; pointer-events: none; }
+.duel-rfx canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.duel-rfx-back { z-index: 1; }
+.duel-rfx-front { z-index: 4; }
+/* the styles the canvas draws drop their flat CSS layers */
+
+/* a question while revealed cards are up: the question moves below the reveal strip instead of over it */
+@media (min-width: 1001px) {
+  .duel-page[data-reveal] .duel-engine-dialog { top: auto; bottom: calc(16 * var(--vh, 1vh)); transform: translateX(-50%); max-height: calc(calc(100 * var(--vh, 1vh)) - 360px); }
+}
+/* scaled-copy:start */
+:where(html.duel-scaled) .duel-page[data-reveal] .duel-engine-dialog { top: auto; bottom: calc(16 * var(--vh, 1vh)); transform: translateX(-50%); max-height: calc(calc(100 * var(--vh, 1vh)) - 360px); }
+/* scaled-copy:end */
+
+
+
+
+
+
+
+
+
+
+
+/* your hand fits its own width (the cards overlap more instead of spilling under Next / End turn) */
+@media (min-width: 1001px) {
+  .duel-page.is-live .duel-hand.is-own .duel-hand-fan { container-type: inline-size; }
+}
+/* scaled-copy:start */
+:where(html.duel-scaled) .duel-page.is-live .duel-hand.is-own .duel-hand-fan { container-type: inline-size; }
+/* scaled-copy:end */
+
+
+
+
+
+
+
+
+
+
+
+
+.turn-timer { position: relative; }
+.duel-clock-bonus.is-small { top: -14px; right: -26px; font-size: 13px; }

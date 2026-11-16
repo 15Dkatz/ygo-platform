@@ -6,7 +6,7 @@ CSS media queries see the real window, so:
     applies while a scaled duel page exists (zero added specificity, same place in the cascade);
   - every small-screen rule (@media (max-width: ...)) in the duel styles stops applying while it exists.
 Idempotent: copies are marked and regenerated."""
-import re, os
+import re, os, glob
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "client", "components", "duel"))
 
 ON = ".duel-scaled"          # <html> class while the duel is scaled (DuelPage); no :has(), which is slow
@@ -55,7 +55,7 @@ def find_blocks(s: str, cond_re: str):
 def process(path: str):
     s = open(path, encoding="utf-8").read()
     # drop earlier copies
-    s = re.sub(re.escape(MARK_A) + r".*?" + re.escape(MARK_B) + r"\n?", "", s, flags=re.S)
+    s = re.sub(r"\n?" + re.escape(MARK_A) + r".*?" + re.escape(MARK_B) + r"\n?", "", s, flags=re.S)
     # 1. desktop blocks: insert scoped copies after each
     blocks = find_blocks(s, r"min-width:\s*(1001|1700)px")
     for start, end, body in reversed(blocks):
@@ -75,5 +75,5 @@ def process(path: str):
     print(path, len(blocks), "desktop blocks copied")
 
 
-for f in ["duel-scene.css", "duel.css", "duel-log.css"]:
+for f in sorted(glob.glob("scene/*.css")) + ["duel.css", "duel-log.css"]:
     process(f)

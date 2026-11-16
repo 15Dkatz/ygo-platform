@@ -1,0 +1,321 @@
+/* duel scene: Chain / Your move callouts, the resolving card and its styles, Now, pickers, keyboard cursor, shortcut sheet, reveal strip, monster info, preview size.
+   Part of duel-scene.css (imported in order: later parts override earlier ones). */
+/* ---------- Chain? / Your move callout: sweeps in toward the dock, the screen edge pulses ---------- */
+.duel-callout { position: fixed; inset: 0; z-index: 44; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.duel-callout::before { content: ""; position: absolute; inset: 0; box-shadow: inset 0 0 0 4px var(--cc), inset 0 0 140px 20px color-mix(in srgb, var(--cc) 45%, transparent); animation: callout-edge 1.5s ease-out both; }
+.duel-callout b {
+  font-family: var(--font-field, inherit); font-size: clamp(54px, calc(11 * var(--vh, 1vh)), 120px); font-weight: 900; text-transform: uppercase; letter-spacing: .04em; line-height: 1; color: #fff;
+  -webkit-text-stroke: 2px rgb(0 0 0 / .35); text-shadow: 0 0 30px var(--cc), 0 0 6px var(--cc), 0 6px 0 rgb(0 0 0 / .35);
+  animation: callout-text 1.5s cubic-bezier(.2, .9, .25, 1) both;
+}
+.duel-callout small { margin-top: 10px; font-size: clamp(13px, calc(2 * var(--vh, 1vh)), 18px); font-weight: 700; color: #fff; text-shadow: 0 2px 8px rgb(0 0 0 / .7); animation: callout-text 1.5s .05s cubic-bezier(.2, .9, .25, 1) both; }
+.duel-callout.is-chain { --cc: var(--accent); }
+.duel-callout.is-move { --cc: var(--warn, #ffb347); }
+@keyframes callout-text {
+  0% { opacity: 0; transform: scale(2.2); filter: blur(10px); }
+  18% { opacity: 1; transform: scale(.94); filter: blur(0); }
+  28% { transform: scale(1.04); }
+  38% { transform: scale(1); }
+  72% { opacity: 1; transform: translate(0, 0) scale(1); }
+  100% { opacity: 0; transform: translate(calc(32 * var(--vw, 1vw)), calc(22 * var(--vh, 1vh))) scale(.3); }
+}
+@keyframes callout-edge { 0% { opacity: 0; } 12% { opacity: 1; } 30% { opacity: .5; } 45% { opacity: 1; } 100% { opacity: 0; } }
+/* the dock arrives with a ring when it asks you to chain */
+.duel-engine-bar.is-chain { animation: dock-call 1.2s ease-out 1, dock-glow 2s 1.2s ease-in-out infinite; }
+@keyframes dock-call { 0% { box-shadow: 0 0 0 0 var(--accent); transform: scale(1.06); } 40% { box-shadow: 0 0 0 14px transparent; transform: scale(1); } 100% { box-shadow: var(--shadow); } }
+@keyframes dock-glow { 50% { box-shadow: 0 0 0 2px var(--accent), 0 0 24px color-mix(in srgb, var(--accent) 55%, transparent); } }
+
+/* ---------- the card you are resolving: a spinning ring; click it to return to the decision ---------- */
+@property --src-a { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+.duel-card.is-source { z-index: 6; }
+.duel-card.is-source::before {
+  content: ""; position: absolute; inset: -6px; border-radius: 10px; z-index: -1; pointer-events: none;
+  background: conic-gradient(from var(--src-a), var(--accent), #fff, var(--warn, #ffb347), var(--accent));
+  filter: blur(1px); animation: src-spin 2.2s linear infinite, src-pulse 1.2s ease-in-out infinite;
+}
+.duel-card.is-source::after {
+  content: ""; position: absolute; inset: -14px; border-radius: 16px; pointer-events: none;
+  box-shadow: 0 0 26px 6px color-mix(in srgb, var(--accent) 65%, transparent); animation: src-pulse 1.2s ease-in-out infinite;
+}
+.duel-page[data-peeking] .duel-card.is-source { cursor: pointer; }
+.duel-source-tag {
+  position: absolute; left: 50%; top: -10px; translate: -50% 0; z-index: 7; padding: 1px 7px; border-radius: 999px; white-space: nowrap;
+  font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; background: var(--accent); color: var(--accent-fg); box-shadow: 0 2px 8px rgb(0 0 0 / .4);
+}
+.duel-zone.is-opp-side .duel-source-tag { rotate: 180deg; }
+@keyframes src-spin { to { --src-a: 360deg; } }
+@keyframes src-pulse { 50% { opacity: .55; } }
+
+/* ---------- Now: what you are deciding (status column) ---------- */
+.duel-now {
+  display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; padding: 8px 10px; border-radius: 12px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent); border: 1px solid var(--accent); box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.duel-now-thumb { width: 40px; grid-row: span 2; }
+.duel-now-text { display: flex; flex-direction: column; min-width: 0; font-size: 12px; }
+.duel-now-text small { font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.duel-now-text b { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.duel-now-text span { color: var(--muted); }
+.duel-now-btn { grid-column: 2; justify-self: start; font-size: 12px; padding: 4px 10px; }
+.duel-now-btn kbd { font-size: 10px; padding: 0 4px; border: 1px solid currentColor; border-radius: 4px; margin-left: 4px; }
+.duel-now.is-peeking { animation: dock-glow 1.6s ease-in-out infinite; }
+
+/* ---------- picker with several piles ---------- */
+.duel-picker-section + .duel-picker-section { margin-top: 12px; }
+.duel-picker-label { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  .duel-turnsign b, .duel-callout b, .duel-callout small, .duel-callout::before, .duel-card.is-source::before, .duel-card.is-source::after, .duel-engine-bar.is-chain, .duel-now.is-peeking { animation: none !important; }
+}
+
+/* hover preview: the text scrolls with the wheel from anywhere; fade the cut-off edge as a hint */
+.duel-floatpreview .duel-preview-text { scroll-behavior: smooth; overscroll-behavior: contain; mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent); padding-bottom: 14px; }
+.duel-floatpreview .duel-preview-text .card-text { font-size: 13px; }
+
+/* while you're busy the turn sign just breathes (slow, small) */
+
+/* ---------- Next phase / End turn above the turn sign ---------- */
+.duel-turnbtns { display: flex; gap: 8px; justify-content: flex-end; margin-bottom: 10px; pointer-events: auto; }
+.duel-turnbtns button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; font-weight: 800; font-size: 14px; border-radius: 10px; }
+.duel-turnbtns kbd { font-size: 10px; padding: 0 4px; border: 1px solid currentColor; border-radius: 4px; opacity: .65; font-weight: 600; }
+.duel-turnbtns .duel-quicknext { flex-direction: row; background: var(--plate-bg); }
+.duel-page.is-live .duel-turnbtns .duel-quicknext, .duel-page.is-live .duel-turnbtns .duel-end-turn { padding: 8px 14px; font-size: 14px; height: auto; margin: 0; }
+
+/* ---------- keyboard cursor ---------- */
+.is-kbd-cursor { outline: 3px solid var(--warn, #ffb347) !important; outline-offset: 4px; border-radius: 8px; box-shadow: 0 0 0 8px color-mix(in srgb, var(--warn, #ffb347) 25%, transparent) !important; z-index: 9; }
+.duel-card.is-kbd-cursor > .duel-quick { display: flex; }
+.duel-card.is-kbd-cursor .duel-quick button::before { content: counter(q) " "; font-size: 10px; opacity: .7; }
+.duel-card.is-kbd-cursor .duel-quick { counter-reset: q; }
+.duel-card.is-kbd-cursor .duel-quick button { counter-increment: q; }
+.duel-chain-options { counter-reset: opt; }
+.duel-chain-options li button { counter-increment: opt; position: relative; }
+.duel-chain-options li button::after { content: counter(opt); position: absolute; top: 3px; right: 6px; font-size: 10px; font-weight: 800; opacity: .55; }
+.duel-menu-num { opacity: .55; }
+
+/* ---------- shortcut sheet ---------- */
+.duel-shortcuts-panel { width: 360px; }
+.duel-shortcuts-grid { display: grid; gap: 12px; }
+.duel-shortcuts-grid h4 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--accent); }
+.duel-shortcuts-grid dl { margin: 0; display: grid; gap: 4px; }
+.duel-shortcuts-grid dl > div { display: grid; grid-template-columns: 84px 1fr; gap: 8px; align-items: baseline; font-size: 12px; }
+.duel-shortcuts-grid dt { margin: 0; text-align: right; }
+.duel-shortcuts-grid dd { margin: 0; color: var(--muted); }
+.duel-shortcuts-grid kbd { font-size: 11px; padding: 1px 6px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface-2); white-space: nowrap; }
+.duel-help-kbd { margin: 14px 0 8px; font-size: 14px; }
+
+/* card text: no scrollbar eating the width (the wheel scrolls it; the fade at the bottom says there's more) */
+.duel-preview-text, .card-preview-body, .dlg-text { scrollbar-width: none; }
+.duel-preview-text::-webkit-scrollbar, .card-preview-body::-webkit-scrollbar, .dlg-text::-webkit-scrollbar { display: none; }
+.duel-floatpreview .duel-preview-text { padding-right: 2px; }
+.duel-floatpreview .duel-preview-text.is-end { mask-image: none; }
+
+/* turn number: right edge, middle of the board */
+.duel-rightmid { position: absolute; right: 18px; top: 50%; transform: translateY(-50%); z-index: 4; pointer-events: none; }
+.duel-turnno { display: flex; flex-direction: column; align-items: center; line-height: 1; text-shadow: 0 2px 6px rgb(0 0 0 / .45); }
+.duel-turnno small { font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.duel-turnno b { font-family: var(--font-num, inherit); font-size: clamp(30px, calc(5 * var(--vh, 1vh)), 52px); font-weight: 900; color: var(--fg); }
+@media (max-width: 1000px) {
+  :where(html:not(.duel-scaled)) .duel-rightmid { display: none; }
+}
+
+/* ---------- resolving card: impossible to miss (spills past its zone) ---------- */
+.duel-card.is-source { animation: src-lift 1.4s ease-in-out infinite; }
+.duel-card.is-source > .duel-card-inner { box-shadow: 0 0 0 2px #fff, 0 0 24px 6px var(--accent), 0 0 60px 18px color-mix(in srgb, var(--accent) 45%, transparent); }
+/* light rays turning behind the card */
+.duel-card.is-source::before {
+  inset: -55%; border-radius: 50%; z-index: -1; filter: blur(2px);
+  background: repeating-conic-gradient(from var(--src-a), color-mix(in srgb, var(--accent) 75%, transparent) 0 8deg, transparent 8deg 24deg);
+  -webkit-mask-image: radial-gradient(circle, #000 18%, transparent 68%); mask-image: radial-gradient(circle, #000 18%, transparent 68%);
+  animation: src-spin 6s linear infinite;
+}
+/* shockwave rings rippling outward */
+.duel-card.is-source::after {
+  inset: -6px; border-radius: 12px; box-shadow: 0 0 0 3px var(--accent), 0 0 18px 4px var(--accent);
+  animation: src-wave 1.4s ease-out infinite;
+}
+.duel-card.is-source .duel-source-tag { animation: src-tag 1.4s ease-in-out infinite; font-size: 11px; padding: 2px 9px; }
+@keyframes src-lift { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-4%) scale(1.07); } }
+@keyframes src-wave { 0% { opacity: .95; transform: scale(1); } 100% { opacity: 0; transform: scale(1.9); } }
+@keyframes src-tag { 50% { transform: scale(1.12); } }
+.duel-zone.has-source, .duel-slot.has-source { z-index: 7; overflow: visible; }
+@media (prefers-reduced-motion: reduce) { .duel-card.is-source, .duel-card.is-source .duel-source-tag { animation: none; } }
+
+/* ---------- reveal strip: excavated / revealed cards, and where each one goes ---------- */
+.duel-reveal {
+  position: fixed; z-index: 42; left: 50%; top: 58px; transform: translateX(-50%); max-width: min(calc(92 * var(--vw, 1vw)), 900px);
+  padding: 10px 14px 12px; border-radius: 14px; background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border: 1px solid var(--accent); box-shadow: 0 10px 40px rgb(0 0 0 / .55), 0 0 24px color-mix(in srgb, var(--accent) 35%, transparent);
+  backdrop-filter: blur(6px); animation: reveal-in .35s cubic-bezier(.2, .9, .3, 1.2) both;
+}
+.duel-reveal-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
+.duel-reveal-head b { font-family: var(--font-field, inherit); font-size: 15px; letter-spacing: .03em; }
+.duel-reveal-head button { padding: 0 8px; font-size: 12px; background: none; border: 1px solid var(--border); }
+.duel-reveal-cards { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.duel-reveal-card { position: relative; width: clamp(64px, calc(7 * var(--vw, 1vw)), 104px); cursor: zoom-in; animation: reveal-flip .55s cubic-bezier(.3, .7, .3, 1.15) both; }
+.duel-reveal-card .duel-card { position: relative; display: block; width: 100%; aspect-ratio: 59 / 86; }
+.duel-reveal-card.has-fate .duel-card { opacity: .45; filter: saturate(.6); transform: scale(.92); transition: all .35s ease; }
+.duel-reveal-fate {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(-8deg); white-space: nowrap;
+  padding: 3px 8px; border-radius: 6px; font-size: 13px; font-weight: 900; letter-spacing: .03em;
+  background: var(--accent); color: var(--accent-fg); box-shadow: 0 4px 12px rgb(0 0 0 / .5); animation: reveal-stamp .4s cubic-bezier(.3, 1.6, .5, 1) both;
+}
+@keyframes reveal-in { from { opacity: 0; transform: translate(-50%, -20px) scale(.96); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
+@keyframes reveal-flip { 0% { opacity: 0; transform: translateY(-30px) rotateY(90deg); } 60% { opacity: 1; transform: translateY(4px) rotateY(-8deg); } 100% { transform: none; } }
+@keyframes reveal-stamp { 0% { opacity: 0; transform: translate(-50%, -50%) rotate(-8deg) scale(2); } 100% { opacity: 1; transform: translate(-50%, -50%) rotate(-8deg) scale(1); } }
+@media (prefers-reduced-motion: reduce) { .duel-reveal, .duel-reveal-card, .duel-reveal-fate { animation: none; } }
+.duel-page.is-live .duel-board-wrap > .duel-rightmid { position: absolute; right: 18px; top: 50%; transform: translateY(-50%); }
+
+/* ================= resolving card: pick a style (settings > Animations) ================= */
+.duel-card.is-source { --src-c: var(--accent); }
+.duel-page[data-resolve-color="gold"] .duel-card.is-source { --src-c: #ffc93c; }
+.duel-page[data-resolve-color="crimson"] .duel-card.is-source { --src-c: #ff3b5c; }
+.duel-page[data-resolve-color="azure"] .duel-card.is-source { --src-c: #3fb8ff; }
+.duel-page[data-resolve-color="emerald"] .duel-card.is-source { --src-c: #2fe08a; }
+.duel-page[data-resolve-color="rainbow"] .duel-card.is-source { --src-c: #ff4d6d; }
+.duel-page[data-resolve-color="rainbow"] .duel-srcfx { animation: src-hue 2.6s linear infinite; }
+@keyframes src-hue { to { filter: hue-rotate(360deg); } }
+
+/* the older single-layer version is replaced by the layers below */
+.duel-page .duel-card.is-source::before, .duel-page .duel-card.is-source::after { content: none; }
+.duel-page .duel-card.is-source > .duel-card-inner { box-shadow: 0 0 0 2px #fff, 0 0 22px 5px var(--src-c), 0 0 56px 16px color-mix(in srgb, var(--src-c) 45%, transparent); }
+.duel-page .duel-card.is-source .duel-source-tag { background: var(--src-c); color: #111; }
+
+.duel-srcfx { position: absolute; inset: 0; pointer-events: none; }
+.duel-srcfx > i { position: absolute; display: block; pointer-events: none; }
+
+/* ---- Shockwave rings (default): turning rays behind, two rings rippling out ---- */
+
+/* ---- Sparkles: two glitter fields turning against each other, big stars twinkling at the corners ---- */
+
+.duel-page[data-resolve="sparkle"] .duel-card.is-source { animation: src-lift 1.8s ease-in-out infinite; }
+
+/* ---- Fireworks: bursts popping around the card, well past its zone ---- */
+
+.duel-page[data-resolve="fireworks"] .duel-card.is-source { animation: src-lift 1.35s ease-in-out infinite; }
+
+/* ---- Flame aura: a big turning, flickering glow behind the card ---- */
+
+.duel-page[data-resolve="aura"] .duel-card.is-source { animation: src-lift 2s ease-in-out infinite; }
+
+/* ---- Minimal: a pulsing outline, nothing else ---- */
+.duel-page[data-resolve="minimal"] .duel-card.is-source { animation: none; }
+.duel-page[data-resolve="minimal"] .duel-card.is-source > .duel-card-inner { box-shadow: 0 0 0 3px var(--src-c), 0 0 12px var(--src-c); }
+.duel-page[data-resolve="minimal"] .sf1 { inset: -6px; border-radius: 10px; border: 2px solid var(--src-c); animation: src-pulse 1.2s ease-in-out infinite; }
+
+/* ---------- other animation switches ---------- */
+.duel-page.no-edge .duel-callout::before, .duel-page.no-edge .duel-lp-hit::before { display: none; }
+.duel-page.no-shimmer .duel-zone-label { animation: none; }
+.duel-page.no-heartbeat .duel-turnsign b { animation: none !important; }
+
+/* colour swatches (settings) */
+.duel-swatches { display: flex; gap: 6px; flex-wrap: wrap; }
+.duel-swatch { width: 24px; height: 24px; padding: 0; border-radius: 50%; border: 2px solid var(--border); }
+.duel-swatch.is-on { outline: 2px solid var(--fg); outline-offset: 2px; }
+.duel-swatch.sw-theme { background: var(--accent); }
+.duel-swatch.sw-gold { background: #ffc93c; }
+.duel-swatch.sw-crimson { background: #ff3b5c; }
+.duel-swatch.sw-azure { background: #3fb8ff; }
+.duel-swatch.sw-emerald { background: #2fe08a; }
+.duel-swatch.sw-rainbow { background: conic-gradient(#ff5f6d, #ffc371, #a8ff78, #78ffd6, #6a82fb, #fc5c7d, #ff5f6d); }
+
+@media (prefers-reduced-motion: reduce) { .duel-srcfx > i { animation: none !important; } }
+
+/* ---------- monster info under the card: Level / Rank / Link, Tuner, materials, then ATK / DEF ---------- */
+.duel-statbox { display: contents; }
+.duel-traits {
+  position: absolute; left: 50%; top: 2px; transform: translateX(-50%); z-index: 4; display: flex; gap: 2px; pointer-events: none; white-space: nowrap;
+}
+.duel-trait {
+  font-size: clamp(8px, calc(var(--cw) * .11), 12px); font-weight: 900; line-height: 1.25; padding: 0 4px; border-radius: 4px;
+  background: rgb(10 10 16 / .82); color: #fff; box-shadow: 0 1px 3px rgb(0 0 0 / .5); font-variant-numeric: tabular-nums;
+}
+.duel-trait.is-level { color: #ffd34d; }
+.duel-trait.is-rank { color: #e6e6e6; background: rgb(0 0 0 / .9); }
+.duel-trait.is-link { color: #8fd3ff; }
+.duel-trait.is-tuner { color: #7dffa0; letter-spacing: .04em; font-size: clamp(7px, calc(var(--cw) * .09), 10px); }
+.duel-trait.is-mats { color: #c9b8ff; }
+.duel-trait.is-up { color: #7dffa0; } .duel-trait.is-down { color: #ff8a8a; }
+.duel-zone.is-opp-side .duel-traits { top: auto; bottom: 2px; }
+/* the separate Xyz material badge is now part of the strip on field monsters */
+.duel-slot.has-traits .duel-card .duel-badge-mat { display: none; }
+
+/* hover preview size (settings > Layout > Card preview) */
+@media (min-width: 1001px) {
+  .duel-page.is-live .duel-floatpreview { width: calc(280px * var(--preview-scale, 1)); max-height: calc(calc(100 * var(--vh, 1vh)) - 70px); }
+  .duel-page.is-live .duel-floatpreview .duel-preview img { width: calc(220px * var(--preview-scale, 1)); }
+  .duel-page.is-live .duel-floatpreview .duel-preview-text { max-height: calc(200px * var(--preview-scale, 1)); font-size: calc(13px * clamp(.85, var(--preview-scale, 1), 1.35)); }
+  .duel-page.is-live .duel-floatpreview .duel-preview-text .card-text { font-size: inherit; }
+  .duel-page.is-live .duel-floatpreview .duel-preview-text h3 { font-size: calc(14px * clamp(.9, var(--preview-scale, 1), 1.4)); }
+}
+/* scaled-copy:start */
+:where(html.duel-scaled) .duel-page.is-live .duel-floatpreview { width: calc(280px * var(--preview-scale, 1)); max-height: calc(calc(100 * var(--vh, 1vh)) - 70px); }
+:where(html.duel-scaled) .duel-page.is-live .duel-floatpreview .duel-preview img { width: calc(220px * var(--preview-scale, 1)); }
+:where(html.duel-scaled) .duel-page.is-live .duel-floatpreview .duel-preview-text { max-height: calc(200px * var(--preview-scale, 1)); font-size: calc(13px * clamp(.85, var(--preview-scale, 1), 1.35)); }
+:where(html.duel-scaled) .duel-page.is-live .duel-floatpreview .duel-preview-text .card-text { font-size: inherit; }
+:where(html.duel-scaled) .duel-page.is-live .duel-floatpreview .duel-preview-text h3 { font-size: calc(14px * clamp(.9, var(--preview-scale, 1), 1.4)); }
+/* scaled-copy:end */
+
+
+
+
+
+
+
+
+
+
+
+/* the preview always fits the window: the picture shrinks to the height available, the text gets the rest */
+@media (min-width: 1001px) {
+  .duel-page.is-live .duel-floatpreview { --pw: min(calc(220px * var(--preview-scale, 1)), calc((calc(100 * var(--vh, 1vh)) - 250px) / 1.458)); width: max(260px, calc(var(--pw) + 60px)); top: 56px; }
+  .duel-page.is-live .duel-floatpreview .duel-preview img { width: var(--pw); }
+  .duel-page.is-live .duel-floatpreview .duel-preview-text { max-height: max(90px, min(calc(200px * var(--preview-scale, 1)), calc(calc(100 * var(--vh, 1vh)) - 170px - var(--pw) * 1.458))); }
+}
+/* scaled-copy:start */
+:where(html.duel-scaled) .duel-page.is-live .duel-floatpreview { --pw: min(calc(220px * var(--preview-scale, 1)), calc((calc(100 * var(--vh, 1vh)) - 250px) / 1.458)); width: max(260px, calc(var(--pw) + 60px)); top: 56px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-floatpreview .duel-preview img { width: var(--pw); }
+:where(html.duel-scaled) .duel-page.is-live .duel-floatpreview .duel-preview-text { max-height: max(90px, min(calc(200px * var(--preview-scale, 1)), calc(calc(100 * var(--vh, 1vh)) - 170px - var(--pw) * 1.458))); }
+/* scaled-copy:end */
+
+
+
+
+
+
+
+
+
+
+
+
+/* ---- Power-up aura: jagged energy flames roaring upward, crackling lightning, rising sparks, a trembling card ---- */
+.duel-page[data-resolve="powerup"][data-resolve-color="theme"] .duel-card.is-source { --src-c: #ffd23f; }
+.duel-page[data-resolve="powerup"] .duel-card.is-source { animation: pu-tremble .09s steps(2) infinite; }
+.duel-page[data-resolve="powerup"] .duel-card.is-source > .duel-card-inner {
+  box-shadow: 0 0 0 2px #fff, 0 0 18px 6px #fff, 0 0 40px 14px var(--src-c), 0 0 90px 30px color-mix(in srgb, var(--src-c) 55%, transparent);
+}
+/* two flame layers: spiky silhouettes that flicker and surge upward, a white-hot inner one and a coloured outer one */
+
+/* lightning: thin zigzag bolts flashing on either side */
+
+/* sparks rising out of the aura */
+
+@keyframes pu-tremble { 0% { translate: -1px 0; } 50% { translate: 1px -1px; } 100% { translate: 0 1px; } }
+
+@media (prefers-reduced-motion: reduce) { .duel-page[data-resolve="powerup"] .duel-card.is-source { animation: none; } }
+
+/* fold-out groups inside a settings section (Layout > Table / Hands / Card preview) */
+.duel-setting-section.is-sub { border-top: 0; padding: 6px 8px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.duel-setting-section.is-sub > summary { font-size: 11px; color: var(--accent); letter-spacing: .06em; }
+.duel-setting-section.is-sub[open] > summary { margin-bottom: 8px; color: var(--accent); }
+.duel-setting-section.is-sub + .duel-setting-section.is-sub { margin-top: 6px; }
+
+/* preview: name left, ATK / DEF right on the same row */
+.duel-preview-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.duel-preview-head h3 { margin: 0; min-width: 0; }
+.duel-preview-head .duel-preview-atk { flex: none; margin: 0; font-variant-numeric: tabular-nums; white-space: nowrap; font-family: var(--font-num, inherit); }
+.duel-preview-head .duel-preview-atk b { font-size: 1.05em; }
+.duel-preview-head .duel-preview-atk small { opacity: .6; margin: 0 2px; font-size: .8em; }
+/* reveal strip: see-through, so the board shows behind it */
+.duel-reveal { background: color-mix(in srgb, var(--surface) 42%, transparent); backdrop-filter: blur(3px) saturate(1.2); }
+.duel-reveal-head b { text-shadow: 0 1px 4px rgb(0 0 0 / .6); }

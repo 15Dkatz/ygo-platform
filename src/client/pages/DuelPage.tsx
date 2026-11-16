@@ -1,37 +1,33 @@
 // PHASE 3 owns this page (duel board). PHASE 4 adds engine-mode prompts.
-import { Suspense, lazy, useSyncExternalStore, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { Suspense, lazy, useSyncExternalStore, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { newDeck, useDeckStore } from "../store/deckStore.ts";
 import { isStarterDeck } from "../../shared/starterDecks.ts";
 import type { Deck } from "../../shared/types.ts";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import type { BoardState, CardInstance, TurnClock } from "../../shared/duel.ts";
-import type { EngineCardRef, EngineEvent, EnginePrompt, EngineResponse } from "../../shared/enginePrompts.ts";
+import type { BoardState, CardInstance } from "../../shared/duel.ts";
+import type { EngineCardRef, EngineEvent, EngineResponse } from "../../shared/enginePrompts.ts";
 import { enginePhaseControls, enginePhaseResponse, manualPhaseControls, type PhaseControls } from "../../shared/phases.ts";
 import { PHASE_LABEL, type DuelAction, type Phase, type Seat } from "../../shared/duelActions.ts";
 import { Board, PendulumStrip, type BoardUI, type Matchup, type ZoneRef } from "../components/duel/Board.tsx";
 import { indexBoard, refUid } from "../components/engine/boardRefs.ts";
 import { attackOutcome } from "../../shared/matchup.ts";
-import { CardFace, CardView } from "../components/duel/CardView.tsx";
+import { CardView } from "../components/duel/CardView.tsx";
 import { useDecks } from "../components/duel/DeckPicker.tsx";
 import { buildMenu, dropAction, locate, occupantAt, pileMenu, type MenuItem, type Pending } from "../components/duel/menus.ts";
 import { ContextMenu, Modal, Toasts } from "../components/duel/Overlays.tsx";
 import { PreDuel } from "../components/duel/PreDuel.tsx";
-import { CardPreview, LogChat, LogText } from "../components/duel/SidePanel.tsx";
+import { CardPreview, LogChat } from "../components/duel/SidePanel.tsx";
 import { boardCodes, getCard, useCardData, useDuelIdentity, useDuelSocket } from "../components/duel/useDuel.ts";
-import { AnimatedLp } from "../components/duel/anim/AnimatedLp.tsx";
 import { useBoardAnimations } from "../components/duel/anim/useBoardAnimations.ts";
-import { getBusVolume, getSoundTheme, isMuted, onMuteChange, play as sfx, setMusic } from "../components/duel/anim/sfx.ts";
+import { getBusVolume, getSoundTheme, isMuted, onMuteChange, setMusic } from "../components/duel/anim/sfx.ts";
 import { EndOverlay, MuteToggle, ReconnectOverlay, TurnBanner } from "../components/duel/DuelFx.tsx";
-import { useEngineBoard, type Decision } from "../components/engine/EngineBoard.tsx";
-import { ClockFace, SecondsText, TurnTimer } from "../components/duel/TurnTimer.tsx";
+import { useEngineBoard } from "../components/engine/EngineBoard.tsx";
 import { SkinPicker } from "../components/SkinPicker.tsx";
 import { DuelSettingsButton } from "../components/duel/DuelSettingsPanel.tsx";
 import { ChainStack } from "../components/duel/ChainStack.tsx";
 import { duelSettings, useDuelSettings } from "../components/duel/duelSettings.ts";
-import { SPEEDS, setAutopilot, setSpeed, useAutopilot, type Speed } from "../components/duel/autopilot.ts";
-import { botResponse } from "../../worker/duel/engine/bot.ts";
+import { setAutopilot, setSpeed, type Speed } from "../components/duel/autopilot.ts";
 import { demoDeck } from "../../shared/starterDecks.ts";
-import { autoAnswer, type AutoPassMode } from "../../shared/autoPass.ts";
 import { nothingLeftToDo } from "../../shared/turnFlow.ts";
 import "../components/duel/duel.css";
 import "./DuelPage.css";
@@ -41,15 +37,18 @@ import { RarityContext, rarityLookup, useFoilPointer } from "../components/cards
 import { SleeveContext } from "../components/duel/Sleeve.tsx";
 import { DuelLog, useRailFit } from "../components/duel/DuelLog.tsx";
 import { useUiScale } from "../components/duel/uiScale.ts";
-import { useHtmlClasses, usePageFlag } from "../components/duel/pageFlag.ts";
-import { PHASE_SHORT, LpDialog, MorePopover, MoveStatus, NowPanel, PHASE_SHORT_LABEL, PhaseCell, PlayerBar, TurnSign, decidingText, scrollableAncestor } from "../components/duel/DuelParts.tsx";
-import { ReplayRecorder, saveReplay } from "../components/duel/replay.ts";
+import { useHtmlClasses } from "../components/duel/pageFlag.ts";
+import { LpDialog, MorePopover, MoveStatus, NowPanel, PhaseCell, PlayerBar, TurnSign, decidingText } from "../components/duel/DuelParts.tsx";
+import { ReplayRecorder } from "../components/duel/replay.ts";
 import { DuelStats } from "../components/duel/DuelStats.tsx";
-import { avatarStyle, getProfile } from "../components/duel/profileStore.ts";
-import type { Profile } from "../../shared/profile.ts";
+import { getProfile } from "../components/duel/profileStore.ts";
 import "../components/duel/profile.css";
 const DeckBuilder = lazy(() => import("./DeckBuilderPage.tsx").then((m) => ({ default: m.DeckBuilder })));
 import { RevealStrip, useReveals } from "../components/duel/RevealStrip.tsx";
+import { useHoverPreview } from "../components/duel/page/useHoverPreview.ts";
+import { useAutoPlay } from "../components/duel/page/useAutoPlay.ts";
+import { useDuelEnd } from "../components/duel/page/useDuelEnd.ts";
+import { useBoardFeedback } from "../components/duel/page/useBoardFeedback.ts";
 
 type Viewer =
   | { kind: "pile"; player: Seat; zone: "gy" | "banished" | "extra" }
@@ -91,15 +90,12 @@ export function DuelPage() {
   };
   const { board, session, room, you } = conn;
 
-  const [preview, setPreview] = useState<number | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; title?: string; items: MenuItem[] } | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [viewer, setViewer] = useState<Viewer | null>(null);
   const [lpFor, setLpFor] = useState<Seat | null>(null);
   const [zoomCard, setZoomCard] = useState<number | null>(null);
-  const [flash, setFlash] = useState<Set<string>>(new Set());
   const [help, setHelp] = useState(false);
-  const [endShown, setEndShown] = useState(false);
   // your own hand layout after Shuffle hand (any number of times; only you see the new order)
   const [handOrder, setHandOrder] = useState<string[] | null>(null);
   const attackerRef = useRef<EngineCardRef | null>(null);
@@ -108,31 +104,7 @@ export function DuelPage() {
   const tilt = ds.tilt > 0;
   // PC scene: log + chat live in a drawer (closed by default), the card preview floats on hover
   const [drawer, setDrawer] = useState(false);
-  const [hovering, setHovering] = useState(false);
-  const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  // the preview floats on the side away from the pointer, so it never covers what you're hovering
-  const pointerX = useRef(0);
-  useEffect(() => {
-    const move = (e: PointerEvent) => { pointerX.current = e.clientX; };
-    window.addEventListener("pointermove", move, { passive: true });
-    return () => window.removeEventListener("pointermove", move);
-  }, []);
-  const [previewRight, setPreviewRight] = useState(false);
-  // for the Z (zoom) key: what's hovered right now
-  const hoveringRef = useRef(false), previewRef = useRef<number | null>(null);
-  hoveringRef.current = hovering;
-  previewRef.current = preview;
-  const onHoverCard = useCallback((code: number | null) => {
-    clearTimeout(hoverTimer.current);
-    if (code) { setPreview(code); setHovering(true); setPreviewRight(pointerX.current < window.innerWidth / 2); }
-    else hoverTimer.current = setTimeout(() => setHovering(false), 350);
-  }, []);
-  /** A card named in the log: the same floating preview as a card on the field, in the spot it last used. */
-  const onLogCard = useCallback((code: number | null) => {
-    clearTimeout(hoverTimer.current);
-    if (code) { setPreview(code); setHovering(true); }
-    else hoverTimer.current = setTimeout(() => setHovering(false), 350);
-  }, []);
+  const { preview, setPreview, hovering, previewRight, onHoverCard, onLogCard, hoveringRef, previewRef } = useHoverPreview(setZoomCard);
 
   const live = !!board && (session?.stage === "duel" || session?.stage === "finished");
   // the live duel keeps its full-size layout, scaled to the window as one piece (phones keep their own layout)
@@ -182,107 +154,9 @@ export function DuelPage() {
     } else if (you !== null) autoJoined.current = true;
   }, [params, session, identity, deck, you, conn.status, send]);
 
-  // Autopilot (demo): your side plays itself so you can watch a whole duel. On with ?autopilot=1.
-  const auto = useAutopilot();
-  const autoOn = useRef(auto.on);
-  autoOn.current = auto.on;
-  useEffect(() => {
-    if (params.get("autopilot") === "1") setAutopilot(true);
-    return () => setAutopilot(false);
-  }, [params]);
-  const autoPrompt = auto.on && session?.mode === "engine" && session.stage === "duel" && conn.prompt && conn.prompt.player === you ? conn.prompt : null;
-  useEffect(() => {
-    if (!autoPrompt) return;
-    const t = setTimeout(() => send({ t: "respond", response: botResponse(autoPrompt, Math.random, "showcase") }), SPEEDS[auto.speed]);
-    return () => clearTimeout(t);
-  }, [autoPrompt, auto.speed, send]);
-  // Auto-pass chains: answer "don't chain" for you when nothing calls for a response (see shared/autoPass.ts)
-  const [autoPass, setAutoPassState] = useState<AutoPassMode>(() => {
-    try { const v = localStorage.getItem("ygo.autoPass"); return v === "ask" || v === "never" ? v : "smart"; } catch { return "smart"; }
-  });
-  const setAutoPass = (m: AutoPassMode) => { setAutoPassState(m); try { localStorage.setItem("ygo.autoPass", m); } catch { /* storage blocked */ } };
-  // auto-chaining: pass when nothing calls for a response, activate a lone mandatory effect, default chain order
-  const isMonsterCode = (code: number) => { const t = getCard(code)?.type; return t ? /Monster/.test(t) : true; };
-  // cards offered at your previous chance to chain (and passed on): quick effects repeating every phase
-  const chainSeen = useRef<{ id: number; codes: Set<number> }>({ id: -1, codes: new Set() });
-  const lastChainPrompt = useRef<{ id: number; codes: Set<number> } | null>(null);
-  if (conn.prompt?.kind === "selectChain" && conn.prompt.player === you && lastChainPrompt.current?.id !== conn.prompt.id) {
-    if (lastChainPrompt.current) chainSeen.current = lastChainPrompt.current;   // the previous chance becomes "seen"
-    lastChainPrompt.current = { id: conn.prompt.id, codes: new Set(conn.prompt.cards.map((c) => c.code)) };
-  }
-  const auto2 = !auto.on && session?.stage === "duel" ? autoAnswer(conn.prompt, you, promptEvents.current, autoPass, isMonsterCode, chainSeen.current.codes) : null;
-  const autoKey = auto2 && conn.prompt ? `${conn.prompt.id}:${JSON.stringify(auto2)}` : null;
-  useEffect(() => {
-    if (!auto2 || !conn.prompt) return;
-    const p = conn.prompt;
-    const t = setTimeout(() => {
-      const { passed, ...body } = auto2 as typeof auto2 & { passed?: boolean };
-      send({ t: "respond", response: { promptId: p.id, ...body } as EngineResponse });
-      // say so when it passed up something you could have chained
-      // (only the first time: a quick effect skipped again at every phase change isn't news)
-      if (passed && p.kind === "selectChain" && p.cards.length && !p.cards.every((c) => chainSeen.current.codes.has(c.code))) {
-        const names = [...new Set(p.cards.map((c) => getCard(c.code)?.name).filter(Boolean))].slice(0, 2).join(", ");
-        toast({ text: `Auto-passed${names ? `: you could have chained ${names}` : ""}. (⚙ Chain prompts)` }, 2600);
-      }
-    }, 120);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoKey]);
+  const { auto, autoOn, autoPass, setAutoPass, callout } = useAutoPlay({ params, session, board, prompt: conn.prompt, you, send, toast, promptEvents });
 
-  // "Your move" callout: a decision lands on you outside your own Main / Battle Phase flow (mostly a chance to chain)
-  const [callout, setCallout] = useState<{ key: number; text: string; sub?: string; tone: "chain" | "move" } | null>(null);
-  const calloutFor = conn.prompt && conn.prompt.player === you && !auto.on && !auto2 && session?.stage === "duel" ? conn.prompt : null;
-  useEffect(() => {
-    const p = calloutFor;
-    if (!p || !board) return;
-    const theirTurn = board.turnPlayer !== you;
-    if (p.kind === "selectChain") {
-      const names = [...new Set(p.cards.map((c) => getCard(c.code)?.name).filter(Boolean))].slice(0, 2).join(" · ");
-      setCallout({ key: p.id, text: p.forced ? "Activate?" : "Chain?", sub: names || undefined, tone: "chain" });
-      sfx("chain");
-    } else if (theirTurn && p.kind !== "idle" && p.kind !== "battle") {
-      setCallout({ key: p.id, text: "Your move", sub: p.hint, tone: "move" });
-      sfx("turn");
-    } else return;
-    const t = setTimeout(() => setCallout(null), 1500);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [calloutFor?.id]);
-
-  // ...and the pre-duel steps: toss the coin, go first
-  useEffect(() => {
-    if (!auto.on || !session || you === null) return;
-    const t = setTimeout(() => {
-      if (session.stage === "rps" && !session.rps.mine) send({ t: "coinToss" });
-      else if (session.stage === "choose" && session.chooser === you) send({ t: "chooseOrder", first: true });
-    }, 600);
-    return () => clearTimeout(t);
-  }, [auto.on, session, you, send]);
-
-  // the end-of-duel overlay appears when a duel we were watching finishes (not on a reload of a finished room)
-  const lastStage = useRef(session?.stage);
-  // a new number per duel in this room (a rematch starts fresh LP counters, with no "+8000" pop-up)
-  const [duelNo, setDuelNo] = useState(0);
-  useEffect(() => {
-    const was = lastStage.current;
-    lastStage.current = session?.stage;
-    if (session?.stage === "duel" && was !== "duel") { setDuelNo((n) => n + 1); recorder.current = new ReplayRecorder(); setReplayId(null); }
-    if (session?.stage === "finished" && was === "duel") {
-      setEndShown(true);
-      // keep the replay (this browser)
-      const rec = recorder.current, b = board;
-      recorder.current = null;
-      if (rec && b && session) {
-        void saveReplay(rec, {
-          names: [b.players[0].name, b.players[1].name], you, winner: session.winner ?? null, reason: session.endReason,
-          sleeves: [session.seats[0]?.sleeve, session.seats[1]?.sleeve], rarity: [session.seats[0]?.rarity, session.seats[1]?.rarity],
-        }, b).then(setReplayId);
-      }
-    }
-    if (session?.stage !== "finished") setEndShown(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.stage]);
-  const [replayId, setReplayId] = useState<string | null>(null);
+  const { duelNo, endShown, setEndShown, replayId } = useDuelEnd(session, board, you, recorder);
 
   // unread chat messages while the chat is closed (system lines don't count)
   const lineCount = conn.chat.filter((c) => !c.system).length;
@@ -290,61 +164,12 @@ export function DuelPage() {
   if (drawer) seenLines.current = lineCount;
   const unread = Math.max(0, lineCount - seenLines.current);
 
-  // while you point at a card, the mouse wheel scrolls its text in the preview (no need to move over there)
-  useEffect(() => {
-    const onWheel = (e: WheelEvent) => {
-      if (!hoveringRef.current || e.ctrlKey) return;
-      // only while pointing at a card on the board / in a hand: anywhere that scrolls itself (the log,
-      // the dock's chain list, a picker, the settings) keeps the wheel for its own scrolling
-      const target = e.target as HTMLElement;
-      if (!target.closest?.(".duel-board-wrap .duel-card, .duel-hand .duel-card")) return;
-      if (scrollableAncestor(target)) return;
-      const el = document.querySelector<HTMLElement>(".duel-floatpreview.is-shown .duel-preview-text");
-      if (!el || el.scrollHeight <= el.clientHeight + 2 || el.contains(target)) return;
-      el.scrollTop += e.deltaY;
-      e.preventDefault();
-    };
-    // the fade at the bottom of the text goes away once you've reached the end
-    const onScroll = (e: Event) => {
-      const el = e.target as HTMLElement;
-      if (el.classList?.contains("duel-preview-text")) el.classList.toggle("is-end", el.scrollTop + el.clientHeight >= el.scrollHeight - 2);
-    };
-    addEventListener("wheel", onWheel, { passive: false });
-    addEventListener("scroll", onScroll, true);
-    return () => { removeEventListener("wheel", onWheel); removeEventListener("scroll", onScroll, true); };
-  }, []);
 
-  // long-press on a card (touch) opens the big preview
-  useEffect(() => {
-    const onInspect = (e: Event) => { const code = (e as CustomEvent<number>).detail; if (code > 0) { setPreview(code); setZoomCard(code); } };
-    addEventListener("duel-inspect", onInspect);
-    return () => removeEventListener("duel-inspect", onInspect);
-  }, []);
-
-  // LP: shake + sound on damage, chime on gain
-  // ...and a big number over that player's half of the field, with a red / green flash at the screen edge
-  const [lpHit, setLpHit] = useState<{ delta: number; side: "top" | "bottom"; key: number } | null>(null);
-  const onLpChange = useCallback((delta: number, side: "top" | "bottom" = "bottom") => {
-    if (delta < 0) { sfx("damage"); anim.animator.shake(); } else if (delta > 0) sfx("gain");
-    if (delta) setLpHit({ delta, side, key: Date.now() });
-  }, [anim.animator]);
-  useEffect(() => { if (!lpHit) return; const t = setTimeout(() => setLpHit(null), 1500); return () => clearTimeout(t); }, [lpHit]);
 
   // open the deck viewer whenever a private peek arrives
   useEffect(() => { if (conn.peek) setViewer({ kind: "peek" }); }, [conn.peek]);
 
-  // flash attacker + target on attack events
-  const seenToasts = useRef(new Set<number>());
-  useEffect(() => {
-    for (const t of conn.toasts) {
-      if (seenToasts.current.has(t.id) || t.event?.kind !== "attack") continue;
-      seenToasts.current.add(t.id);
-      anim.animator.attack(t.event.attacker, t.event.target, other(t.event.player), 0, true, (board && locate(board, t.event.attacker)?.card.code) || undefined);
-      const uids = [t.event.attacker, t.event.target].filter(Boolean) as string[];
-      setFlash((f) => new Set([...f, ...uids]));
-      setTimeout(() => setFlash((f) => { const n = new Set(f); uids.forEach((u) => n.delete(u)); return n; }), 1600);
-    }
-  }, [conn.toasts, anim.animator]);
+  const { lpHit, onLpChange, flash } = useBoardFeedback(anim.animator, board, conn.toasts);
 
   const act = useCallback((a: DuelAction) => send({ t: "action", action: a }), [send]);
   const askNumber = (label: string, def: number) => {

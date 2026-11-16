@@ -1,8 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "../env.ts";
-import type {
-  BoardState, ClientMsg, DuelStage, EngineHostStart, RoomInfo, RpsChoice, ServerMsg, SessionInfo,
-} from "../../shared/duel.ts";
+import type { ClientMsg, DuelStage, RoomInfo, ServerMsg, SessionInfo } from "../../shared/duel.ts";
 import type { DuelMode } from "../../shared/types.ts";
 import { DEFAULT_SETTINGS, cleanSettings, formatTimeControl, type RoomSettings } from "../../shared/roomSettings.ts";
 import { skillCardProblem } from "./engine/deckCheck.ts";
@@ -15,100 +13,16 @@ import { ENGINE_NOTICE, engineAvailable } from "./engineHook.ts";
 import { botResponse } from "./engine/bot.ts";
 import { BadResponse, restoreRoomEngine, startRoomEngine, type RoomEngineSession, type RoomEngineUpdate } from "./engine/roomHook.ts";
 import { eventsFor } from "./engine/EngineDuel.ts";
-import type { EngineEvent } from "../../shared/enginePrompts.ts";
 import { stepClock } from "../../shared/clock.ts";
 import { cleanRarities, type RarityMap } from "../../shared/rarity.ts";
 import { DEFAULT_SLEEVE, cleanSleeve } from "../../shared/sleeves.ts";
-import { cleanProfile, type Profile } from "../../shared/profile.ts";
-import type { OpenChainLink } from "../../shared/chain.ts";
+import { cleanProfile } from "../../shared/profile.ts";
 import { publicChain, publicDeciding } from "./engine/publicView.ts";
+import { ENGINE_KEY, MAX_LOG, HOST_SEAT, BOT_SEAT, BOT_ID, BOT_DELAY_MS, MAX_SNAPSHOT_CHARS, SEAT_GRACE_MS, EMPTY_ROOM_MS, MAX_SOCKETS, MAX_CHAT, MAX_MSG_BYTES, STALE_MS, other, BEATS } from "./roomState.ts";
+import type { ChatLine, RoomData, Attachment } from "./roomState.ts";
+import { RoomError, checkHostUpdate } from "./hostUpdate.ts";
+export { SEAT_GRACE_MS } from "./roomState.ts";
 
-/** DO storage key of the engine snapshot (seed + decks + responses; replayed on wake). */
-const ENGINE_KEY = "engine";
-const MAX_LOG = 500;
-/** Host-runs-rules mode: whose browser runs the engine (the room creator sits in seat 0). */
-const HOST_SEAT: Seat = 0;
-/** A bot opponent always takes the other seat; its prompts are answered by whoever runs the engine. */
-const BOT_SEAT: Seat = 1;
-const BOT_ID = "bot";
-/** Pause before the bot answers, so the human can follow what it does. */
-const BOT_DELAY_MS = 450;
-/** DO storage values are capped at 128 KiB; a snapshot is ~40 bytes per engine response. */
-const MAX_SNAPSHOT_CHARS = 120_000;
-
-/**
- * One duel room. PHASE 3 implements manual mode (shared board state, players move cards
- * themselves). PHASE 4 adds engine mode (ocgcore WASM enforces the rules). The room's
- * mode is fixed when it is created; players can switch an engine duel to manual.
- *
- * Uses the WebSocket Hibernation API: sockets carry their identity/seat in an attachment and
- * the whole room (seats, stage, board) lives in DO storage under "room", so a hibernated or
- * restarted object resumes the duel exactly. Engine mode plugs in through ./engineHook.ts
- * (see `startDuel` and the "respond" / "switchMode" messages below).
- */
-
-/** How long a disconnected player keeps their seat. */
-export const SEAT_GRACE_MS = 5 * 60_000;
-/** How long an empty room (nobody seated, nobody connected) lives. */
-const EMPTY_ROOM_MS = 10 * 60_000;
-const MAX_SOCKETS = 64;
-const MAX_CHAT = 100;
-const MAX_MSG_BYTES = 64 * 1024;
-/** Clients send "ping" every 25 s (answered by the runtime without waking the object); silent sockets are dropped. */
-const STALE_MS = 75_000;
-
-interface SeatState {
-  id: string;
-  name: string;
-  deck: { deckId: string; main: number[]; extra: number[]; side: number[]; rarity?: RarityMap; sleeve?: string } | null;
-  connected: boolean;
-  leftAt: number | null;
-  bot?: boolean;
-  profile?: Profile;
-}
-
-interface ChatLine { from: string; text: string; at: number; system?: boolean }
-
-interface RoomData {
-  roomId: string;
-  name: string;
-  mode: DuelMode;
-  host: string;
-  created_at: string;
-  stage: DuelStage;
-  seats: [SeatState | null, SeatState | null];
-  rps: [RpsChoice | null, RpsChoice | null];
-  rpsLast?: { choices: [RpsChoice, RpsChoice]; winner: Seat | null };
-  chooser: Seat | null;
-  winner: Seat | null;
-  endReason?: string;
-  rematch: [boolean, boolean];
-  switchVotes: [boolean, boolean];
-  board: BoardState | null;
-  chat: ChatLine[];
-  /** Engine mode: the prompts currently waiting for an answer (kept so reconnecting players get theirs). */
-  prompts?: { seat: Seat; prompt: unknown }[];
-  /** The open chain, from the public events (rules-enforced). */
-  chain?: OpenChainLink[];
-  /** Where this room's rules engine runs (fixed when the room is created). */
-  engineRunner?: "host" | "server";
-  /** Host-runs-rules mode: the duel setup the host's browser starts from. */
-  hostStart?: EngineHostStart;
-  /** Identity of whoever created the room (quick duels vs a bot are theirs alone). */
-  ownerId?: string;
-  settings?: RoomSettings;
-  /** Demo duel vs the bot (decks aren't shuffled); only ever set together with a bot. */
-  demo?: boolean;
-  /** When the current duel started (for match history). */
-  duelStartedAt?: string;
-  /** Turn timer state (ms). `turn` = the board turn the clock last saw, to refill at a new turn. */
-  clock?: { remaining: [number, number]; running: Seat | null; since: number; turn: number; decision?: string | null };
-}
-
-interface Attachment { id: string | null; name: string; seat: Seat | null; since?: number }
-
-const other = (p: Seat): Seat => (p === 0 ? 1 : 0);
-const BEATS: Record<RpsChoice, RpsChoice> = { rock: "scissors", paper: "rock", scissors: "paper" };
 
 export class DuelRoom extends DurableObject<Env> {
   private room: RoomData | null = null;
@@ -1045,44 +959,4 @@ export class DuelRoom extends DurableObject<Env> {
       console.error("rooms index update failed", e);
     }
   }
-}
-
-class RoomError extends Error {}
-
-type EnginePromptEntry = NonNullable<RoomEngineUpdate["prompts"]>[number];
-
-/** Sanity-check an engine update from the host's browser before storing and broadcasting it.
- *  (The host is trusted with the rules in this mode; this only keeps malformed data out.) */
-function checkHostUpdate(raw: unknown): RoomEngineUpdate {
-  const u = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
-  const bad = (why: string) => new RoomError(`Bad engine update (${why}).`);
-  const out: RoomEngineUpdate = {};
-  if (u.board !== undefined) {
-    const b = u.board as BoardState;
-    if (!b || typeof b !== "object" || !Array.isArray(b.players) || b.players.length !== 2 || !Array.isArray(b.extraMonster)) throw bad("board");
-    out.board = b;
-  }
-  if (u.prompts !== undefined) {
-    if (!Array.isArray(u.prompts) || u.prompts.length > 2) throw bad("prompts");
-    out.prompts = (u.prompts as { seat: unknown; prompt: unknown }[]).map((x) => {
-      if (!x || (x.seat !== 0 && x.seat !== 1) || !x.prompt || typeof x.prompt !== "object") throw bad("prompt");
-      return { seat: x.seat, prompt: x.prompt } as EnginePromptEntry;
-    });
-  }
-  if (u.log !== undefined) {
-    if (!Array.isArray(u.log)) throw bad("log");
-    out.log = u.log.filter((l): l is string => typeof l === "string").slice(0, 200).map((l) => l.slice(0, 300));
-  }
-  if (u.finished !== undefined && u.finished !== null) {
-    const f = u.finished as { winner?: unknown; reason?: unknown };
-    if (f.winner !== 0 && f.winner !== 1 && f.winner !== null) throw bad("result");
-    out.finished = { winner: f.winner as Seat | null, reason: String(f.reason ?? "Duel over").slice(0, 120) };
-  }
-  // optional per-seat animation events; the host already masked them for each seat
-  if (Array.isArray(u.events) && u.events.length === 2 && u.events.every((l) => Array.isArray(l))) {
-    const clean = (l: unknown[]) => l.filter((e): e is EngineEvent => !!e && typeof e === "object" && typeof (e as { e?: unknown }).e === "string").slice(0, 400);
-    const ev = [clean(u.events[0] as unknown[]), clean(u.events[1] as unknown[])] as [EngineEvent[], EngineEvent[]];
-    if (JSON.stringify(ev).length <= 200_000) out.events = ev;
-  }
-  return out;
 }

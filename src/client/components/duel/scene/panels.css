@@ -1,0 +1,538 @@
+/* duel scene: Action dock, settings panel, recent actions, hover buttons, More menu, calm panels, turn / log corner, whose turn.
+   Part of duel-scene.css (imported in order: later parts override earlier ones). */
+/* ---------- action dock: every decision in one place (right column on PC) ---------- */
+.duel-engine-bar kbd { font: 600 10px/1 var(--font); padding: 2px 4px; margin-left: 4px; border-radius: 4px; border: 1px solid currentColor; opacity: .7; }
+.duel-engine-bar .is-back { border-color: var(--border); }
+.duel-engine-bar-kicker { display: none; }
+.duel-engine-bar-buttons { display: contents; }
+.duel-chain-options { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; width: 100%; max-height: calc(42 * var(--vh, 1vh)); overflow: auto; }
+.duel-chain-options button {
+  width: 100%; display: grid; grid-template-columns: 38px 1fr auto; gap: 8px; align-items: center; text-align: left;
+  padding: 6px 8px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border)); background: var(--surface-2);
+}
+.duel-chain-options button:hover, .duel-chain-options button:focus-visible { border-color: var(--accent); background: var(--accent-soft); }
+.duel-chain-thumb { --cw: 38px; position: relative; display: block; }
+.duel-chain-text { display: flex; flex-direction: column; min-width: 0; }
+.duel-chain-text b { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.duel-chain-text small { font-size: 11px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.duel-chain-go { font-size: 12px; font-weight: 800; color: var(--accent); }
+@media (min-width: 1001px) {
+  /* the bar becomes a dock in the right column, beside the status and End turn */
+  .duel-page.is-live .duel-engine-bar {
+    left: auto; right: 12px; top: auto; bottom: 164px; transform: none; max-height: calc(calc(100 * var(--vh, 1vh)) - 240px); overflow: auto;   /* 8px above the action cluster (Next phase, ⋯ More, End turn) */
+    width: 176px; max-width: none; border-radius: 14px; padding: 10px; gap: 6px;
+    flex-direction: column; align-items: stretch; flex-wrap: nowrap;
+    border: 2px solid var(--accent); box-shadow: 0 0 0 4px var(--accent-soft), var(--shadow);
+    animation: dock-in .22s ease-out;
+  }
+  .duel-page.is-live .duel-engine-bar.is-chain { border-color: var(--warn); box-shadow: 0 0 0 4px color-mix(in srgb, var(--warn) 25%, transparent), var(--shadow); }
+  .duel-page.is-live .duel-engine-bar-kicker { display: block; font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+  .duel-page.is-live .duel-engine-bar.is-chain .duel-engine-bar-kicker { color: var(--warn); }
+  .duel-page.is-live .duel-engine-bar-hint { font-size: 14px; }
+  .duel-page.is-live .duel-engine-bar-count { align-self: flex-start; }
+  .duel-page.is-live .duel-engine-bar-buttons { display: flex; flex-direction: column; gap: 6px; }
+  .duel-page.is-live .duel-engine-bar-buttons > button { width: 100%; padding: 8px 10px; font-weight: 700; }
+  .duel-page.is-live .duel-engine-bar-list { font-size: 12px; font-weight: 500 !important; padding: 4px !important; background: none; border-color: transparent; color: var(--muted); }
+  /* the dock covers the status column while open: keep only its "Your move" pill */
+  .duel-page.is-live[data-engine-bar] .duel-status .duel-engine { display: none; }
+
+}
+/* scaled-copy:start */
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar {
+    left: auto; right: 12px; top: auto; bottom: 164px; transform: none; max-height: calc(calc(100 * var(--vh, 1vh)) - 240px); overflow: auto;   /* 8px above the action cluster (Next phase, ⋯ More, End turn) */
+    width: 176px; max-width: none; border-radius: 14px; padding: 10px; gap: 6px;
+    flex-direction: column; align-items: stretch; flex-wrap: nowrap;
+    border: 2px solid var(--accent); box-shadow: 0 0 0 4px var(--accent-soft), var(--shadow);
+    animation: dock-in .22s ease-out;
+  }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar.is-chain { border-color: var(--warn); box-shadow: 0 0 0 4px color-mix(in srgb, var(--warn) 25%, transparent), var(--shadow); }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar-kicker { display: block; font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar.is-chain .duel-engine-bar-kicker { color: var(--warn); }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar-hint { font-size: 14px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar-count { align-self: flex-start; }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar-buttons { display: flex; flex-direction: column; gap: 6px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar-buttons > button { width: 100%; padding: 8px 10px; font-weight: 700; }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar-list { font-size: 12px; font-weight: 500 !important; padding: 4px !important; background: none; border-color: transparent; color: var(--muted); }
+:where(html.duel-scaled) .duel-page.is-live[data-engine-bar] .duel-status .duel-engine { display: none; }
+/* scaled-copy:end */
+
+
+
+
+
+
+
+
+
+
+
+@keyframes dock-in { from { opacity: 0; transform: translateY(10px); } }
+@media (prefers-reduced-motion: reduce) { .duel-page.is-live .duel-engine-bar { animation: none; } }
+
+/* ---------- ⚙ duel settings ---------- */
+.duel-settings { position: relative; }
+.duel-settings > .duel-help-btn.is-on { background: var(--accent-soft); border-color: var(--accent); }
+.duel-settings-panel {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 60; width: 300px; display: grid; gap: 12px; padding: 14px;
+  background: var(--surface); color: var(--fg); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow);
+}
+.duel-settings-panel h3 { margin: 0; font-size: 14px; }
+.duel-setting { display: grid; gap: 4px; font-size: 13px; }
+.duel-setting > span:first-child { display: flex; justify-content: space-between; }
+.duel-setting b { color: var(--accent); font-variant-numeric: tabular-nums; }
+.duel-setting input[type=range] { width: 100%; accent-color: var(--accent); }
+.duel-setting select { font-size: 13px; }
+.duel-setting small { font-size: 11px; }
+.duel-setting-row { display: flex; align-items: center; gap: 8px; }
+.duel-setting-mute { padding: 2px 6px; font-size: 14px; }
+.duel-toggle { display: flex; align-items: center; gap: 10px; font-size: 13px; cursor: pointer; }
+.duel-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+.duel-toggle-track { flex: none; width: 34px; height: 20px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); position: relative; transition: background .15s ease; }
+.duel-toggle-track i { position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); transition: transform .15s ease, background .15s ease; }
+.duel-toggle input:checked + .duel-toggle-track { background: var(--accent); border-color: var(--accent); }
+.duel-toggle input:checked + .duel-toggle-track i { transform: translateX(14px); background: var(--accent-fg); }
+.duel-toggle input:focus-visible + .duel-toggle-track { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 600px) {
+  :where(html:not(.duel-scaled)) .duel-settings-panel { position: fixed; left: 8px; right: 8px; top: 56px; width: auto; }
+}
+
+/* menus: the way out is always the last row */
+.duel-menu-close { border-top: 1px solid var(--border); color: var(--muted); margin-top: 2px; }
+.duel-menu-close:hover { color: var(--fg); }
+
+/* ---------- the open chain (status column) ---------- */
+.duel-chainstack { display: grid; gap: 4px; padding: 8px; border-radius: 10px; background: var(--plate-bg); border: 1px solid color-mix(in srgb, var(--warn) 50%, var(--border)); }
+.duel-chainstack-title { font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--warn); }
+.duel-chainstack ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: calc(30 * var(--vh, 1vh)); overflow: auto; }
+.duel-chainstack li { display: grid; grid-template-columns: 18px 28px 1fr; gap: 6px; align-items: center; padding: 3px 4px; border-radius: 8px; border-left: 3px solid var(--border); }
+.duel-chainstack li.is-mine { border-left-color: var(--accent); }
+.duel-chainstack li.is-theirs { border-left-color: var(--danger); }
+.duel-chainstack li.is-resolving { background: color-mix(in srgb, var(--warn) 18%, transparent); }
+.duel-chainstack-n { font-weight: 900; font-size: 13px; text-align: center; color: var(--warn); }
+.duel-chainstack-thumb { --cw: 28px; position: relative; display: block; }
+.duel-chainstack-text { display: flex; flex-direction: column; min-width: 0; }
+.duel-chainstack-text b { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.duel-chainstack-text small { font-size: 10px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* ---------- recent actions (left rail, under Next phase) ---------- */
+.duel-recent { display: grid; gap: 4px; padding: 8px; border-radius: 10px; background: var(--plate-bg); border: 1px solid var(--border); font-size: 12px; }
+.duel-recent-title { justify-self: start; padding: 0; border: 0; background: none; font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); cursor: pointer; }
+.duel-recent-title:hover { color: var(--accent); }
+.duel-recent ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
+.duel-recent li { line-height: 1.3; overflow-wrap: anywhere; }
+.duel-recent li.is-new { font-weight: 700; animation: recent-in .35s ease-out; }
+@keyframes recent-in { from { transform: translateX(-6px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .duel-recent li.is-new { animation: none; } }
+/* phones / narrow: the full log sits under the board, so the on-board feed would only squeeze the phase row */
+@media (max-width: 1000px) {
+  :where(html:not(.duel-scaled)) .duel-recent { display: none; }
+}
+
+/* "nothing left to play": point at the way forward */
+.duel-nothing { margin: 0; padding: 6px 8px; font-size: 12px; border-radius: 8px; background: var(--accent-soft); border: 1px solid var(--accent); }
+.duel-nothing kbd { font-size: 10px; padding: 1px 4px; border: 1px solid currentColor; border-radius: 4px; }
+.duel-page.is-nothing-to-do .duel-next-phase:not(:disabled),
+.duel-page.is-nothing-to-do .duel-end-turn:not(:disabled) { animation: forward-pulse 1.6s ease-in-out infinite; }
+@keyframes forward-pulse { 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 35%, transparent), 0 0 18px color-mix(in srgb, var(--accent) 45%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .duel-page.is-nothing-to-do .duel-next-phase, .duel-page.is-nothing-to-do .duel-end-turn { animation: none; } }
+
+.duel-setting-reset { justify-self: start; font-size: 12px; padding: 3px 8px; }
+
+@media (min-width: 1001px) {
+  /* the main answer (Don't chain / Confirm) is the dock's last button: right above Next phase */
+  .duel-page.is-live .duel-engine-bar-list { order: -1; }
+}
+/* scaled-copy:start */
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar-list { order: -1; }
+/* scaled-copy:end */
+
+
+
+
+
+
+
+
+
+
+
+
+/* ---------- hover action buttons on playable cards ---------- */
+.duel-quick {
+  position: absolute; left: 50%; bottom: calc(100% + 4px); transform: translateX(-50%); z-index: 20;
+  display: none; flex-direction: column; gap: 3px; min-width: max(100%, 92px);
+}
+.duel-card.is-clickable:hover > .duel-quick, .duel-card:focus-within > .duel-quick { display: flex; }
+.duel-quick button {
+  font-size: 12px; font-weight: 700; padding: 4px 8px; white-space: nowrap; border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent); border: 1px solid var(--accent); color: var(--fg);
+  box-shadow: 0 4px 12px rgb(0 0 0 / .45); backdrop-filter: blur(4px);
+}
+.duel-quick button:hover { background: var(--accent); color: var(--accent-fg); }
+/* field cards: buttons over the card instead of above it (the tilt would push them away) */
+.duel-slot .duel-quick { bottom: auto; top: 50%; transform: translate(-50%, -50%); }
+/* opponent-side cards are rotated: keep the buttons readable */
+.duel-zone.is-opp-side .duel-quick { rotate: 180deg; }
+
+/* ---------- ⋯ More (tools pop-up) ---------- */
+.duel-more { position: relative; }
+.duel-more-btn { width: 100%; font-size: 12px; padding: 4px 8px; background: color-mix(in srgb, var(--surface) 55%, transparent); }
+.duel-more-panel {
+  position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 30; width: max-content; min-width: 100%; max-width: 260px;
+  display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent); border: 1px solid var(--border); box-shadow: var(--shadow); backdrop-filter: blur(6px);
+}
+.duel-more-panel button { text-align: left; font-size: 12px; padding: 5px 10px; }
+@media (max-width: 1000px) {
+  :where(html:not(.duel-scaled)) .duel-more-panel { position: static; width: auto; max-width: none; }
+}
+
+/* ---------- Recent: folds away ---------- */
+.duel-recent-head { display: flex; justify-content: space-between; align-items: center; }
+.duel-recent-log { padding: 0; border: 0; background: none; font-size: 11px; color: var(--muted); cursor: pointer; }
+.duel-recent-log:hover { color: var(--accent); }
+.duel-recent.is-folded { padding: 4px 8px; }
+
+/* the floating card preview lives in the upper area, clear of the bottom-right action cluster;
+   while a decision dock is open on the right it stays on the left */
+@media (min-width: 1001px) {
+  .duel-page.is-live .duel-floatpreview { top: 56px; transform: translate(-12px, 0); max-height: calc(calc(100 * var(--vh, 1vh)) - 260px); overflow: hidden; }
+  .duel-page.is-live .duel-floatpreview.is-shown { transform: none; }
+  .duel-page.is-live .duel-floatpreview.is-right { transform: translate(12px, 0); }
+  .duel-page.is-live .duel-floatpreview.is-right.is-shown { transform: none; }
+  .duel-page.is-live[data-engine-bar] .duel-floatpreview.is-right { left: 12px; right: auto; }
+}
+/* scaled-copy:start */
+:where(html.duel-scaled) .duel-page.is-live .duel-floatpreview { top: 56px; transform: translate(-12px, 0); max-height: calc(calc(100 * var(--vh, 1vh)) - 260px); overflow: hidden; }
+:where(html.duel-scaled) .duel-page.is-live .duel-floatpreview.is-shown { transform: none; }
+:where(html.duel-scaled) .duel-page.is-live .duel-floatpreview.is-right { transform: translate(12px, 0); }
+:where(html.duel-scaled) .duel-page.is-live .duel-floatpreview.is-right.is-shown { transform: none; }
+:where(html.duel-scaled) .duel-page.is-live[data-engine-bar] .duel-floatpreview.is-right { left: 12px; right: auto; }
+/* scaled-copy:end */
+
+
+
+
+
+
+
+
+
+
+
+
+@media (min-width: 1001px) {
+  /* the dock fits the strip beside the field (as wide as the action cluster); wider on big screens */
+  .duel-page.is-live .duel-engine-bar .duel-chain-options button { grid-template-columns: 30px 1fr; padding: 5px 6px; gap: 6px; }
+  .duel-page.is-live .duel-engine-bar .duel-chain-thumb { --cw: 30px; }
+  .duel-page.is-live .duel-engine-bar .duel-chain-go { display: none; }
+  .duel-page.is-live .duel-engine-bar-hint { font-size: 13px; }
+}
+/* scaled-copy:start */
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar .duel-chain-options button { grid-template-columns: 30px 1fr; padding: 5px 6px; gap: 6px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar .duel-chain-thumb { --cw: 30px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar .duel-chain-go { display: none; }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar-hint { font-size: 13px; }
+/* scaled-copy:end */
+
+
+
+
+
+
+
+
+
+
+
+@media (min-width: 1700px) {
+  .duel-page.is-live .duel-engine-bar { width: 260px; }
+  .duel-page.is-live .duel-board-wrap > .duel-corner { width: 260px; }
+  .duel-page.is-live .duel-engine-bar .duel-chain-options button { grid-template-columns: 38px 1fr auto; }
+  .duel-page.is-live .duel-engine-bar .duel-chain-thumb { --cw: 38px; }
+  .duel-page.is-live .duel-engine-bar .duel-chain-go { display: inline; }
+}
+/* scaled-copy:start */
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar { width: 260px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-board-wrap > .duel-corner { width: 260px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar .duel-chain-options button { grid-template-columns: 38px 1fr auto; }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar .duel-chain-thumb { --cw: 38px; }
+:where(html.duel-scaled) .duel-page.is-live .duel-engine-bar .duel-chain-go { display: inline; }
+/* scaled-copy:end */
+
+
+
+
+
+
+
+
+
+
+
+
+/* ---------- dock: minimize / back signals ---------- */
+.duel-engine-bar-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.duel-engine-bar-min { padding: 0 8px; font-size: 16px; line-height: 1.2; border-radius: 6px; background: none; border: 1px solid var(--border); color: var(--muted); }
+.duel-engine-bar-min:hover { color: var(--fg); border-color: var(--accent); }
+.duel-engine-bar-noback { display: block; font-size: 11px; color: var(--muted); text-align: center; }
+.duel-decision-pill {
+  position: fixed; z-index: 46; right: 12px; bottom: 164px; max-width: 260px; text-align: left;
+  padding: 7px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: var(--accent); color: var(--accent-fg); border: 0; box-shadow: var(--shadow); animation: forward-pulse 1.6s ease-in-out infinite;
+}
+.duel-decision-pill kbd { font-size: 10px; padding: 1px 4px; border: 1px solid currentColor; border-radius: 4px; margin-left: 4px; opacity: .8; }
+@media (max-width: 1000px) {
+  :where(html:not(.duel-scaled)) .duel-decision-pill { left: 8px; right: 8px; bottom: 8px; max-width: none; }
+}
+@media (prefers-reduced-motion: reduce) { .duel-decision-pill { animation: none; } }
+/* recent: the newest line is "now" */
+.duel-recent-now { display: inline-block; margin-right: 5px; padding: 0 5px; border-radius: 4px; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; background: var(--accent); color: var(--accent-fg); vertical-align: 1px; }
+.duel-recent .duel-log-card { cursor: zoom-in; }
+
+/* the board clips to its own frame (the opponent's hand peeks from the top edge without covering the top bar) */
+@media (min-width: 1001px) {
+  .duel-page.is-live .duel-board-wrap { overflow: clip; }
+  .duel-page.is-live .duel-topline { position: relative; z-index: 30; }
+}
+/* scaled-copy:start */
+:where(html.duel-scaled) .duel-page.is-live .duel-board-wrap { overflow: clip; }
+:where(html.duel-scaled) .duel-page.is-live .duel-topline { position: relative; z-index: 30; }
+/* scaled-copy:end */
+
+
+
+
+
+
+
+
+
+
+
+
+/* ---------- LP hits: a big number over that player's half + a flash at the screen edge ---------- */
+.duel-lp-hit { position: fixed; inset: 0; z-index: 40; pointer-events: none; display: flex; justify-content: center; }
+.duel-lp-hit.is-top { align-items: flex-start; padding-top: calc(18 * var(--vh, 1vh)); }
+.duel-lp-hit.is-bottom { align-items: flex-end; padding-bottom: calc(30 * var(--vh, 1vh)); }
+.duel-lp-hit b {
+  font-size: clamp(48px, calc(9 * var(--vh, 1vh)), 96px); font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: -.02em;
+  -webkit-text-stroke: 2px rgb(0 0 0 / .55); text-shadow: 0 6px 24px rgb(0 0 0 / .6);
+  animation: duel-lp-hit 1.4s cubic-bezier(.2, .8, .3, 1) forwards;
+}
+.duel-lp-hit.is-down b { color: var(--danger); }
+.duel-lp-hit.is-up b { color: var(--ok); }
+.duel-lp-hit::before { content: ""; position: absolute; inset: 0; animation: duel-lp-edge 1s ease-out forwards; }
+.duel-lp-hit.is-down::before { box-shadow: inset 0 0 120px 30px color-mix(in srgb, var(--danger) 70%, transparent); }
+.duel-lp-hit.is-up::before { box-shadow: inset 0 0 120px 30px color-mix(in srgb, var(--ok) 55%, transparent); }
+@keyframes duel-lp-hit {
+  0% { opacity: 0; transform: scale(.4); }
+  15% { opacity: 1; transform: scale(1.15); }
+  30% { transform: scale(1); }
+  75% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-40px) scale(.95); }
+}
+@keyframes duel-lp-edge { from { opacity: 1; } to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .duel-lp-hit b { animation: none; } .duel-lp-hit::before { animation: none; opacity: 0; } }
+
+/* ---------- calm panels: the side panels fade back until you point at them (⚙ setting) ---------- */
+@media (min-width: 1001px) {
+  .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail,
+  .duel-page.is-live.is-calm .duel-board-wrap > .duel-plate .duel-pcounts,
+  .duel-page.is-live.is-calm .duel-board-wrap > .duel-plate .duel-pinfo,
+  .duel-page.is-live.is-calm .duel-more-btn { opacity: .5; transition: opacity .2s ease; }
+  .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail:hover,
+  .duel-page.is-live.is-calm .duel-board-wrap > .duel-plate:hover .duel-pcounts,
+  .duel-page.is-live.is-calm .duel-board-wrap > .duel-plate:hover .duel-pinfo,
+  .duel-page.is-live.is-calm .duel-more-btn:hover, .duel-page.is-live.is-calm .duel-more-btn[aria-expanded="true"] { opacity: 1; }
+  .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail { background: transparent; border-color: transparent; box-shadow: none; backdrop-filter: none; }
+  .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail:hover { background: var(--plate-bg); }
+}
+/* scaled-copy:start */
+:where(html.duel-scaled) .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail, :where(html.duel-scaled) .duel-page.is-live.is-calm .duel-board-wrap > .duel-plate .duel-pcounts, :where(html.duel-scaled) .duel-page.is-live.is-calm .duel-board-wrap > .duel-plate .duel-pinfo, :where(html.duel-scaled) .duel-page.is-live.is-calm .duel-more-btn { opacity: .5; transition: opacity .2s ease; }
+:where(html.duel-scaled) .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail:hover, :where(html.duel-scaled) .duel-page.is-live.is-calm .duel-board-wrap > .duel-plate:hover .duel-pcounts, :where(html.duel-scaled) .duel-page.is-live.is-calm .duel-board-wrap > .duel-plate:hover .duel-pinfo, :where(html.duel-scaled) .duel-page.is-live.is-calm .duel-more-btn:hover, :where(html.duel-scaled) .duel-page.is-live.is-calm .duel-more-btn[aria-expanded="true"] { opacity: 1; }
+:where(html.duel-scaled) .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail { background: transparent; border-color: transparent; box-shadow: none; backdrop-filter: none; }
+:where(html.duel-scaled) .duel-page.is-live.is-calm .duel-board-wrap > .duel-rail:hover { background: var(--plate-bg); }
+/* scaled-copy:end */
+
+
+
+
+
+
+
+
+
+
+
+/* no glass box when the status column has nothing to say */
+.duel-status .duel-engine:empty { display: none; }
+@media (min-width: 1001px) {
+  .duel-page.is-live .duel-board-wrap > .duel-status:not(:has(> :not(.duel-engine:empty))) { background: none; border-color: transparent; box-shadow: none; backdrop-filter: none; padding: 0; }
+}
+/* scaled-copy:start */
+:where(html.duel-scaled) .duel-page.is-live .duel-board-wrap > .duel-status:not(:has(> :not(.duel-engine:empty))) { background: none; border-color: transparent; box-shadow: none; backdrop-filter: none; padding: 0; }
+/* scaled-copy:end */
+
+
+
+
+
+
+
+
+
+
+
+
+/* ---------- phases in the middle row's empty cells ---------- */
+.duel-gap { display: flex; align-items: center; justify-content: center; min-width: 0; }
+.duel-phasecell { display: flex; flex-direction: column; justify-content: center; gap: calc(var(--cw) * .06); width: 100%; height: 100%; padding: calc(var(--cw) * .04) 0; }
+.duel-phasebtn {
+  flex: 1 1 0; min-height: 0; max-height: calc(var(--cw) * .5); padding: 0; border-radius: calc(var(--cw) * .1);
+  font-size: clamp(11px, calc(var(--cw) * .2), 26px); font-weight: 900; letter-spacing: .06em;
+  background: color-mix(in srgb, var(--surface) 35%, transparent); color: var(--muted);
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+.duel-phasebtn:disabled { opacity: 1; cursor: default; }
+.duel-phasebtn.is-past { color: color-mix(in srgb, var(--muted) 45%, transparent); background: transparent; }
+.duel-phasebtn.is-next:not(:disabled) { color: var(--accent); border-color: var(--accent); cursor: pointer; }
+.duel-phasebtn.is-next:not(:disabled):hover { background: var(--accent-soft); }
+.duel-phasebtn.is-active { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 70%, transparent); }
+.duel-page[data-phase="battle"] .duel-phasebtn.is-active { background: var(--ph-battle); border-color: var(--ph-battle); box-shadow: 0 0 16px var(--ph-battle); }
+.duel-page[data-phase="main2"] .duel-phasebtn.is-active { background: var(--ph-main2); border-color: var(--ph-main2); }
+.duel-page[data-phase="end"] .duel-phasebtn.is-active { background: var(--ph-end); border-color: var(--ph-end); }
+.duel-phasebtn.duel-next-phase { display: block; padding: 0; }
+.duel-phasecell-end { flex: 1.3 1 0; max-height: calc(var(--cw) * .62); padding: 0; font-size: clamp(11px, calc(var(--cw) * .15), 20px); border-radius: calc(var(--cw) * .1); }
+
+/* turn badge (left rail) */
+.duel-turnbadge { display: flex; flex-direction: column; gap: 1px; padding: 6px 8px; }
+.duel-turnbadge b { font-size: 16px; font-weight: 900; letter-spacing: .03em; }
+.duel-turnbadge span { font-size: 11px; color: var(--muted); }
+.duel-turnbadge.is-mine b { color: var(--accent); }
+.duel-rail .duel-more { margin-top: 4px; }
+.duel-rail .duel-more-panel { bottom: auto; top: calc(100% + 6px); left: 0; right: auto; }
+
+/* ---------- layout settings (⚙ > Layout) ---------- */
+@media (min-width: 1001px) {
+  .duel-page.is-live .duel-field { translate: 0 calc(var(--field-y, 0) * var(--cw)); }
+  .duel-page.is-live.is-tilt .duel-board-wrap { perspective: var(--persp, 1500px); perspective-origin: 50% var(--persp-y, 100%); }
+  .duel-page.is-live .duel-hand.is-own { transform: translate(-50%, var(--hand-drop, 55%)); }
+  .duel-page.is-live .duel-hand.is-opp { transform: translate(-50%, var(--opp-hand-drop, -65%)); --hw: calc(var(--cw) * .72 * var(--opp-hand-scale, 1)); }
+}
+/* scaled-copy:start */
+:where(html.duel-scaled) .duel-page.is-live .duel-field { translate: 0 calc(var(--field-y, 0) * var(--cw)); }
+:where(html.duel-scaled) .duel-page.is-live.is-tilt .duel-board-wrap { perspective: var(--persp, 1500px); perspective-origin: 50% var(--persp-y, 100%); }
+:where(html.duel-scaled) .duel-page.is-live .duel-hand.is-own { transform: translate(-50%, var(--hand-drop, 55%)); }
+:where(html.duel-scaled) .duel-page.is-live .duel-hand.is-opp { transform: translate(-50%, var(--opp-hand-drop, -65%)); --hw: calc(var(--cw) * .72 * var(--opp-hand-scale, 1)); }
+/* scaled-copy:end */
+
+
+
+
+
+
+
+
+
+
+
+.duel-setting-layout { border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; display: flex; flex-direction: column; gap: 8px; }
+.duel-setting-layout summary { cursor: pointer; font-weight: 700; font-size: 13px; }
+.duel-setting-layout[open] summary { margin-bottom: 6px; }
+.duel-page.is-live .duel-phasecell .duel-phasebtn { padding: 0; font-size: clamp(11px, calc(var(--cw) * .2), 26px); display: block; }
+.duel-page.is-live .duel-phasecell .duel-phasecell-end { padding: 0; font-size: clamp(11px, calc(var(--cw) * .15), 20px); }
+/* the settings panel scrolls inside the window; the page itself never scrolls sideways */
+.duel-settings-panel { max-height: calc(calc(100 * var(--vh, 1vh)) - 70px); overflow-y: auto; overscroll-behavior: contain; }
+@media (min-width: 1001px) { .duel-page.is-live { overflow: clip; } }
+/* scaled-copy:start */
+:where(html.duel-scaled) .duel-page.is-live { overflow: clip; }
+/* scaled-copy:end */
+
+
+
+
+
+
+
+
+
+
+
+
+/* ---------- settings panel sections ---------- */
+.duel-setting-section { border-top: 1px solid var(--border); padding-top: 8px; }
+.duel-setting-section > summary { cursor: pointer; font-weight: 800; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); list-style: none; display: flex; justify-content: space-between; }
+.duel-setting-section > summary::-webkit-details-marker { display: none; }
+.duel-setting-section > summary::after { content: "▸"; transition: rotate .15s ease; }
+.duel-setting-section[open] > summary::after { rotate: 90deg; }
+.duel-setting-section[open] > summary { color: var(--fg); margin-bottom: 10px; }
+.duel-setting-section-body { display: grid; gap: 12px; }
+.duel-setting-group { display: grid; gap: 10px; }
+.duel-setting-grouptitle { font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: .05em; }
+
+/* ---------- Turn / log: right under the opponent's LP (top left) ---------- */
+@media (min-width: 1001px) {
+  .duel-page.is-live .duel-board-wrap > .duel-rail {
+    top: var(--rail-top, 118px); transform: none; bottom: auto; width: min(var(--side), 220px);
+    max-height: calc(100% - var(--rail-top, 118px) - 150px); overflow: auto;
+  }
+  .duel-page.is-live .duel-rail .duel-recent ol { max-height: none; }
+  .duel-page.is-live .duel-rail .duel-recent li { font-size: 12px; line-height: 1.35; }
+}
+/* scaled-copy:start */
+:where(html.duel-scaled) .duel-page.is-live .duel-board-wrap > .duel-rail {
+    top: var(--rail-top, 118px); transform: none; bottom: auto; width: min(var(--side), 220px);
+    max-height: calc(100% - var(--rail-top, 118px) - 150px); overflow: auto;
+  }
+:where(html.duel-scaled) .duel-page.is-live .duel-rail .duel-recent ol { max-height: none; }
+:where(html.duel-scaled) .duel-page.is-live .duel-rail .duel-recent li { font-size: 12px; line-height: 1.35; }
+/* scaled-copy:end */
+
+
+
+
+
+
+
+
+
+
+
+
+/* ---------- whose turn: bottom right, a heartbeat when it is yours ---------- */
+@media (min-width: 1001px) {
+  .duel-page.is-live .duel-board-wrap > .duel-corner { right: 16px; bottom: 14px; width: auto; min-width: 150px; align-items: flex-end; }
+}
+/* scaled-copy:start */
+:where(html.duel-scaled) .duel-page.is-live .duel-board-wrap > .duel-corner { right: 16px; bottom: 14px; width: auto; min-width: 150px; align-items: flex-end; }
+/* scaled-copy:end */
+
+
+
+
+
+
+
+
+
+
+
+.duel-turnsign { display: flex; flex-direction: column; align-items: flex-end; text-align: right; pointer-events: none; user-select: none; }
+.duel-turnsign b { font-family: var(--font-field, inherit); font-size: clamp(22px, calc(3.4 * var(--vh, 1vh)), 38px); font-weight: 900; line-height: 1; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+.duel-turnsign small { margin-top: 4px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.duel-turnsign.is-mine b, .duel-turnsign.is-acting b {
+  color: var(--accent); transform-origin: 100% 50%;
+  text-shadow: 0 0 18px color-mix(in srgb, var(--accent) 70%, transparent), 0 2px 0 rgb(0 0 0 / .35);
+  animation: turn-heartbeat 1.3s ease-in-out infinite;
+}
+.duel-turnsign.is-acting b { color: var(--warn, #ffb347); text-shadow: 0 0 22px color-mix(in srgb, var(--warn, #ffb347) 80%, transparent); animation-duration: .9s; }
+.duel-turnsign.is-mine.is-waiting b { animation: none; opacity: .7; }
+.duel-turnsign.is-theirs { opacity: .42; filter: grayscale(1); }
+.duel-turnsign.is-theirs b { font-size: clamp(16px, calc(2.4 * var(--vh, 1vh)), 26px); }
+@keyframes turn-heartbeat {
+  0%, 40%, 100% { transform: scale(1); }
+  12% { transform: scale(1.14); }
+  24% { transform: scale(1.02); }
+  32% { transform: scale(1.09); }
+}
