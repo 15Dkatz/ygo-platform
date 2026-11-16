@@ -9,6 +9,7 @@
     "preview": "npm run build && vite preview",
     "deploy": "npm run build && wrangler deploy",
     "e2e": "playwright test",
+    "dev:worker": "node scripts/dev-worker.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:engine": "vitest run src/worker/duel/engine/combos.test.ts src/worker/duel/engine/mechanics.test.ts src/worker/duel/engine/extraDeck.test.ts",
