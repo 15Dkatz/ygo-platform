@@ -331,7 +331,7 @@ export function DeckBuilder({ deckId, onClose, onSaved }: { deckId: string | und
                           <CardImage card={c} />
                           <RarityFoil rarity={rar} type={c.type} code={id} />
                           {rar !== "common" && <span className={`rarity-badge r-${isPreset(rar) ? rar : "custom"}`} title={rarityLabel(rar)}>{rarityShort(rar)}</span>}
-                          {format === "genesys" && (genesysExcluded(c) || (points !== null && points > 0)) && <span className="db-card-points">{genesysExcluded(c) ? "Not allowed" : `${points} pts`}</span>}
+                          {format === "genesys" && (genesysExcluded(c) || (points !== null && points > 0)) && <span className="db-card-points">{genesysExcluded(c) ? "Not allowed" : points === 1 ? "1pt" : `${points} pts`}</span>}
                           {lim < 3 && <span className={`cs-ban ban-${lim}`}>{lim}</span>}
                         </button>
                       );

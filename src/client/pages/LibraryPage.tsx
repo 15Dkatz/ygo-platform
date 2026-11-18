@@ -91,7 +91,7 @@ const Tile = memo(function Tile({ card: c, copies, display: d, onOpen, genesys }
   return (
     <button type="button" className="lib-tile" onClick={() => onOpen(c)} {...previewHandlers(c)}>
       {d.img && <CardImage card={c} />}
-      <b className="t-name">{c.name}{genesys && points !== null && points > 0 ? ` · ${points} pts` : ""}</b>
+      <b className="t-name">{c.name}{genesys && points !== null && points > 0 ? ` · ${points === 1 ? "1pt" : `${points} pts`}` : ""}</b>
       {d.tier && <small className={`tier-badge tier-${c.tier}`}>{c.tier ? `Tier ${c.tier}${c.tier_src === "yours" ? "" : " (est.)"}` : " "}</small>}
       {d.kind && <small>{[c.kind, c.attribute, lv].filter(Boolean).join(" · ") || " "}</small>}
       {d.stat && <small>{c.atk !== null ? `ATK ${c.atk}` : ""}{c.defense !== null ? ` / DEF ${c.defense}` : ""}{c.atk === null && c.defense === null ? " " : ""}</small>}
