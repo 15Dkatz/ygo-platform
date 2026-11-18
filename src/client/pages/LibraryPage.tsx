@@ -16,6 +16,8 @@ import { summaryText } from "../components/library/importYdk.ts";
 import { CardDialog } from "../components/library/CardDialog.tsx";
 import { VirtualRows } from "../components/library/VirtualRows.tsx";
 import "./LibraryPage.css";
+import { FormatSelector, useDeckFormat } from "../components/library/FormatSelector.tsx";
+import { genesysPoints } from "../../shared/formats.ts";
 
 // ----------------------------------------------------------------------------- options
 const SORT_OPTIONS: [SortKey, string][] = [
@@ -72,23 +74,24 @@ function loadPrefs(): UiPrefs {
 // buildLibrary (relations over ~9k cards) is the expensive step; keep the last result for the
 // session so coming back to the page is instant. Custom tags are applied on top (cheap).
 let baseCache: { sig: string; cards: LibraryCard[] } | null = null;
-function deriveBase(decks: Deck[], countMode: CountMode): LibraryCard[] {
-  const sig = `${countMode}|${catalog.version}|${decks.map((d) => `${d.id}@${d.updated_at}`).join(",")}`;
+function deriveBase(decks: Deck[], countMode: CountMode, includeUnresolved: boolean): LibraryCard[] {
+  const sig = `${includeUnresolved}|${countMode}|${catalog.version}|${decks.map((d) => `${d.id}@${d.updated_at}`).join(",")}`;
   if (baseCache?.sig === sig) return baseCache.cards;
-  const cards = buildLibrary(decks, catalog.cards, catalog.alias, {}, { countMode });
+  const cards = buildLibrary(decks, catalog.cards, catalog.alias, {}, { countMode, includeUnresolved });
   baseCache = { sig, cards };
   return cards;
 }
 
 // ----------------------------------------------------------------------------- tiles
-interface TileProps { card: LibraryCard; copies: number; display: Display; onOpen: (c: LibraryCard) => void }
-const Tile = memo(function Tile({ card: c, copies, display: d, onOpen }: TileProps) {
+interface TileProps { card: LibraryCard; copies: number; display: Display; onOpen: (c: LibraryCard) => void; genesys?: boolean }
+const Tile = memo(function Tile({ card: c, copies, display: d, onOpen, genesys }: TileProps) {
   const lv = levelLabel(c);
+  const points = genesysPoints(c);
   const dd = Object.values(c.deck_dates).map((x) => x.modified).filter(Boolean).sort()[0];
   return (
     <button type="button" className="lib-tile" onClick={() => onOpen(c)} {...previewHandlers(c)}>
       {d.img && <CardImage card={c} />}
-      <b className="t-name">{c.name}</b>
+      <b className="t-name">{c.name}{genesys && points !== null && points > 0 ? ` · ${points} pts` : ""}</b>
       {d.tier && <small className={`tier-badge tier-${c.tier}`}>{c.tier ? `Tier ${c.tier}${c.tier_src === "yours" ? "" : " (est.)"}` : " "}</small>}
       {d.kind && <small>{[c.kind, c.attribute, lv].filter(Boolean).join(" · ") || " "}</small>}
       {d.stat && <small>{c.atk !== null ? `ATK ${c.atk}` : ""}{c.defense !== null ? ` / DEF ${c.defense}` : ""}{c.atk === null && c.defense === null ? " " : ""}</small>}
@@ -148,22 +151,33 @@ export function LibraryPage() {
     try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch { /* storage blocked */ }
   }, [prefs]);
 
+  const loadController = useRef<AbortController | null>(null);
+  const [format, setFormat] = useDeckFormat();
   const load = useCallback(async () => {
+    loadController.current?.abort();
+    const controller = new AbortController();
+    loadController.current = controller;
     setError(null);
     try {
       const [ds, ts] = await Promise.all([store.list(), store.getTags()]);
+      if (controller.signal.aborted) return;
       setTagsState(ts);
-      const ids = ds.flatMap((d) => [...d.main, ...d.extra, ...d.side]);
-      await ensureCards(ids, (done, total) => setLoading(total ? { done, total } : null));
       setDecks(ds);
+      const ids = ds.flatMap((d) => [...d.main, ...d.extra, ...d.side]);
+      await ensureCards(ids, (done, total) => {
+        if (controller.signal.aborted) return;
+        setLoading(done < total ? { done, total } : null);
+        setCatVersion(catalog.version);
+      }, { signal: controller.signal, batchSize: 500 });
+      if (controller.signal.aborted) return;
       setCatVersion(catalog.version);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      if (!controller.signal.aborted) setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setLoading(null);
+      if (!controller.signal.aborted) setLoading(null);
     }
   }, [store]);
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(); return () => loadController.current?.abort(); }, [load]);
   useEffect(() => {
     const on = () => void load();
     window.addEventListener("ygo:decks-changed", on);
@@ -171,7 +185,7 @@ export function LibraryPage() {
   }, [load]);
 
   // ---- derivation (memoised: decks/catalogue -> base; + custom tags -> library)
-  const base = useMemo(() => (decks && catVersion >= 0 ? deriveBase(decks, prefs.countMode) : []), [decks, catVersion, prefs.countMode]);
+  const base = useMemo(() => (decks && catVersion >= 0 ? deriveBase(decks, prefs.countMode, !loading) : []), [decks, catVersion, prefs.countMode, !!loading]);
   const library = useMemo(() => {
     const copy = base.map((c) => ({ ...c }));
     computeTags(copy, tags);
@@ -264,7 +278,7 @@ export function LibraryPage() {
     const ro = new ResizeObserver(() => setTileH(el.offsetHeight));
     ro.observe(el);
     return () => ro.disconnect();
-  }, [tileW, prefs.display, prefs.view, library.length]);
+  }, [tileW, prefs.display, prefs.view, library.length, format]);
 
   const isGrid = prefs.view === "grid";
   const rowH = isGrid ? (tileH || 300) + GAP : 34;
@@ -287,7 +301,8 @@ export function LibraryPage() {
   const heightOf = useCallback((i: number) => (rows[i].type === "head" ? HEAD_H : rowH), [rows, rowH]);
 
   const openCard = useCallback((c: LibraryCard) => setOpen(c), []);
-  const listCols = LIST_COLS.filter((c) => !c.show || prefs.display[c.show]);
+  const pointColumn: (typeof LIST_COLS)[number] = { key: "points", label: "Points", w: 64, get: (c: LibraryCard) => { const points = genesysPoints(c); return points !== null && points > 0 ? points : ""; } };
+  const listCols = [...(format === "genesys" ? [pointColumn] : []), ...LIST_COLS].filter((c) => !c.show || prefs.display[c.show]);
   const listTemplate = listCols.map((c) => `${c.w}px`).join(" ");
   const listWidth = listCols.reduce((s, c) => s + c.w, 0);
 
@@ -306,7 +321,7 @@ export function LibraryPage() {
     if (isGrid) {
       return (
         <div className="lib-grid-row" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gap: GAP }}>
-          {r.cards.map((c) => <Tile key={c.id} card={c} copies={copies(c)} display={prefs.display} onOpen={openCard} />)}
+          {r.cards.map((c) => <Tile genesys={format === "genesys"} key={c.id} card={c} copies={copies(c)} display={prefs.display} onOpen={openCard} />)}
         </div>
       );
     }
@@ -321,7 +336,7 @@ export function LibraryPage() {
         ))}
       </div>
     );
-  }, [rows, isGrid, cols, prefs.display, openCard, listCols, listTemplate, listWidth]);
+  }, [rows, isGrid, cols, prefs.display, openCard, listCols, listTemplate, listWidth, format]);
 
   // ---- tag editing
   const saveTags = async (next: CustomTags, msg?: string) => {
@@ -400,6 +415,8 @@ export function LibraryPage() {
   const sample = library[0];
   return (
     <section className="library">
+      {loading && <div role="status">Loading card data… {loading.done.toLocaleString()} / {loading.total.toLocaleString()} ids <progress max={loading.total} value={loading.done} /></div>}
+      <FormatSelector format={format} onChange={setFormat} />
       <div className="lib-head">
         <h1>Library <span className="muted lib-sub">· {library.length.toLocaleString()} cards from {decks.length} deck{decks.length === 1 ? "" : "s"}</span></h1>
         <details className="lib-menu">
@@ -544,7 +561,7 @@ export function LibraryPage() {
       <div ref={wrapRef} className={`lib-results${isGrid ? "" : " list"}`}>
         {sample && isGrid && (
           <div className="lib-probe" aria-hidden="true" style={{ width: tileW }} ref={probeRef}>
-            <Tile card={sample} copies={1} display={prefs.display} onOpen={() => {}} />
+            <Tile genesys={format === "genesys"} card={sample} copies={1} display={prefs.display} onOpen={() => {}} />
           </div>
         )}
         {sorted.length === 0 ? (

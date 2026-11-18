@@ -19,7 +19,8 @@
     "cards:import:remote": "node --experimental-strip-types scripts/import-cards.ts --remote",
     "cf-typegen": "wrangler types",
     "engine:import:local": "node --experimental-sqlite --experimental-strip-types scripts/import-engine-data.ts --local --all-scripts",
-    "engine:import:remote": "node --experimental-sqlite --experimental-strip-types scripts/import-engine-data.ts --remote --all-scripts"
+    "engine:import:remote": "node --experimental-sqlite --experimental-strip-types scripts/import-engine-data.ts --remote --all-scripts",
+    "genesys:update": "node --experimental-strip-types scripts/update-genesys.ts"
   },
   "dependencies": {
     "hono": "^4.13.16",

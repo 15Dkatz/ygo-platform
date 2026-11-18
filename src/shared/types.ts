@@ -40,6 +40,7 @@ export interface Card {
 export interface Deck {
   id: string;            // uuid
   name: string;
+  starred?: boolean;
   main: number[];        // one entry per copy, in .ydk order
   extra: number[];
   side: number[];
