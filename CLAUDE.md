@@ -20,13 +20,14 @@ Live: https://ygo-platform.stevenbliu.workers.dev · repo stevenbliu/ygo-platfor
 - `npm test` (vitest, ~190 tests) · `npm run typecheck` · `npm run build` (tsc + vite)
 - `npm run dev:worker`: wrangler dev on :8788 serving the last build, with a memory guard (restarts past
   `DEV_MEM_LIMIT_MB`, log in `.wrangler/dev-memory.log`). `npm run dev` is plain vite.
+- `npm run genesys:update`: refresh the bundled official TCG points in `src/shared/genesysPoints.ts`; review the diff.
 - `npm run e2e`: Playwright smoke test (`e2e/*.e2e.ts`) against `BASE_URL` (default localhost:8788).
 - `node scripts/long-demo.mjs [secs]`: long demo duel against localhost (memory diagnostics).
 - CI (`.github/workflows/deploy.yml`) on push to main: tests, D1 migrations, deploy, e2e against the live site.
 
 ## Map
 - `src/shared/`: types and pure logic used by both sides (duel.ts messages/board, duelActions, enginePrompts,
-  autoPass, chain, clock, phases, roomSettings, sleeves, profile, rarity, starterDecks).
+  autoPass, chain, clock, phases, roomSettings, sleeves, profile, rarity, starterDecks, formats, genesysPoints, genesysAdditions).
 - `src/worker/`: `index.ts` (Hono app), `routes/` (auth, cards, decks, duel, engine, images), `auth/`.
   - `duel/DuelRoom.ts`: the room DO (seats, lobby, chat, clocks, bot, engine updates). Constants and stored
     shapes in `roomState.ts`; host-update checks in `hostUpdate.ts`.

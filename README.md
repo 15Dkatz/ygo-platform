@@ -29,6 +29,10 @@ npm run dev                  # http://localhost:5173
 - Pages read and write decks only through `useDeckStore()`.
 - D1 statements bind at most ~90 parameters; chunk bigger `IN (...)` lists.
 
+Deck stars are saved with each deck (browser storage for guests, D1 for accounts) and can be filtered. The library renders card batches as they arrive and virtualizes both grid and list views.
+
+The format selector defaults to the latest bundled TCG Genesys list, including the November 13, 2026 MAMS additions linked in the editor. The deck editor shows per-copy points and Main/Extra/Side totals against the standard 100-point cap. Refresh the official snapshot with `npm run genesys:update` and review the diff. Format checks are deck-building guidance; duel rooms still use their existing engine rules.
+
 ## Rules engine (phase 4)
 
 Rules-enforced duels run EDOPro's core (ygopro-core, AGPL-3.0) as WebAssembly inside the

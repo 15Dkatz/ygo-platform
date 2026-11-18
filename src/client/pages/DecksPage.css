@@ -39,3 +39,7 @@ button.danger:hover { border-color: var(--danger); }
 .decks-starters ul { list-style: none; margin: 6px 0 4px; padding: 0; display: grid; gap: 6px; }
 .decks-starters li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .decks-starters li button { margin-left: auto; font-size: 12px; padding: 3px 10px; }
+
+.deck-title { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.deck-title button { flex-shrink: 0; padding: 4px 7px; font-size: 13px; }
+.deck-title button[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }

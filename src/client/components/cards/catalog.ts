@@ -41,16 +41,18 @@ const CHUNK = 2000;
  * Make sure every id is resolved (alias -> canonical card, or marked missing).
  * `onProgress(done, total)` is called after each request.
  */
-export async function ensureCards(ids: Iterable<number>, onProgress?: (done: number, total: number) => void): Promise<void> {
+export async function ensureCards(ids: Iterable<number>, onProgress?: (done: number, total: number) => void, options: { signal?: AbortSignal; batchSize?: number } = {}): Promise<void> {
   const todo = [...new Set(ids)].filter((id) => !alias.has(id) && !missing.has(id));
   onProgress?.(0, todo.length);
-  for (let i = 0; i < todo.length; i += CHUNK) {
-    const chunk = todo.slice(i, i + CHUNK);
-    const r = await api<LookupResult>("/api/cards/lookup", { method: "POST", json: { ids: chunk } });
+  const batch = options.batchSize ?? CHUNK;
+  for (let i = 0; i < todo.length; i += batch) {
+    options.signal?.throwIfAborted();
+    const chunk = todo.slice(i, i + batch);
+    const r = await api<LookupResult>("/api/cards/lookup", { method: "POST", json: { ids: chunk }, signal: options.signal });
     for (const c of r.cards) cards.set(c.id, c);
     for (const [raw, canon] of Object.entries(r.alias)) alias.set(Number(raw), canon);
     for (const id of r.missing) missing.add(id);
     version++;
-    onProgress?.(Math.min(todo.length, i + CHUNK), todo.length);
+    onProgress?.(Math.min(todo.length, i + batch), todo.length);
   }
 }

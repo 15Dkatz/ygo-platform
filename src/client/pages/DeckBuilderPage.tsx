@@ -20,6 +20,10 @@ import "./DeckBuilderPage.css";
 import { SleevePicker, SleeveSwatch } from "../components/cards/SleevePicker.tsx";
 import { LETTERINGS, LETTERING_LABEL, PICTURES, PICTURE_LABEL, RARITIES, RARITY_LABEL, RARITY_SHORT, foilOf, foilParts, isPreset, rarityLabel, rarityOf, rarityShort, type Rarity } from "../../shared/rarity.ts";
 import { RarityFoil, useFoilPointer } from "../components/cards/Rarity.tsx";
+import { FORMAT_LABEL, genesysExcluded, genesysPoints, genesysSummary, type DeckFormat } from "../../shared/formats.ts";
+import { GENESYS_ADDITIONS_SOURCE } from "../../shared/genesysAdditions.ts";
+import { GENESYS_CHECKED, GENESYS_SOURCE } from "../../shared/genesysPoints.ts";
+import { FormatSelector, useDeckFormat } from "../components/library/FormatSelector.tsx";
 import { cardImage } from "../api.ts";
 
 const SECTIONS: { key: Section; label: string; min?: number; max: number }[] = [
@@ -38,8 +42,7 @@ type DragData = { id: number; from?: Section; index?: number };
 const cardOf = (id: number): Card => catalog.get(id) ?? unknownCard(id);
 
 /** Which ban list to check against. */
-export type BanFormat = "tcg" | "ocg" | "none";
-const FORMAT_LABEL: Record<BanFormat, string> = { tcg: "TCG", ocg: "OCG", none: "No ban list" };
+export type BanFormat = DeckFormat;
 const banOf = (c: Card, f: BanFormat) => (f === "tcg" ? c.ban_tcg : f === "ocg" ? c.ban_ocg : null);
 
 /** Validation: section sizes, copies per card across sections, the chosen ban list, unknown ids. */
@@ -56,6 +59,7 @@ function validateDeck(deck: Pick<Deck, "main" | "extra" | "side">, get: (id: num
   for (const [id, n] of counts) {
     const c = get(id);
     const lim = Math.min(MAX_COPIES, banLimit(banOf(c, format)));
+    if (format === "genesys" && genesysExcluded(c)) out.push({ level: "error", text: `${c.name}: Link and Pendulum monsters are not allowed in Genesys.` });
     if (c.category === "Unknown") out.push({ level: "warn", text: `Unknown card id ${id} (×${n}) is not in the catalogue.` });
     if (/Skill/.test(c.type ?? "")) out.push({ level: "warn", text: `${c.name} is a Skill card: not allowed in rules-enforced duels.` });
     if (n > lim) {
@@ -70,6 +74,11 @@ function validateDeck(deck: Pick<Deck, "main" | "extra" | "side">, get: (id: num
   for (const id of deck.extra) {
     const c = get(id);
     if (c.category !== "Unknown" && !isExtraDeckType(c.type)) { out.push({ level: "error", text: `${c.name} cannot go in the Extra Deck.` }); break; }
+  }
+  if (format === "genesys") {
+    const points = genesysSummary(deck, get);
+    if (points.total > 100) out.push({ level: "error", text: `Genesys total is ${points.total} points (standard cap 100).` });
+    if (points.unknown) out.push({ level: "error", text: `Cannot verify Genesys points: ${points.unknown} unresolved card(s).` });
   }
   return out;
 }
@@ -159,11 +168,7 @@ export function DeckBuilder({ deckId, onClose, onSaved }: { deckId: string | und
     if (deck) for (const id of [...deck.main, ...deck.extra, ...deck.side]) m.set(id, (m.get(id) ?? 0) + 1);
     return m;
   }, [deck]);
-  // ban list format, remembered across decks
-  const [format, setFormatState] = useState<BanFormat>(() => {
-    try { const v = localStorage.getItem("ygo.banFormat"); return v === "ocg" || v === "none" ? v : "tcg"; } catch { return "tcg"; }
-  });
-  const setFormat = (f: BanFormat) => { setFormatState(f); try { localStorage.setItem("ygo.banFormat", f); } catch { /* storage blocked */ } };
+  const [format, setFormat] = useDeckFormat();
   const problems = useMemo(() => (deck ? validateDeck(deck, cardOf, format) : []), [deck, format]);
 
   /** Add a card; Extra Deck monsters go to the Extra Deck unless sent to the Side Deck. */
@@ -266,12 +271,17 @@ export function DeckBuilder({ deckId, onClose, onSaved }: { deckId: string | und
         <div className={`db-deck${tab === "deck" ? " active" : ""}`}>
           <div className="db-format">
             <span className={`db-legal ${errors ? "is-bad" : "is-ok"}`}>{errors ? "✕ Not legal" : "✓ Legal"}{format === "none" ? "" : ` · ${FORMAT_LABEL[format]}`}</span>
-            <label className="muted">Ban list
-              <select value={format} onChange={(e) => setFormat(e.target.value as BanFormat)} aria-label="Ban list format">
-                {(Object.keys(FORMAT_LABEL) as BanFormat[]).map((f) => <option key={f} value={f}>{FORMAT_LABEL[f]}</option>)}
-              </select>
-            </label>
+            <FormatSelector format={format} onChange={setFormat} />
           </div>
+          {format === "genesys" && (() => {
+            const p = genesysSummary(deck, cardOf);
+            return <div className="db-points" aria-live="polite">
+              <strong>{p.unknown ? "At least " : ""}{p.total} / 100 points</strong>
+              <span>Main {p.main} · Extra {p.extra} · Side {p.side}{p.unknown ? ` · ${p.unknown} unresolved` : ""}</span>
+              <a href={GENESYS_SOURCE} target="_blank" rel="noreferrer">Official list · checked {GENESYS_CHECKED}</a>
+              <a href={GENESYS_ADDITIONS_SOURCE} target="_blank" rel="noreferrer">Includes November 13 additions</a>
+            </div>;
+          })()}
           {total > 0 && <EngineSupportNote ids={[...deck.main, ...deck.extra, ...deck.side]} />}
           <div className={`db-problems${problems.length ? "" : " ok"}`} aria-live="polite">
             {problems.length === 0 ? (
@@ -310,6 +320,7 @@ export function DeckBuilder({ deckId, onClose, onSaved }: { deckId: string | und
                       const lim = banLimit(banOf(c, format));
                       const over3 = (counts.get(id) ?? 0) > Math.min(MAX_COPIES, lim);
                       const rar = rarityOf(deck.rarity, id);
+                      const points = genesysPoints(c);
                       return (
                         <button key={`${i}-${id}`} type="button" className={`db-card${over3 ? " illegal" : ""}`} data-foil={rar !== "common" ? rar : undefined} title={`${c.name} — click to remove, right-click for more`}
                           draggable
@@ -320,6 +331,7 @@ export function DeckBuilder({ deckId, onClose, onSaved }: { deckId: string | und
                           <CardImage card={c} />
                           <RarityFoil rarity={rar} type={c.type} code={id} />
                           {rar !== "common" && <span className={`rarity-badge r-${isPreset(rar) ? rar : "custom"}`} title={rarityLabel(rar)}>{rarityShort(rar)}</span>}
+                          {format === "genesys" && (genesysExcluded(c) || (points !== null && points > 0)) && <span className="db-card-points">{genesysExcluded(c) ? "Not allowed" : points === 1 ? "1pt" : `${points} pts`}</span>}
                           {lim < 3 && <span className={`cs-ban ban-${lim}`}>{lim}</span>}
                         </button>
                       );

@@ -20,6 +20,8 @@ export function DecksPage() {
   const guest = !!auth && !auth.loading && !auth.user;
   const [decks, setDecks] = useState<Deck[] | null>(null);
   const [q, setQ] = useState("");
+  const [starredOnly, setStarredOnly] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [sortBy, setSortBy] = useState<SortBy>("name");
   const [error, setError] = useState<string | null>(null);
 
@@ -39,7 +41,7 @@ export function DecksPage() {
 
   const shown = useMemo(() => {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);
-    const list = (decks || []).filter((d) => words.every((w) => d.name.toLowerCase().includes(w)));
+    const list = (decks || []).filter((d) => (!starredOnly || d.starred) && words.every((w) => d.name.toLowerCase().includes(w)));
     const date = (d: Deck) => d.file_modified || d.updated_at.slice(0, 10);
     const cmp: Record<SortBy, (a: Deck, b: Deck) => number> = {
       name: (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }),
@@ -48,7 +50,7 @@ export function DecksPage() {
       size: (a, b) => b.main.length + b.extra.length + b.side.length - (a.main.length + a.extra.length + a.side.length),
     };
     return list.sort((a, b) => cmp[sortBy](a, b) || a.name.localeCompare(b.name));
-  }, [decks, q, sortBy]);
+  }, [decks, q, sortBy, starredOnly]);
 
   const run = async (fn: () => Promise<unknown>) => {
     setError(null);
@@ -58,6 +60,11 @@ export function DecksPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
+  };
+
+  const toggleStar = async (d: Deck) => {
+    setBusy(true);
+    try { await run(() => store.save({ ...d, starred: !d.starred })); } finally { setBusy(false); }
   };
 
   const create = () =>
@@ -138,6 +145,7 @@ export function DecksPage() {
             <option value="updated">Last edited</option>
             <option value="size">Size</option>
           </select>
+          <button type="button" aria-pressed={starredOnly} onClick={() => setStarredOnly(!starredOnly)}>★ Starred only</button>
           <span className="muted">{shown.length} shown</span>
         </div>
       )}
@@ -146,10 +154,15 @@ export function DecksPage() {
       ) : decks.length === 0 ? (
         <p className="muted">No decks yet. Import your .ydk files or start a new deck.</p>
       ) : (
+        <>
+        {shown.length === 0 && <p className="muted">No decks match your filters.</p>}
         <ul className="deck-list">
           {shown.map((d) => (
             <li key={d.id} className="deck-item">
-              <Link to={`/decks/${d.id}`} className="deck-name">{d.name}</Link>
+              <span className="deck-title">
+                <button type="button" disabled={busy} aria-pressed={!!d.starred} aria-label={`${d.starred ? "Unstar" : "Star"} ${d.name}`} onClick={() => void toggleStar(d)}>{d.starred ? "★" : "☆"}</button>
+                <Link to={`/decks/${d.id}`} className="deck-name">{d.name}</Link>
+              </span>
               <span className="deck-counts">
                 <span title="Main Deck" className={d.main.length < 40 || d.main.length > 60 ? "bad" : ""}>Main {d.main.length}</span>
                 <span title="Extra Deck" className={d.extra.length > 15 ? "bad" : ""}>Extra {d.extra.length}</span>
@@ -167,6 +180,7 @@ export function DecksPage() {
             </li>
           ))}
         </ul>
+        </>
       )}
     </section>
   );

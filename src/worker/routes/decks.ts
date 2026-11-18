@@ -28,7 +28,7 @@ export const MAX_CARD_NAME = 200;
 
 /** D1 allows 100 bound parameters per statement; stay under it. */
 const MAX_PARAMS = 90;
-const DECK_COLS = 12;
+const DECK_COLS = 13;
 const TAG_COLS = 3;
 
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
@@ -69,6 +69,7 @@ function parseDeck(raw: unknown, now: string, keepTimes: boolean): Deck {
   return {
     id: d.id,
     name,
+    starred: d.starred === true,
     main: cardList(d.main, "main"),
     extra: cardList(d.extra, "extra"),
     side: cardList(d.side, "side"),
@@ -84,6 +85,7 @@ function parseDeck(raw: unknown, now: string, keepTimes: boolean): Deck {
 interface DeckRow {
   id: string;
   name: string;
+  starred: number;
   main: string;
   extra: string;
   side: string;
@@ -98,6 +100,7 @@ interface DeckRow {
 const rowToDeck = (r: DeckRow): Deck => ({
   id: r.id,
   name: r.name,
+  starred: !!r.starred,
   main: JSON.parse(r.main),
   extra: JSON.parse(r.extra),
   side: JSON.parse(r.side),
@@ -109,7 +112,7 @@ const rowToDeck = (r: DeckRow): Deck => ({
   updated_at: r.updated_at,
 });
 
-const DECK_SELECT = "SELECT id, name, main, extra, side, file_modified, file_created, rarity, sleeve, created_at, updated_at FROM decks";
+const DECK_SELECT = "SELECT id, name, starred, main, extra, side, file_modified, file_created, rarity, sleeve, created_at, updated_at FROM decks";
 
 /** Multi-row upserts, ≤ 90 bound parameters each. created_at of existing decks is kept. */
 function upsertStatements(db: D1Database, userId: string, list: Deck[]): D1PreparedStatement[] {
@@ -117,17 +120,17 @@ function upsertStatements(db: D1Database, userId: string, list: Deck[]): D1Prepa
   const out: D1PreparedStatement[] = [];
   for (let i = 0; i < list.length; i += perStmt) {
     const chunk = list.slice(i, i + perStmt);
-    const values = chunk.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
+    const values = chunk.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
     const params = chunk.flatMap((d) => [
-      d.id, userId, d.name, JSON.stringify(d.main), JSON.stringify(d.extra), JSON.stringify(d.side),
+      d.id, userId, d.name, d.starred ? 1 : 0, JSON.stringify(d.main), JSON.stringify(d.extra), JSON.stringify(d.side),
       d.file_modified ?? null, d.file_created ?? null, d.rarity && Object.keys(d.rarity).length ? JSON.stringify(d.rarity) : null, d.sleeve && d.sleeve !== DEFAULT_SLEEVE ? d.sleeve : null, d.created_at, d.updated_at,
     ]);
     out.push(
       db.prepare(
-        `INSERT INTO decks (id, user_id, name, main, extra, side, file_modified, file_created, rarity, sleeve, created_at, updated_at)
+        `INSERT INTO decks (id, user_id, name, starred, main, extra, side, file_modified, file_created, rarity, sleeve, created_at, updated_at)
          VALUES ${values}
          ON CONFLICT (user_id, id) DO UPDATE SET
-           name = excluded.name, main = excluded.main, extra = excluded.extra, side = excluded.side,
+           starred = excluded.starred, name = excluded.name, main = excluded.main, extra = excluded.extra, side = excluded.side,
            file_modified = excluded.file_modified, file_created = excluded.file_created, rarity = excluded.rarity, sleeve = excluded.sleeve,
            updated_at = excluded.updated_at`,
       ).bind(...params),
